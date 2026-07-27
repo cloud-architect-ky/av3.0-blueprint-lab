@@ -45,6 +45,7 @@ Read it once now; everything below is a map of it.
 
 ---
 
+<a id="the-8-stage-pipeline"></a>
 ## 2. The 8-stage pipeline (and how the modules map to it)
 
 The blog defines an **8-stage** pipeline. This lab implements each stage as one or

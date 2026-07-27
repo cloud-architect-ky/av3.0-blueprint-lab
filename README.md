@@ -45,6 +45,10 @@ policy + simulation (M6/M7), search (M8), or production patterns (M9/M11).
 Instances shown are the dashboard defaults; each GPU module also offers
 alternatives (e.g. `ml.g6.12xlarge` when `ml.g5.12xlarge` capacity is short).
 
+For how these modules map to the **8-stage pipeline** described in the AWS blog
+post above, see [Participant Pre-Learning Guide § 2 "The 8-stage pipeline (and how
+the modules map to it)"](docs/en/PRE_LEARNING_GUIDE.md#the-8-stage-pipeline).
+
 ---
 
 ## Which docs to read

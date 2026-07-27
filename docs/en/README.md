@@ -32,8 +32,8 @@ Anyone can deploy it into **their own AWS account**.
 | **M2** | Cosmos Reason Captioning — VLM captions of sampled clips | `ml.g5.12xlarge` (GPU) |
 | **M3** | Cosmos Curator — **NeMo Curator** video curation (split, transcode, filter, dedup) | `ml.g5.12xlarge` (GPU) |
 | **M4** | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g6.24xlarge` verified) |
-| **M5** | Cosmos Predict — synthetic scenario (video2world) generation | GPU |
-| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU |
+| **M5** | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g6.24xlarge` verified) |
+| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU (`ml.g6.24xlarge` verified) |
 | **M7** | AlpaSim Closed-Loop Eval — visualize genuine closed-loop policy evaluation | `ml.t3.medium` (CPU) + GPU EC2 |
 | **M8** | OpenSearch Semantic Search — k-NN retrieval over caption embeddings | `ml.t3.medium` (CPU) |
 | **M9** | HyperPod Distributed Training — a real 2-node `torch.distributed` DDP job | `ml.t3.medium` (CPU) + job nodes |

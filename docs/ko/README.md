@@ -32,8 +32,8 @@
 | **M2** | Cosmos Reason 캡셔닝 — 샘플링된 클립의 VLM 캡션 생성 | `ml.g5.12xlarge` (GPU) |
 | **M3** | Cosmos Curator — **NeMo Curator** 비디오 큐레이션(분할, 트랜스코딩, 필터링, 중복 제거) | `ml.g5.12xlarge` (GPU) |
 | **M4** | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g6.24xlarge` 검증됨) |
-| **M5** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU |
-| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU |
+| **M5** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g6.24xlarge` 검증됨) |
+| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU (`ml.g6.24xlarge` 검증됨) |
 | **M7** | AlpaSim 폐루프 평가 — 진정한 폐루프 정책 평가 시각화 | `ml.t3.medium` (CPU) + GPU EC2 |
 | **M8** | OpenSearch 시맨틱 검색 — 캡션 임베딩에 대한 k-NN 검색 | `ml.t3.medium` (CPU) |
 | **M9** | HyperPod 분산 학습 — 실제 2노드 `torch.distributed` DDP 작업 | `ml.t3.medium` (CPU) + 작업 노드 |

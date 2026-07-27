@@ -21,8 +21,8 @@
 | **M2** | Cosmos Reason キャプション生成 — サンプリングしたクリップの VLM キャプション | `ml.g5.12xlarge`（GPU） |
 | **M3** | Cosmos Curator — **NeMo Curator** による動画キュレーション（分割、トランスコード、フィルタ、重複排除） | `ml.g5.12xlarge`（GPU） |
 | **M4** | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g6.24xlarge` で検証済み） |
-| **M5** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU |
-| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU |
+| **M5** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g6.24xlarge` で検証済み） |
+| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU（`ml.g6.24xlarge` で検証済み） |
 | **M7** | AlpaSim クローズドループ評価 — 本物のクローズドループポリシー評価を可視化 | `ml.t3.medium`（CPU）+ GPU EC2 |
 | **M8** | OpenSearch セマンティック検索 — キャプション埋め込みに対する k-NN 検索 | `ml.t3.medium`（CPU） |
 | **M9** | HyperPod 分散学習 — 本物の 2 ノード `torch.distributed` DDP ジョブ | `ml.t3.medium`（CPU）+ ジョブノード |

@@ -4,7 +4,7 @@
 
 **문서 언어:** [English](../en/README.md) · **한국어** · [日本語](../ja/README.md)
 
-**NVIDIA + AWS Physical AI 데이터 파이프라인**을 직접 실행해 볼 수 있는 셀프
+[NVIDIA와 함께 AWS에서 자율주행 3.0을 위한 End-to-End Physical AI 데이터 파이프라인 구축하기](https://aws.amazon.com/ko/blogs/tech/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/)를 직접 실행해 볼 수 있는 셀프
 서비스 AWS 플랫폼입니다. 참가자는 자율주행 데이터 파이프라인 전체를 다루는
 **12개의 Jupyter 노트북 모듈(M0–M11)**을 차례로 진행합니다 — 데이터 탐색,
 비디오 캡셔닝(Cosmos Reason), 데이터 큐레이션(Cosmos Curator), 합성 데이터

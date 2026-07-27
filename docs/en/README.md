@@ -4,8 +4,8 @@
 
 **Docs language:** **English** · [한국어](../ko/README.md) · [日本語](../ja/README.md)
 
-A self-service AWS platform for hands-on execution of the **NVIDIA + AWS Physical
-AI data pipeline**. Participants work through **12 Jupyter notebook modules
+A self-service AWS platform for hands-on execution of the [Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/).
+Participants work through **12 Jupyter notebook modules
 (M0–M11)** covering the full autonomous-vehicle data pipeline — data exploration,
 video captioning (Cosmos Reason), data curation (Cosmos Curator), synthetic
 augmentation (Cosmos Transfer & Predict), vision-language-action inference

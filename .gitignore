@@ -35,6 +35,8 @@ infra/cdk.context.json
 build.log
 *.log
 *.tar.gz
+# ...but DO ship the curated executed-notebook example bundle:
+!examples/notebooks-with-outputs.tar.gz
 
 # ── OS / editor cruft ──────────────────────────────────
 .DS_Store

@@ -51,6 +51,19 @@ the modules map to it)"](docs/en/PRE_LEARNING_GUIDE.md#the-8-stage-pipeline).
 
 ---
 
+## Preview before you install
+
+Want to see what the lab produces before deploying anything?
+
+**Executed notebook results.** [`examples/notebooks-with-outputs.tar.gz`](examples/notebooks-with-outputs.tar.gz)
+contains all 12 module notebooks (M0–M11) **with their output cells** from a real
+run — plots, generated videos' metadata, metrics, and logs. Download and open them
+in any Jupyter viewer to see each module's actual results **without installing or
+running anything**. (Account-specific identifiers have been replaced with
+placeholders.)
+
+---
+
 ## Which docs to read
 
 Full guides live under **`docs/<lang>/`** in **English / 한국어 / 日本語**

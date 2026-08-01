@@ -62,6 +62,19 @@ in any Jupyter viewer to see each module's actual results **without installing o
 running anything**. (Account-specific identifiers have been replaced with
 placeholders.)
 
+**Admin dashboard.** The admin adds or removes participants here. Each row's
+**Dashboard Link → Copy link** copies that participant's personal dashboard URL to
+hand out, and **Sessions** / **Costs** tabs track live usage.
+
+![Admin dashboard](../images/admin-dashboard.png)
+
+**Participant dashboard.** Each participant opens their own dashboard to launch
+their SageMaker workspace and run the notebooks. It shows the flow of the 11
+pipeline modules; the participant picks the right instance for each notebook
+(CPU or GPU), starts it, opens the workspace, and runs the notebook.
+
+![Participant dashboard](../images/participant-dashboard.png)
+
 ---
 
 ## Which docs to read

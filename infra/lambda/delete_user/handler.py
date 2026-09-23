@@ -87,6 +87,18 @@ def cleanup_aoss(user_id: str) -> dict:
         code = getattr(exc, "response", {}).get("Error", {}).get("Code")
         return code or type(exc).__name__
 
+    def _absent(exc: Exception) -> bool:
+        """True when the resource simply does not exist.
+
+        "Not found" is the SUCCESS case for a teardown: there is nothing left to bill.
+        Most participants never reach M4, so no collection and no policies were ever
+        created and all three deletes raise ResourceNotFoundException. Counting that as
+        `complete: False` fired the admin UI's orphan warning on EVERY deletion — and a
+        warning that always fires is one nobody reads, which defeats the point of
+        surfacing genuine orphans at all. Found by smoke-testing a user who never ran M4.
+        """
+        return _why(exc) in ("ResourceNotFoundException", "NotFoundException", "404")
+
     # 1) Delete the collection (needs the id from batch_get_collection).
     try:
         resp = aoss.batch_get_collection(names=[name])
@@ -100,9 +112,12 @@ def cleanup_aoss(user_id: str) -> dict:
         else:
             logger.info(f"No aoss collection {name} (user never ran M4)")
     except Exception as e:  # noqa: BLE001 — best-effort, but now RECORDED
-        result["complete"] = False
-        result["reasons"].append(f"collection:{_why(e)}")
-        logger.warning(f"aoss collection cleanup for {name}: {e}")
+        if _absent(e):
+            logger.info(f"No aoss collection {name} (user never ran M4)")
+        else:
+            result["complete"] = False
+            result["reasons"].append(f"collection:{_why(e)}")
+            logger.warning(f"aoss collection cleanup for {name}: {e}")
 
     # 2) Delete the security + access policies. Names/types match M4.
     for pname, ptype, api in (
@@ -115,12 +130,17 @@ def cleanup_aoss(user_id: str) -> dict:
             result["policiesDeleted"].append(pname)
             logger.info(f"Deleted aoss {ptype} policy {pname}")
         except Exception as e:  # noqa: BLE001 — best-effort
-            # ConflictException is EXPECTED while the collection is still
-            # DELETING (it still references the policy) — the teardown.sh sweep
-            # reaps these once the collection is gone.
-            result["complete"] = False
-            result["reasons"].append(f"{pname}:{_why(e)}")
-            logger.warning(f"aoss policy cleanup for {pname}: {e}")
+            # ResourceNotFoundException means the policy was never created (the
+            # common case — the user never ran M4), so there is nothing to bill and
+            # nothing to report. ConflictException is EXPECTED while the collection
+            # is still DELETING (it still references the policy) and IS reported, so
+            # the admin knows the teardown.sh sweep still has work to do.
+            if _absent(e):
+                logger.info(f"No aoss {ptype} policy {pname} (nothing to clean up)")
+            else:
+                result["complete"] = False
+                result["reasons"].append(f"{pname}:{_why(e)}")
+                logger.warning(f"aoss policy cleanup for {pname}: {e}")
 
     return result
 

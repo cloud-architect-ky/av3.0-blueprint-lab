@@ -69,6 +69,12 @@ export interface DeleteUserResult {
    * `reasons` carries AWS error CODES (e.g. "AccessDeniedException",
    * "ConflictException"); ConflictException is expected right after a delete, while
    * the collection is still DELETING, and the teardown.sh sweep reaps it later.
+   *
+   * "Not found" is deliberately NOT reported: most participants never reach M4, so no
+   * collection or policy was ever created and every delete would come back
+   * ResourceNotFoundException. Treating that as incomplete made this warning fire on
+   * every single deletion, which trains admins to ignore it. So `complete: false` now
+   * means a resource plausibly still exists.
    */
   aoss?: {
     collection: string;

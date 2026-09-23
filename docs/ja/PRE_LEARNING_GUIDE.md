@@ -201,8 +201,12 @@ M6/M7 ポリシー＋シミュレーション、M8 検索、M9/M11 本番パタ�
   [docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html)
 
 ### モデル（NVIDIA Cosmos と Alpamayo）
-- 🧩 **NVIDIA Cosmos** — モデル ＋ このラボが参照する *Cosmos Cookbook*：
+- 🧩 **NVIDIA Cosmos** — モデルの本拠地、現在は **Cosmos 3**：
   [github.com/NVIDIA/Cosmos](https://github.com/NVIDIA/Cosmos)
+- 🧩 **Cosmos Cookbook** — このラボが参照するポストトレーニングのレシピ集（**別**リポジトリで、
+  Cosmos 3 のリリース以降はメンテナンスのみ）：
+  [github.com/nvidia-cosmos/cosmos-cookbook](https://github.com/nvidia-cosmos/cosmos-cookbook)
+  · ドキュメントサイト：[nvidia-cosmos.github.io/cosmos-cookbook](https://nvidia-cosmos.github.io/cosmos-cookbook/)
 - 🧩 **Cosmos Reason 1**（キャプション生成、M2） —
   [huggingface.co/nvidia/Cosmos-Reason1-7B](https://huggingface.co/nvidia/Cosmos-Reason1-7B)
 - 🧩 **Cosmos Transfer 2.5**（天候オーグメンテーション、M4） —

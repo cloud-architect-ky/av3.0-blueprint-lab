@@ -207,8 +207,12 @@
   [docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html)
 
 ### 모델 (NVIDIA Cosmos & Alpamayo)
-- 🧩 **NVIDIA Cosmos** — 모델 + 이 랩이 참고하는 *Cosmos Cookbook*:
+- 🧩 **NVIDIA Cosmos** — 모델의 본거지, 현재는 **Cosmos 3**:
   [github.com/NVIDIA/Cosmos](https://github.com/NVIDIA/Cosmos)
+- 🧩 **Cosmos Cookbook** — 이 랩이 참고하는 포스트 트레이닝 레시피(**별도** 리포지토리이며,
+  Cosmos 3 출시 이후 유지보수 전용):
+  [github.com/nvidia-cosmos/cosmos-cookbook](https://github.com/nvidia-cosmos/cosmos-cookbook)
+  · 문서 사이트: [nvidia-cosmos.github.io/cosmos-cookbook](https://nvidia-cosmos.github.io/cosmos-cookbook/)
 - 🧩 **Cosmos Reason 1** (캡셔닝, M2) —
   [huggingface.co/nvidia/Cosmos-Reason1-7B](https://huggingface.co/nvidia/Cosmos-Reason1-7B)
 - 🧩 **Cosmos Transfer 2.5** (날씨 증강, M4) —

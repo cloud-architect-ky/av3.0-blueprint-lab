@@ -92,7 +92,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     version: "1.0",
     status: "in-progress",
     license: "NVIDIA Open Model License",
-    sourceUrl: "https://github.com/NVIDIA/Cosmos",
+    sourceUrl: "https://github.com/nvidia-cosmos/cosmos-cookbook/tree/main/docs/recipes/post_training/reason1/av_video_caption_vqa",
     // Stage 3 — Cosmos Reason 1 (Qwen2.5-VL) needs ~96 GB VRAM.
     recommendedInstance: "ml.g5.12xlarge",
     // ml.g6.12xlarge (4× L4 24 GB) is the capacity fallback when g5 is unavailable
@@ -120,7 +120,8 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     version: "0.8",
     status: "locked",
     license: "Apache-2.0",
-    sourceUrl: "https://github.com/NVIDIA/NeMo-Curator",
+    // NVIDIA/NeMo-Curator silently redirects to a new org + name; pin the real one.
+    sourceUrl: "https://github.com/NVIDIA-NeMo/Curator",
     recommendedInstance: "ml.g5.12xlarge",
     alternatives: ["ml.g6.12xlarge", "ml.g6.24xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
     storageGB: 100,
@@ -148,7 +149,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     version: "2.5",
     status: "locked",
     license: "NVIDIA Open Model License",
-    sourceUrl: "https://github.com/NVIDIA/Cosmos",
+    sourceUrl: "https://github.com/nvidia-cosmos/cosmos-transfer2.5",
     // Stage 5 — diffusion world model; shards across a multi-GPU box. g6.24xlarge
     // (4× L4, 96 GB) is the verified workshop default at 480p; p4d/p5 give 720p.
     recommendedInstance: "ml.g6.24xlarge",
@@ -177,7 +178,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     version: "2.5",
     status: "locked",
     license: "NVIDIA Open Model License",
-    sourceUrl: "https://github.com/NVIDIA/Cosmos",
+    sourceUrl: "https://github.com/nvidia-cosmos/cosmos-predict2.5",
     recommendedInstance: "ml.g6.24xlarge",
     // Ordered by capability, not price: p4d/p5 are the only entries that clear the
     // per-GPU tier (40/80 GB) for full resolution + guardrails. The g5/g6 entries

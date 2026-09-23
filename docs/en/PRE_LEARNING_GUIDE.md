@@ -202,8 +202,12 @@ required for the workshop.
   [docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html](https://docs.aws.amazon.com/sagemaker/latest/dg/sagemaker-hyperpod.html)
 
 ### The models (NVIDIA Cosmos & Alpamayo)
-- 🧩 **NVIDIA Cosmos** — models + the *Cosmos Cookbook* the lab draws from:
+- 🧩 **NVIDIA Cosmos** — the models' home, now **Cosmos 3**:
   [github.com/NVIDIA/Cosmos](https://github.com/NVIDIA/Cosmos)
+- 🧩 **Cosmos Cookbook** — the post-training recipes this lab draws from (a
+  *separate* repo, now maintenance-only since Cosmos 3):
+  [github.com/nvidia-cosmos/cosmos-cookbook](https://github.com/nvidia-cosmos/cosmos-cookbook)
+  · browsable docs: [nvidia-cosmos.github.io/cosmos-cookbook](https://nvidia-cosmos.github.io/cosmos-cookbook/)
 - 🧩 **Cosmos Reason 1** (captioning, M2) —
   [huggingface.co/nvidia/Cosmos-Reason1-7B](https://huggingface.co/nvidia/Cosmos-Reason1-7B)
 - 🧩 **Cosmos Transfer 2.5** (weather aug, M4) —

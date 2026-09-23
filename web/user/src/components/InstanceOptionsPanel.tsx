@@ -439,7 +439,7 @@ function getInstanceDescription(instanceType: string): string {
     "ml.g6.24xlarge": "96 vCPU, 384 GiB, 4× L4 (96 GB) — multi-GPU",
     "ml.g6.48xlarge": "192 vCPU, 768 GiB, 8× L4 (192 GB) — multi-GPU",
     // g7e = RTX PRO 6000 Blackwell, 96 GB PER CARD (verified via
-    // ec2 describe-instance-types). The per-card figure is what M4/M5/M6 branch
+    // ec2 describe-instance-types). The per-card figure is what M5/M6/M9 branch
     // on, so it is stated explicitly here: "4× L4 (96 GB)" and
     // "1× RTX PRO 6000 (96 GB)" are the same total but NOT the same capability.
     "ml.g7e.2xlarge": "8 vCPU, 64 GiB, 1× RTX PRO 6000 (96 GB/card) — full-res tier",

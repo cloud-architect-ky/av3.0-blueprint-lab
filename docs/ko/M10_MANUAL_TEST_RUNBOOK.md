@@ -1,10 +1,10 @@
-# M7 수작업 테스트 런북 (Part A: admin GPU 실행 → Part B: 참가자 노트북)
+# M10 수작업 테스트 런북 (Part A: admin GPU 실행 → Part B: 참가자 노트북)
 
-M7은 두 겹이다. **Part A** = admin이 GPU EC2에서 진짜 AlpaSim을 돌려 `m7-reference/`를
+M10은 두 겹이다. **Part A** = admin이 GPU EC2에서 진짜 AlpaSim을 돌려 `m10-reference/`를
 만드는 것(무겁고 1회성). **Part B** = 참가자가 CPU 노트북에서 그 결과를 시각화하는 것(가볍고
 반복). "둘 다 순서대로"는 A로 참조 결과를 새로 만들고 → B로 그걸 노트북에서 보는 흐름이다.
 
-> 레퍼런스 배포에서 이미 성공적으로 실행돼 `s3://av30lab-shared-data-<aws-account-id>/m7-reference/`
+> 레퍼런스 배포에서 이미 성공적으로 실행돼 `s3://av30lab-shared-data-<aws-account-id>/m10-reference/`
 > 에 진짜 결과가 올라간 적이 있다. 그런 참조 결과가 이미 있으면 **Part B만 단독으로 돌려도 완전한
 > 검증**이 된다. Part A는 "처음부터 다시 재현"을 원할 때만 필요하다(~$30, 2-3시간).
 
@@ -36,7 +36,7 @@ UN aws sts get-caller-identity --query '[Account,Arn]' --output text
 # 이 랩이 배포된 계정/리전 → 이후 모든 블록이 쓰는 변수 (하드코딩 대신 여기서 한 번 정의)
 export REGION=<region>                                    # 당신이 배포한 리전으로 (예: us-west-2)
 export ACCOUNT=$(UN aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # 모델/데이터/노트북 템플릿 + m7-reference
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # 모델/데이터/노트북 템플릿 + m10-reference
 export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}      # 참가자별 users/<id>/ (Part C에서 사용)
 echo "ACCOUNT=$ACCOUNT REGION=$REGION"
 echo "SHARED_BUCKET=$SHARED_BUCKET"
@@ -61,7 +61,7 @@ echo "SHARED_BUCKET=$SHARED_BUCKET"
 > `g6e.16xlarge`를 고르면 GPU 1장이라 실행 직전
 > `Service renderer requested GPUs [1] but only 0 .. 0 are available` 로 죽는다.
 >
-> | g6e size | GPUs | vCPU | M7(2gpu) |
+> | g6e size | GPUs | vCPU | M10(2gpu) |
 > |---|---|---|---|
 > | xlarge / 2xlarge / 4xlarge / 8xlarge | **1** | 4–32 | ❌ |
 > | **g6e.12xlarge** | **4** | 48 | ✅ **권장** |
@@ -103,11 +103,11 @@ echo "VPC=$VPC SUBNET=$SUBNET"
 
 # (c) 보안그룹 (egress만 필요; SSM 접속이라 인바운드 불필요)
 SG=$(UN aws ec2 create-security-group --region $REGION \
-  --group-name av30-alpasim-m7 --description "M7 AlpaSim egress" \
+  --group-name av30-alpasim-m7 --description "M10 AlpaSim egress" \
   --vpc-id $VPC --query GroupId --output text)
 # (인바운드 규칙 추가 안 함 — SSM Session Manager로 접속)
 
-# (d) IAM instance-profile (랩계정에 없음 → 즉석 생성). hf-cache read + m7-reference write + KMS + SSM.
+# (d) IAM instance-profile (랩계정에 없음 → 즉석 생성). hf-cache read + m10-reference write + KMS + SSM.
 UN aws iam create-role --role-name av30-alpasim-m7 \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
 UN aws iam attach-role-policy --role-name av30-alpasim-m7 \
@@ -117,7 +117,7 @@ UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
-  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${SHARED_BUCKET}/m7-reference/*"},
+  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${SHARED_BUCKET}/m10-reference/*"},
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
@@ -175,7 +175,7 @@ tail -f /var/log/alpasim_m7.log   # Ctrl-C 로 빠져나와도 백그라운드 �
 스크립트가 하는 일: preflight(nvidia-smi/docker/uv/cargo) → hf-cache 복원 → alpasim clone
 (tag alpasim-base-v0.96.0) → NGC login(옵션)+이미지 접근 확인 → `source setup_local_env.sh`
 → mount 디렉토리 생성 → `deploy/local_m7.yaml`(driver HF-offline) + `topology/m7_4gpu.yaml`
-(driver 단독 GPU0) 작성 → `uv run alpasim_wizard ...` 실행 → 결과 검증 → `s3://.../m7-reference/`
+(driver 단독 GPU0) 작성 → `uv run alpasim_wizard ...` 실행 → 결과 검증 → `s3://.../m10-reference/`
 업로드. **첫 빌드는 오래 걸린다(protos 컴파일 + 이미지 pull + NuRec 씬 다운로드).**
 재실행 시 clone/빌드/hf-cache/NuRec 씬은 남아 있어 wizard 단계부터라 훨씬 빠르다.
 
@@ -187,8 +187,8 @@ tail -f /var/log/alpasim_m7.log   # Ctrl-C 로 빠져나와도 백그라운드 �
   ```
   runtime-0-1 exited with code 0            # eval 컨테이너가 0으로 정상 종료
   [verify] core outputs present.
-  [upload] -> s3://.../m7-reference/ ...
-  === DONE — genuine AlpaSim results uploaded to s3://.../m7-reference/ ===
+  [upload] -> s3://.../m10-reference/ ...
+  === DONE — genuine AlpaSim results uploaded to s3://.../m10-reference/ ===
   ```
   성공 시 `tail -f`가 멈추는 것은 **정상**이다(스크립트가 끝나 백그라운드 프로세스가 종료됨 —
   죽은 게 아니다). 최종 확정은 A4의 S3 확인(오늘 날짜).
@@ -206,15 +206,15 @@ tail -f /var/log/alpasim_m7.log   # Ctrl-C 로 빠져나와도 백그라운드 �
 
 빠르게 성공 여부만 확인:
 ```bash
-grep -q "=== DONE" /var/log/alpasim_m7.log && echo "M7 성공 (S3 업로드 완료)" \
-  || echo "M7 미완 — 로그 끝(tail -n 40)에서 ERROR/RuntimeError/중단 지점 확인"
+grep -q "=== DONE" /var/log/alpasim_m7.log && echo "M10 성공 (S3 업로드 완료)" \
+  || echo "M10 미완 — 로그 끝(tail -n 40)에서 ERROR/RuntimeError/중단 지점 확인"
 ```
 
 ## A4. 성공 확인 → **즉시 terminate** (과금 중단)
 ```bash
 # ⟸ 먼저 §0의 UN() 래퍼 + SHARED_BUCKET/REGION 변수를 정의했어야 함.
 # 로컬(자격증명)에서:
-UN aws s3 ls s3://$SHARED_BUCKET/m7-reference/ --recursive --region $REGION
+UN aws s3 ls s3://$SHARED_BUCKET/m10-reference/ --recursive --region $REGION
 # aggregate/results-summary.json + metrics_results.{txt,png,parquet} + rollouts/**/metrics.parquet
 # + eval/eval.mp4 + run.json 이 보이면 성공.
 
@@ -237,24 +237,24 @@ UN aws ec2 delete-security-group --region $REGION --group-id $SG
 
 # Part C — admin: 참가자별 자가실행 프로비저닝 (참가자가 직접 AlpaSim을 돌릴 때)
 
-Part A는 admin이 **공유 참조 결과 1벌**(`m7-reference/`)을 만드는 것이다. 아래 Part C는
+Part A는 admin이 **공유 참조 결과 1벌**(`m10-reference/`)을 만드는 것이다. 아래 Part C는
 **참가자마다 자기 GPU 호스트에서 직접 AlpaSim을 돌리게** 할 때(참가자 실행 가이드 =
-[M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md)) admin이 하는 사전 배선이다.
+[M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md)) admin이 하는 사전 배선이다.
 
 > **비용/상한 경고**: g6e.12xlarge = **48 vCPU/대**, ~**$10.5/hr/대**. G-vCPU quota 768 →
 > **동시 최대 16대(=16명)**. launch 전 반드시 quota 확인:
 > `UN aws service-quotas get-service-quota --region $REGION --service-code ec2 --quota-code L-DB2E81BA`
 
 ## C1. instance-profile 정책 확장 (참가자는 user-workspace에 씀)
-Part A의 `av30-alpasim-m7` 인스턴스 역할은 `m7-reference/`에만 write한다. 참가자 자가실행은
-`users/<id>/m7/`에 써야 하므로 정책을 확장한다(prefix 제한으로 여러 참가자 공유 가능):
+Part A의 `av30-alpasim-m7` 인스턴스 역할은 `m10-reference/`에만 write한다. 참가자 자가실행은
+`users/<id>/m10/`에 써야 하므로 정책을 확장한다(prefix 제한으로 여러 참가자 공유 가능):
 ```bash
 # ⟸ 먼저 §0의 UN() 래퍼 + SHARED_BUCKET/USER_BUCKET 변수를 정의했어야 함.
 UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-participant-m7 \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
-  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${USER_BUCKET}/users/*/m7/*"},
+  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${USER_BUCKET}/users/*/m10/*"},
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
@@ -264,7 +264,7 @@ JSON
 Part A2의 (e) `run-instances`에 참가자 태그를 추가한다(공유 SG/instance-profile 재사용):
 ```bash
 # ⟸ 먼저 §0의 UN() 래퍼를 정의 + 자격증명 갱신해야 함 (안 하면 'command not found: UN').
-PID=m7-test01     # 참가자 id
+PID=m10-test01     # 참가자 id
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
@@ -285,7 +285,7 @@ UN aws ec2 wait instance-status-ok --region $REGION --instance-ids $IID
 # ⟸ 먼저 §0의 UN() 래퍼를 정의 + 자격증명 갱신해야 함 (안 하면 'command not found: UN').
 UN aws iam create-user --user-name $PID
 # heredoc으로 $REGION/$ACCOUNT/$IID 는 확장하고, IAM 정책 변수 ${aws:...} 는 \$ 로 보존.
-UN aws iam put-user-policy --user-name $PID --policy-name m7-ssm --policy-document "$(cat <<JSON
+UN aws iam put-user-policy --user-name $PID --policy-name m10-ssm --policy-document "$(cat <<JSON
 {
   "Version":"2012-10-17","Statement":[
    {"Sid":"StartOwnInstance","Effect":"Allow","Action":["ssm:StartSession"],
@@ -307,7 +307,7 @@ UN aws iam create-access-key --user-name $PID   # → 참가자에게 out-of-ban
 # ⟸ 먼저 §0의 UN() 래퍼를 정의 + 자격증명 갱신해야 함 (안 하면 'command not found: UN').
 UN aws iam create-user --user-name $PID --tags Key=Participant,Value=$PID
 # heredoc으로 $REGION/$ACCOUNT 는 확장, IAM 정책 변수 ${aws:...} 는 \$ 로 보존.
-UN aws iam put-user-policy --user-name $PID --policy-name m7-ssm-abac --policy-document "$(cat <<JSON
+UN aws iam put-user-policy --user-name $PID --policy-name m10-ssm-abac --policy-document "$(cat <<JSON
 {
   "Version":"2012-10-17","Statement":[
    {"Sid":"StartTaggedInstance","Effect":"Allow","Action":["ssm:StartSession"],
@@ -335,8 +335,8 @@ aws ec2 terminate-instances --instance-ids $IID --region $REGION # ✗ 거부 �
 ```
 
 ## C5. 참가자 실행 → 완료 통보 → admin 정리
-- 참가자는 [M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md)를 따라 실행하고
-  결과를 `users/<id>/m7/`에 올린 뒤 **완료를 통보**한다.
+- 참가자는 [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md)를 따라 실행하고
+  결과를 `users/<id>/m10/`에 올린 뒤 **완료를 통보**한다.
 - admin은 통보받는 즉시 정리(태그로 일괄 조회 가능):
 ```bash
 # ⟸ 먼저 §0의 UN() 래퍼를 정의 + 자격증명 갱신해야 함 (안 하면 'command not found: UN').
@@ -349,8 +349,8 @@ UN aws ec2 describe-instances --region $REGION \
 # IAM user 정리 (키 먼저 삭제)
 UN aws iam list-access-keys --user-name $PID --query 'AccessKeyMetadata[].AccessKeyId' --output text \
   | tr '\t' '\n' | while read k; do UN aws iam delete-access-key --user-name $PID --access-key-id "$k"; done
-UN aws iam delete-user-policy --user-name $PID --policy-name m7-ssm 2>/dev/null || \
-  UN aws iam delete-user-policy --user-name $PID --policy-name m7-ssm-abac 2>/dev/null
+UN aws iam delete-user-policy --user-name $PID --policy-name m10-ssm 2>/dev/null || \
+  UN aws iam delete-user-policy --user-name $PID --policy-name m10-ssm-abac 2>/dev/null
 UN aws iam delete-user --user-name $PID
 ```
 
@@ -359,7 +359,7 @@ UN aws iam delete-user --user-name $PID
 
 ---
 
-# Part B — 참가자: Studio CPU 노트북에서 M7 시각화 (~$0, 5분)
+# Part B — 참가자: Studio CPU 노트북에서 M10 시각화 (~$0, 5분)
 
 이게 참가자가 실제로 겪는 경험이고, 게이트3의 "실제 Studio 환경" 갭을 메운다.
 
@@ -369,22 +369,22 @@ UN aws iam delete-user --user-name $PID
    없으면 admin 대시보드 → Users → Provision으로 새 유저 하나 만들면 링크가 나온다.
 2. 브라우저로 그 링크 열기 → Pipeline Map 표시.
 
-## B2. 인스턴스 = CPU 확인 (M7은 GPU 불필요)
-- M7 노트는 **`ml.t3.medium`(CPU)** 에서 돈다. 워크스페이스 기본이 t3.medium이므로
-  **인스턴스 변경 불필요**. (M6에서 GPU로 올렸다면, M7 전에 Instance Options → t3.medium으로
+## B2. 인스턴스 = CPU 확인 (M10은 GPU 불필요)
+- M10 노트는 **`ml.t3.medium`(CPU)** 에서 돈다. 워크스페이스 기본이 t3.medium이므로
+  **인스턴스 변경 불필요**. (M9에서 GPU로 올렸다면, M10 전에 Instance Options → t3.medium으로
   되돌리는 게 비용상 바람직 — GPU에서도 돌긴 하지만 낭비.)
 
 ## B3. 워크스페이스 열고 노트북 실행
 1. 대시보드 우상단 **Open Workspace** → JupyterLab 탭.
-2. 파일 브라우저에서 **`M7_AlpaSim_ClosedLoop.ipynb`** 열기.
+2. 파일 브라우저에서 **`M10_AlpaSim_ClosedLoop.ipynb`** 열기.
 3. **Run ▸ Run All Cells** (또는 Shift+Enter로 위→아래).
 
 ## B4. 통과 기준 (각 셀이 이렇게 나와야 함)
 | 셀 | 기대 출력 |
 |---|---|
-| cell-2 config | Profile/Reference eval/M6 provenance 경로 출력 |
-| cell-3 provenance | M6 manifest 있으면 open-loop minADE 표시, 없으면 "stand alone"(둘 다 정상) |
-| cell-4 download | `aws s3 sync m7-reference/` → 아티팩트 목록(aggregate/, rollouts/, eval/, run.json) |
+| cell-2 config | Profile/Reference eval/M9 provenance 경로 출력 |
+| cell-3 provenance | M9 manifest 있으면 open-loop minADE 표시, 없으면 "stand alone"(둘 다 정상) |
+| cell-4 download | `aws s3 sync m10-reference/` → 아티팩트 목록(aggregate/, rollouts/, eval/, run.json) |
 | cell-5 parse | AlpaSim 집계표 verbatim + 11개 driving score(collision 0.00, dist_to_gt 4.37m, progress 0.92) + "Per-rollout time-series: N rows" |
 | cell-6 viz | metrics_results.png 인라인 + safety-rate 막대 + dist_to_gt_trajectory 시계열 |
 | cell-7 video | eval.mp4 (~4.7MB) 인라인 재생 |
@@ -394,7 +394,7 @@ UN aws iam delete-user --user-name $PID
 ## B5. 흔한 실패 → 원인
 | 증상 | 원인/해결 |
 |---|---|
-| cell-4 `M7 reference eval not found in S3` | m7-reference/ 미업로드 → Part A 먼저(또는 기존 번들 확인) |
+| cell-4 `M10 reference eval not found in S3` | m10-reference/ 미업로드 → Part A 먼저(또는 기존 번들 확인) |
 | cell-4 download failed / AccessDenied | 실행역할이 shared 버킷 read 권한 없음 → 이미 있음(정상). 없으면 IAM 확인 |
 | cell-7 video 미표시 | eval.mp4 누락(비필수) — 메트릭만으로도 PASS |
 | STS/import 에러 | CPU 커널에 pandas/matplotlib 기본 포함 — 안 되면 첫 셀에서 `%pip install pandas matplotlib` |

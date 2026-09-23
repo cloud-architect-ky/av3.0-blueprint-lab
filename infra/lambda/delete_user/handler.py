@@ -5,7 +5,7 @@ Tears down everything create_user provisioned, in dependency order:
   1. JupyterLab app  (must be gone before the space can be deleted)
   2. Space           (must be gone before the user profile can be deleted)
   3. User profile
-  4. OpenSearch Serverless collection + policies created by M8 (if any)
+  4. OpenSearch Serverless collection + policies created by M4 (if any)
   5. S3 workspace files under users/{userId}/
   6. DynamoDB session row
 
@@ -45,17 +45,17 @@ APP_TYPE = "JupyterLab"
 
 
 def cleanup_aoss(user_id: str) -> dict:
-    """Best-effort teardown of the OpenSearch Serverless resources M8 creates.
+    """Best-effort teardown of the OpenSearch Serverless resources M4 creates.
 
     Deletes the collection (by id, after lookup) then its three policies
     (encryption `-enc`, network `-net`, data-access `-access`). Fully idempotent:
-    a user who never ran M8 has none of these, and every "not found" is ignored.
+    a user who never ran M4 has none of these, and every "not found" is ignored.
 
     Best-effort — never raises, so an AOSS hiccup can't block the SageMaker/S3/DDB
     teardown. But it now RECORDS incompleteness in the response (`complete` +
     `reasons`) instead of silently swallowing it, so a caller/sweeper can tell a
     collection may still be billing. The collection name is derived with the
-    SHARED sanitizer (aoss_collection_name) so it byte-matches whatever M8 named
+    SHARED sanitizer (aoss_collection_name) so it byte-matches whatever M4 named
     it — the old raw `user_id[:8]` diverged for uppercase/leading-digit/hyphen
     ids and left orphans.
 
@@ -84,13 +84,13 @@ def cleanup_aoss(user_id: str) -> dict:
             result["collectionDeleted"] = True  # QUEUED, not confirmed gone
             logger.info(f"Queued delete of aoss collection {name} (id={coll_id})")
         else:
-            logger.info(f"No aoss collection {name} (user never ran M8)")
+            logger.info(f"No aoss collection {name} (user never ran M4)")
     except Exception as e:  # noqa: BLE001 — best-effort, but now RECORDED
         result["complete"] = False
         result["reasons"].append(f"collection:{type(e).__name__}")
         logger.warning(f"aoss collection cleanup for {name}: {e}")
 
-    # 2) Delete the security + access policies. Names/types match M8.
+    # 2) Delete the security + access policies. Names/types match M4.
     for pname, ptype, api in (
         (f"{name}-enc", "encryption", aoss.delete_security_policy),
         (f"{name}-net", "network", aoss.delete_security_policy),
@@ -232,8 +232,8 @@ def handler(event, context):
     except sagemaker.exceptions.ResourceNotFound:
         logger.warning(f"No user profile: {user_id}, proceeding")
 
-    # 4. Delete the OpenSearch Serverless collection + policies that M8 may have
-    #    created for this user (best-effort, idempotent — no-op if M8 never ran).
+    # 4. Delete the OpenSearch Serverless collection + policies that M4 may have
+    #    created for this user (best-effort, idempotent — no-op if M4 never ran).
     aoss_result = cleanup_aoss(user_id)
 
     # 5. Delete the user's S3 workspace files.

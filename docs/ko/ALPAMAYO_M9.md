@@ -1,10 +1,10 @@
-# Alpamayo 1.5 (M6) — SMD 이미지에서의 실제 VLA 추론
+# Alpamayo 1.5 (M9) — SMD 이미지에서의 실제 VLA 추론
 
-**상태:** M6(Alpamayo 1.5, Vision-Language-Action 궤적 예측)는 SageMaker
+**상태:** M9(Alpamayo 1.5, Vision-Language-Action 궤적 예측)는 SageMaker
 Distribution(SMD) GPU 이미지에서 **엔드투엔드로 검증**되었습니다 —
 `PhysicalAI-Autonomous-Vehicles` 데모 클립에 대한 실제 추론으로
 Chain-of-Causation 설명과 예측된 ego 궤적을 생성합니다(검증된 클립에서
-**minADE 0.375 m**). M4/M5와 마찬가지로 오프라인 S3 체크포인트 캐시와
+**minADE 0.375 m**). M5/M6와 마찬가지로 오프라인 S3 체크포인트 캐시와
 사전 저장된 데모 클립을 통해 **참가자 HF 토큰 없이** 실행됩니다.
 
 ## 이 모듈이 가지고 있던 핵심 문제
@@ -13,12 +13,12 @@ Chain-of-Causation 설명과 예측된 ego 궤적을 생성합니다(검증된 �
 (`from alpamayo.model import AlpamayoForConditionalGeneration`,
 `alpamayo.inference.AlpamayoInferencePipeline`, `alpamayo.utils.load_frames_from_video`,
 `pipeline.predict_trajectory` / `predict_trajectory_multicam` / `visual_qa`)를
-임포트했습니다 — M4/M5의 가짜 `cosmos1`과 동일한 부류의 버그입니다.
+임포트했습니다 — M5/M6의 가짜 `cosmos1`과 동일한 부류의 버그입니다.
 `pip install alpamayo`는 존재하지 않습니다. 실제 워크플로우는 공식 리포지토리
 [`NVlabs/alpamayo1.5`](https://github.com/NVlabs/alpamayo1.5), 패키지
 `alpamayo1_5`(언더스코어)입니다.
 
-M4/M5와 달리 Alpamayo는 **다른 스택**입니다: Python **3.12**(Cosmos는
+M5/M6와 달리 Alpamayo는 **다른 스택**입니다: Python **3.12**(Cosmos는
 3.10에 고정), torch 2.8, transformers 4.57.1, `physical-ai-av==0.2.0`,
 **transformer-engine 없음**, 그리고 **flash-attn 제외**(SMD 이미지에서 소스
 빌드가 실패함). 따라서 자체 venv와 자체 설정 경로를 가집니다.
@@ -57,9 +57,9 @@ pred_xyz, _, extra = model.sample_trajectories_from_data_with_vlm_rollout(
 
 ## 결정적인 두 가지 오프라인 발견
 
-M6는 M4/M5처럼 토큰 없이 실행되어야 하지만, 두 부분이 다르게 동작합니다:
+M9는 M5/M6처럼 토큰 없이 실행되어야 하지만, 두 부분이 다르게 동작합니다:
 
-1. **모델은 오프라인으로 로드됩니다 — hf-cache 사용(M4/M5와 동일).** `HF_TOKEN`을
+1. **모델은 오프라인으로 로드됩니다 — hf-cache 사용(M5/M6와 동일).** `HF_TOKEN`을
    설정하지 않고 `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1`이면,
    `Alpamayo1_5.from_pretrained(...)` + `helper.get_processor`가 S3에서 복원된
    HF 캐시에서 **토큰 없이, 네트워크 없이** 로드됩니다 — `from_pretrained`가
@@ -114,9 +114,9 @@ alpamayo`)가 추가되었습니다. 공유 프리앰블(버킷 해석 + `$HF_HO
 `scripts/alpamayo_save_clip.py`는 그러한 `.pt` 파일을 생성하는 관리자 전용
 동반 스크립트입니다(온라인, 토큰 사용).
 
-## M6 노트북 흐름(재작성됨)
+## M9 노트북 흐름(재작성됨)
 
-`notebooks/M6_Alpamayo_VLA_Inference.ipynb`(11개 셀):
+`notebooks/M9_Alpamayo_VLA_Inference.ipynb`(11개 셀):
 
 1. **제목** + **라이선스**(비상업용 가중치) 마크다운.
 2. **Config** — 프로필/버킷, NVMe 작업 디렉터리, `DEMO_CLIPS`, `HF_TOKEN`(선택).
@@ -127,10 +127,10 @@ alpamayo`)가 추가되었습니다. 공유 프리앰블(버킷 해석 + `$HF_HO
    `alpamayo_infer.py` 찾기.
 6. **Inference** — `a1_5` venv로 `bash -lc`, `alpamayo_infer.py` 실행.
 7. **Visualize** — 예측 궤적 대 정답(ground-truth) 궤적 + 추론 내용 출력.
-8. **Upload** — 출력 → `users/{profile}/m6/`; 매니페스트는 M7이 읽는 키
+8. **Upload** — 출력 → `users/{profile}/m9/`; 매니페스트는 M10이 읽는 키
    (`model` / `modes_run` / `timestamp` / `results`)를 유지합니다.
 9. **비용.**
-10. **검증 + 인라인 미리보기 + 다음 모듈(M7).**
+10. **검증 + 인라인 미리보기 + 다음 모듈(M10).**
 
 워크숍 실행 비용을 낮게 유지하기 위해 기본값은 `DEMO_CLIPS = ["030c760c-..."]`
 (클립 하나)입니다; 모두 실행하려면 스테이징된 다른 클립의 주석을 해제하세요.
@@ -184,11 +184,11 @@ our lane."* (89자).
   오차 내에 충분히 있음).
 - **g5에서 전체 노트북 Restart & Run All** (2026-07-12, 참가자 경로, HF 토큰
   없음): cell-3이 `balanced-expert`를 자동 선택, cell-6 minADE 0.3779 m, cell-10
-  `Status: PASS`, 출력은 `users/<profile>/m6/`에 작성됨.
+  `Status: PASS`, 출력은 `users/<profile>/m9/`에 작성됨.
 
 ## 멀티 GPU(24 GB 카드) — `balanced-expert` 디바이스 맵
 
-p4d/p5는 종종 용량 제약이 있습니다. M6는 **24 GB 멀티 GPU** 박스
+p4d/p5는 종종 용량 제약이 있습니다. M9는 **24 GB 멀티 GPU** 박스
 (g5.48xlarge = 8× A10G 24 GB, g6.48xlarge = 8× L4 24 GB)에서도 실행되지만,
 평범한 `device_map="auto"`로는 **안 됩니다**:
 
@@ -224,12 +224,12 @@ p4d/p5는 종종 용량 제약이 있습니다. M6는 **24 GB 멀티 GPU** 박�
     `balanced-expert`를 강제하세요.
   - **24 GB 멀티 GPU** (g5, g6): `balanced-expert`가 VLM을 샤딩하고 액션 스택을
     cuda:0에 고정합니다. 이것은 **용량 헤지**입니다 — p4d/p5를 사용할 수 없을
-    때, M6는 여유가 있는 어떤 멀티 GPU 박스에서도 여전히 실행됩니다.
+    때, M9는 여유가 있는 어떤 멀티 GPU 박스에서도 여전히 실행됩니다.
 - 환경 + 체크포인트는 NVMe에 있으며 **앱 재시작 시 초기화됩니다**; 설정 셀은
   멱등적이고, 새 앱은 다시 다운로드하는 대신 S3에서 체크포인트를 복원합니다
   (빠름, 리전 내).
 
 ## 라이선스
 
-Alpamayo-1.5-10B 가중치는 **비상업용**입니다(연구/평가 전용). M6와 M7 모두 이
+Alpamayo-1.5-10B 가중치는 **비상업용**입니다(연구/평가 전용). M9와 M10 모두 이
 고지를 표시합니다; 추론 코드는 Apache-2.0입니다.

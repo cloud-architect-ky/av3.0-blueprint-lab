@@ -18,24 +18,24 @@ The most important constraints to be aware of:
 NVIDIA models (downloaded from Hugging Face — admin accepts the license once)
 --------------------------------------------------------------------------------
 
-  * nvidia/Alpamayo-1.5-10B                (used by modules M6, M7)
+  * nvidia/Alpamayo-1.5-10B                (used by modules M9, M10)
         ==> **NON-COMMERCIAL** license — research / evaluation only.
             Commercial use requires a separate agreement with NVIDIA.
-  * nvidia/Cosmos-Reason1-7B               (M2, M4, M5)  — NVIDIA Open Model License
-  * nvidia/Cosmos-Guardrail1               (M4, M5)      — NVIDIA Open Model License
-  * nvidia/Cosmos-Transfer2.5-2B           (M4)          — NVIDIA Open Model License
-  * nvidia/Cosmos-Predict2.5-2B            (M5)          — NVIDIA Open Model License
-  * nvidia/Cosmos-Reason2-8B               (M6, M7)      — NVIDIA Open Model License
+  * nvidia/Cosmos-Reason1-7B               (M2, M5, M6, M8)  — NVIDIA Open Model License
+  * nvidia/Cosmos-Guardrail1               (M5, M6)      — NVIDIA Open Model License
+  * nvidia/Cosmos-Transfer2.5-2B           (M5)          — NVIDIA Open Model License
+  * nvidia/Cosmos-Predict2.5-2B            (M6)          — NVIDIA Open Model License
+  * nvidia/Cosmos-Reason2-8B               (M9, M10)      — NVIDIA Open Model License
 
 --------------------------------------------------------------------------------
 Datasets
 --------------------------------------------------------------------------------
 
-  * nuScenes-mini (Motional)               (M1, M3, M10)
+  * nuScenes-mini (Motional)               (M1, M3, M7)
         Pulled from the public AWS Open Data mirror. Subject to the nuScenes
         Terms of Use (non-commercial; see https://www.nuscenes.org/terms-of-use).
-  * nvidia/PhysicalAI-Autonomous-Vehicles  (M6 demo clip / dataset) — NVIDIA license
-  * nvidia/PhysicalAI-Autonomous-Vehicles-NuRec  (M7 AlpaSim eval scenes)
+  * nvidia/PhysicalAI-Autonomous-Vehicles  (M9 demo clip / dataset) — NVIDIA license
+  * nvidia/PhysicalAI-Autonomous-Vehicles-NuRec  (M10 AlpaSim eval scenes)
         NVIDIA AV NuRec Dataset License. Downloaded at runtime; the account whose
         Hugging Face token is used must have accepted this dataset license.
 
@@ -43,10 +43,10 @@ Datasets
 Third-party software the notebooks build / run
 --------------------------------------------------------------------------------
 
-  * AlpaSim  (NVlabs/alpasim)              (M7)  — Apache-2.0
-  * NuRec renderer image  nvcr.io/nvidia/nre/nre-ga  (M7)
+  * AlpaSim  (NVlabs/alpasim)              (M10)  — Apache-2.0
+  * NuRec renderer image  nvcr.io/nvidia/nre/nre-ga  (M10)
         Pulled from NVIDIA NGC; subject to the NGC / NVIDIA container license.
-  * NeMo Curator (M3), Nerfstudio + gsplat (M10), and other pip/uv-installed
+  * NeMo Curator (M3), Nerfstudio + gsplat (M7), and other pip/uv-installed
         packages retain their respective upstream licenses.
 
 --------------------------------------------------------------------------------

@@ -13,10 +13,19 @@ launch, sourced from the participant's own users/<id>/.av30-progress.env:
   USER_PROFILE         the participant userId (== the {id} path segment)
 
 Canonical module ids (must match web/user/src/data/pipeline-config.ts):
-  M1 -> m01-data-exploration   M2 -> m02-cosmos-reason   M3 -> m03-cosmos-curator
-  M4 -> m04-cosmos-transfer     M5 -> m05-cosmos-predict  M6 -> m06-alpamayo-vla
-  M7 -> m07-alpasim             M8 -> m08-opensearch      M9 -> m09-hyperpod
-  M10 -> m10-nerfstudio         M11 -> m11-orchestration
+(numbered in the blog's 8-stage order, which is NOT the order they were written)
+  M1  -> m01-data-exploration   (stage 1-2  explore)
+  M2  -> m02-cosmos-reason      (stage 3    captioning)
+  M3  -> m03-cosmos-curator     (stage 3    curation)
+  M4  -> m04-opensearch         (stage 4    search + indexing)
+  M5  -> m05-cosmos-transfer    (stage 5    weather augmentation)
+  M6  -> m06-cosmos-predict     (stage 5    scenario generation)
+  M7  -> m07-nerfstudio         (stage 6    neural reconstruction)
+  M8  -> m08-cosmos-sft         (stage 7    LoRA SFT training)
+  M9  -> m09-alpamayo-vla       (stage 7    VLA inference)
+  M10 -> m10-alpasim            (stage 8    closed-loop eval)
+  M11 -> m11-orchestration      (ext        SageMaker Pipelines)
+  M12 -> m12-hyperpod           (ext        distributed-training scale-up)
 """
 import os
 

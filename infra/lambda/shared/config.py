@@ -11,15 +11,15 @@ _logger = logging.getLogger()
 
 
 def aoss_collection_name(user_id: str) -> str:
-    """AOSS collection name for a user — MUST byte-match M8's _aoss_name().
+    """AOSS collection name for a user — MUST byte-match M4's _aoss_name().
 
-    M8 (notebooks/M8_OpenSearch_Semantic_Search.ipynb, cell 1) creates the
+    M4 (notebooks/M4_OpenSearch_Semantic_Search.ipynb, cell 1) creates the
     OpenSearch Serverless collection with exactly this algorithm. delete_user
     and the teardown script must reproduce it precisely, or they look up the
     WRONG collection name and silently orphan a continuously-billing collection
     (the root cause of the av30-semantic-ky-5-34x orphan seen in the field).
 
-    Keep this identical to M8's _aoss_name: lowercase, non [a-z0-9-] -> '-',
+    Keep this identical to M4's _aoss_name: lowercase, non [a-z0-9-] -> '-',
     first 8 chars, strip stray leading/trailing hyphens, ensure a letter start.
     """
     slug = re.sub(r"[^a-z0-9-]", "-", user_id.lower())[:8].strip("-") or "user"
@@ -38,7 +38,7 @@ AWS_REGION = os.environ.get("AWS_REGION", "us-west-2")
 # --- SageMaker Distribution image selection ---------------------------------
 # JupyterLab apps must pin a Distribution image; without it SageMaker uses the
 # domain/account default (a CPU build), so torch.cuda.is_available() is False on
-# GPU instances and the GPU pre-flight checks in M2..M10 fail. NOTE: this is NOT
+# GPU instances and the GPU pre-flight checks in the GPU modules (M2, M3, M5-M9) fail. NOTE: this is NOT
 # the jupyter-server-3 image used for the JupyterServer default in the CDK stack
 # — the JupyterLab Distribution images are different and live in the SageMaker
 # Distribution account (542918446943), published per-region.
@@ -258,10 +258,10 @@ PRESIGNED_URL_EXPIRY = 28800
 #   g4dn  = T4    16 GB   | g5  = A10G 24 GB | g6 = L4 24 GB (NOT L40S — that is g6e)
 #   p4d   = A100  40 GB   | p5  = H100 80 GB
 #   4-GPU sizes: g5/g6 .12xlarge and .24xlarge ;  8-GPU: .48xlarge
-# M4/M5 branch on PER-GPU VRAM (>=38 GB -> 720p + guardrails ON), and M6 on
+# M5/M6 branch on PER-GPU VRAM (>=38 GB -> 720p + guardrails ON), and M9 on
 # >=40 GB (single-GPU "verified path"). So no g5/g6 size can reach the top tier;
 # only p4d (40 GB) / p5 (80 GB) can. 24 GB cards still COMPLETE the lab — see
-# docs/en/ALPAMAYO_M6.md "Verified runs" (minADE 0.3779 m, Status: PASS).
+# docs/en/ALPAMAYO_M9.md "Verified runs" (minADE 0.3779 m, Status: PASS).
 INSTANCE_RATES = {
     # --- CPU ---
     "ml.t3.medium": 0.05,
@@ -295,9 +295,9 @@ INSTANCE_RATES = {
     "ml.g6.24xlarge": 8.344,
     "ml.g6.48xlarge": 16.688,
     # --- g7e (RTX PRO 6000 Blackwell, 96 GB/card) — the instance the AWS blog
-    #     names for Stage 5, and the CHEAPEST route to M4/M5's top tier. 96 GB
+    #     names for Stage 5, and the CHEAPEST route to M5/M6's top tier. 96 GB
     #     per card clears their ">= 70 GB per GPU" branch, so Cosmos Transfer /
-    #     Predict load on ONE GPU at full 720p with guardrails ON, and M6 takes
+    #     Predict load on ONE GPU at full 720p with guardrails ON, and M9 takes
     #     its verified single-GPU path. ml.g7e.2xlarge ($4.20) therefore beats
     #     ml.g6.24xlarge ($8.34) on BOTH price and output quality.
     #     GPU COUNT IS NOT THE SIZE (same trap as g6e) — verified against the
@@ -312,7 +312,7 @@ INSTANCE_RATES = {
     "ml.g7e.12xlarge": 10.3576,
     "ml.g7e.24xlarge": 20.7152,
     "ml.g7e.48xlarge": 41.4304,
-    # --- p4d/p5 — clear M4/M5's 38 GB and M6's 40 GB tiers, but cost far more
+    # --- p4d/p5 — clear M5/M6's 38 GB and M9's 40 GB tiers, but cost far more
     #     per unit of quality than g7e now does ---
     # NOTE: ml.p3.2xlarge is NOT in the us-west-2 SageMaker price list (V100 is
     # being retired), so this rate is unverifiable and the type is effectively

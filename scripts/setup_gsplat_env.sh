@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup_gsplat_env.sh — build gsplat's CUDA extension so M10 (Nerfstudio
+# setup_gsplat_env.sh — build gsplat's CUDA extension so M7 (Nerfstudio
 # `ns-train splatfacto`, 3D Gaussian Splatting) actually trains on a SageMaker
 # Distribution (SMD) GPU app.
 #
@@ -36,7 +36,7 @@
 # the conda dev-header install AND these symlinks (verified: a session reset wiped
 # targets/x86_64-linux/include while nvcc + the gsplat py-package survived). So
 # this is a per-SESSION bootstrap, not a one-time install. Re-run it at the start
-# of every session before M10's training cell. It is idempotent (skips work
+# of every session before M7's training cell. It is idempotent (skips work
 # already done); ~3-5 min on a cold session, seconds when already built.
 #
 # USAGE (from a GPU JupyterLab terminal, or `!bash scripts/setup_gsplat_env.sh`):
@@ -71,7 +71,7 @@ fi
 CUDA_RT="$(find "$CONDA_ROOT/targets" -path '*/include/cuda_runtime.h' 2>/dev/null | head -1)"
 if [ -z "$CUDA_RT" ]; then
     echo "ERROR: cuda_runtime.h still missing after install — cannot build gsplat."
-    echo "       Fall back to the M10 demo path (see docs/TODO_M10_nerfstudio.md)."
+    echo "       Fall back to the M7 demo path (see docs/TODO_M7_nerfstudio.md)."
     exit 1
 fi
 TGT="$(dirname "$(dirname "$CUDA_RT")")"   # .../targets/x86_64-linux
@@ -153,11 +153,11 @@ echo "[gsplat] source-building gsplat==1.4.0 (this can take ~3-5 min) ..."
 # --------------------------------------------------------------------------
 if env -u CPATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u LIBRARY_PATH -u LD_LIBRARY_PATH \
        "$PY" -c "from gsplat.cuda._backend import _C; print('gsplat CUDA backend OK (clean env)')" 2>&1 | tail -3; then
-    echo "=== Done. gsplat CUDA extension builds in a clean env — M10 ns-train can now run. ==="
+    echo "=== Done. gsplat CUDA extension builds in a clean env — M7 ns-train can now run. ==="
     exit 0
 else
     echo "ERROR: gsplat built but its CUDA backend failed to import in a clean env."
-    echo "       Re-run this script, or fall back to the M10 demo path"
-    echo "       (see docs/TODO_M10_nerfstudio.md)."
+    echo "       Re-run this script, or fall back to the M7 demo path"
+    echo "       (see docs/TODO_M7_nerfstudio.md)."
     exit 1
 fi

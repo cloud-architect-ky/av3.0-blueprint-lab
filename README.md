@@ -6,7 +6,7 @@
 
 A self-service AWS platform for hands-on execution of the [Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/).
 Participants work through **12 Jupyter notebook modules
-(M0–M11)** covering the full autonomous-vehicle data pipeline — data exploration,
+(M0–M12)** covering the full autonomous-vehicle data pipeline — data exploration,
 video captioning (Cosmos Reason), data curation (Cosmos Curator), synthetic
 augmentation (Cosmos Transfer & Predict), vision-language-action inference
 (Alpamayo), closed-loop simulation (AlpaSim), semantic search, distributed
@@ -23,25 +23,31 @@ Anyone can deploy it into **their own AWS account**.
 
 ---
 
-## The 12 modules
+## The 13 modules
 
-| Module | What it does | Recommended instance |
-|---|---|---|
-| **M0** | Pipeline overview — maps the end-to-end pipeline to the modules (no compute) | `ml.t3.medium` (CPU) |
-| **M1** | Data Exploration — ingest & explore real **nuScenes-mini** sensor data; select scenes | `ml.t3.medium` (CPU) |
-| **M2** | Cosmos Reason Captioning — VLM captions of sampled clips | `ml.g5.12xlarge` (GPU) |
-| **M3** | Cosmos Curator — **NeMo Curator** video curation (split, transcode, filter, dedup) | `ml.g5.12xlarge` (GPU) |
-| **M4** | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g6.24xlarge` verified) |
-| **M5** | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g6.24xlarge` verified) |
-| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU (`ml.g6.24xlarge` verified) |
-| **M7** | AlpaSim Closed-Loop Eval — visualize genuine closed-loop policy evaluation | `ml.t3.medium` (CPU) + GPU EC2 |
-| **M8** | OpenSearch Semantic Search — k-NN retrieval over caption embeddings | `ml.t3.medium` (CPU) |
-| **M9** | HyperPod Distributed Training — a real 2-node `torch.distributed` DDP job | `ml.t3.medium` (CPU) + job nodes |
-| **M10** | Nerfstudio 3D Reconstruction — NeRF / 3D Gaussian Splatting (optional/demo) | `ml.g5.xlarge` (GPU) |
-| **M11** | Pipeline Automation — a real SageMaker Pipeline (Caption→Curate→Augment) | `ml.t3.medium` (CPU) + processing job |
+| Module | Blog stage | What it does | Recommended instance |
+|---|---|---|---|
+| **M0** | — | Pipeline overview — maps the end-to-end pipeline to the modules (no compute) | `ml.t3.medium` (CPU) |
+| **M1** | 1–2 | Data Exploration — ingest & explore real **nuScenes-mini** sensor data; select scenes | `ml.t3.medium` (CPU) |
+| **M2** | 3 | Cosmos Reason Captioning — VLM captions of sampled clips | `ml.g5.12xlarge` (GPU) |
+| **M3** | 3 | Cosmos Curator — **NeMo Curator** video curation (split, transcode, filter, dedup) | `ml.g5.12xlarge` (GPU) |
+| **M4** | 4 | OpenSearch Semantic Search — k-NN retrieval over caption embeddings | `ml.t3.medium` (CPU) |
+| **M5** | 5 | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g6.24xlarge` verified) |
+| **M6** | 5 (ext) | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g6.24xlarge` verified) |
+| **M7** | 6 | Nerfstudio 3D Reconstruction — NeRF / 3D Gaussian Splatting (optional/demo) | `ml.g5.xlarge` (GPU) |
+| **M8** | 7 | Cosmos Reason LoRA SFT — parameter-efficient fine-tune on nuScenes **human** labels | GPU (`ml.g6.24xlarge`, native-res measured) |
+| **M9** | 7 | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU (`ml.g6.24xlarge` verified) |
+| **M10** | 8 | AlpaSim Closed-Loop Eval — visualize genuine closed-loop policy evaluation | `ml.t3.medium` (CPU) + GPU EC2 |
+| **M11** | — (ext) | Pipeline Automation — a real SageMaker Pipeline (Caption→Curate→Augment) | `ml.t3.medium` (CPU) + processing job |
+| **M12** | — (ext) | HyperPod Distributed Training — a real 2-node `torch.distributed` DDP job | `ml.t3.medium` (CPU) + job nodes |
 
-Recommended path: **M0 → M1 → M2 → M3**, then branch to synthetic data (M4/M5),
-policy + simulation (M6/M7), search (M8), or production patterns (M9/M11).
+**The numbering follows the blog's 8-stage order**, so running M0 → M1 → M2 → … in
+sequence walks the pipeline as the blog describes it. M11 and M12 are extensions
+with no blog stage of their own and sit at the end.
+
+Recommended path: straight through **M0 → M10**, then the extensions (M11, M12).
+If you only want one branch: synthetic data is M5/M6, policy + simulation is
+M8/M9/M10, search is M4.
 Instances shown are the dashboard defaults; each GPU module also offers
 alternatives (e.g. `ml.g6.12xlarge` when `ml.g5.12xlarge` capacity is short).
 
@@ -56,11 +62,17 @@ the modules map to it)"](docs/en/PRE_LEARNING_GUIDE.md#the-8-stage-pipeline).
 Want to see what the lab produces before deploying anything?
 
 **Executed notebook results.** [`examples/notebooks-with-outputs.tar.gz`](examples/notebooks-with-outputs.tar.gz)
-contains all 12 module notebooks (M0–M11) **with their output cells** from a real
-run — plots, generated videos' metadata, metrics, and logs. Download and open them
-in any Jupyter viewer to see each module's actual results **without installing or
-running anything**. (Account-specific identifiers have been replaced with
-placeholders.)
+contains 12 module notebooks **with their output cells** from a real run — plots,
+generated videos' metadata, metrics, and logs. Download and open them in any Jupyter
+viewer to see each module's actual results **without installing or running
+anything**. (Account-specific identifiers have been replaced with placeholders.)
+
+> **The bundle predates the renumbering to blog-stage order**, so its filenames and
+> the S3 paths printed in its outputs use the OLD numbers. It is left exactly as
+> captured rather than relabelled, because rewriting the printed paths would falsify
+> the execution record. Old → new: `M4`→M5, `M5`→M6, `M6`→M9, `M7`→M10, `M8`→M4,
+> `M9`→M12, `M10`→M7; M0–M3 and M11 are unchanged. The new **M8** (Cosmos Reason
+> LoRA SFT) is not in the bundle — it has no captured run yet.
 
 **Admin dashboard.** The admin adds or removes participants here. Each row's
 **Dashboard Link → Copy link** copies that participant's personal dashboard URL to
@@ -86,8 +98,8 @@ Full guides live under **`docs/<lang>/`** in **English / 한국어 / 日本語**
 |---|---|
 | **Admin — setting up the lab** | [PREREQUISITES](docs/en/PREREQUISITES.md) → [ADMIN_GUIDE](docs/en/ADMIN_GUIDE.md) → [DATA_CONTRACT](docs/en/DATA_CONTRACT.md) |
 | **Participant** | [PRE_LEARNING_GUIDE](docs/en/PRE_LEARNING_GUIDE.md) → [PARTICIPANT_GUIDE](docs/en/PARTICIPANT_GUIDE.md) |
-| **Per-module deep dives** | [COSMOS_M4_M5](docs/en/COSMOS_M4_M5.md) · [ALPAMAYO_M6](docs/en/ALPAMAYO_M6.md) · [ALPASIM_M7](docs/en/ALPASIM_M7.md) · [HYPERPOD_M9](docs/en/HYPERPOD_M9.md) · [PIPELINE_M11](docs/en/PIPELINE_M11.md) |
-| **M7 GPU / SSM (advanced)** | [M7_MANUAL_TEST_RUNBOOK](docs/en/M7_MANUAL_TEST_RUNBOOK.md) (admin) · [M7_PARTICIPANT_SSM_RUNBOOK](docs/en/M7_PARTICIPANT_SSM_RUNBOOK.md) (participant) |
+| **Per-module deep dives** | [COSMOS_M5_M6](docs/en/COSMOS_M5_M6.md) · [ALPAMAYO_M9](docs/en/ALPAMAYO_M9.md) · [ALPASIM_M10](docs/en/ALPASIM_M10.md) · [HYPERPOD_M12](docs/en/HYPERPOD_M12.md) · [PIPELINE_M11](docs/en/PIPELINE_M11.md) |
+| **M10 GPU / SSM (advanced)** | [M10_MANUAL_TEST_RUNBOOK](docs/en/M10_MANUAL_TEST_RUNBOOK.md) (admin) · [M10_PARTICIPANT_SSM_RUNBOOK](docs/en/M10_PARTICIPANT_SSM_RUNBOOK.md) (participant) |
 
 ---
 
@@ -101,14 +113,14 @@ Full guides live under **`docs/<lang>/`** in **English / 한국어 / 日本語**
 | Python | 3.12+ | CDK infrastructure code |
 | AWS CDK | 2.x | `npm install -g aws-cdk` |
 | jq | — | JSON parsing in deploy scripts |
-| Hugging Face token | — | **Admin-only** — pre-caches gated models (M2/M4/M5/M6) and runs the M7 reference eval. **Participants need NO HF token.** See [docs/en/PREREQUISITES.md](docs/en/PREREQUISITES.md). |
-| NGC API key | — | **Admin-only, M7 only** — the AlpaSim NuRec renderer image. |
+| Hugging Face token | — | **Admin-only** — pre-caches gated models (M2/M5/M6/M9) and runs the M10 reference eval. **Participants need NO HF token.** See [docs/en/PREREQUISITES.md](docs/en/PREREQUISITES.md). |
+| NGC API key | — | **Admin-only, M10 only** — the AlpaSim NuRec renderer image. |
 
 ### Service quotas (request early — 24–48 h lead time)
 
 GPU **Studio JupyterLab App** quotas default to low or **0** on fresh accounts —
 request increases before the workshop. There are also separate **job** quotas for
-M9/M11 that are easy to miss. Full table + CLI commands: **[docs/en/ADMIN_GUIDE.md](docs/en/ADMIN_GUIDE.md)** and **[docs/en/PREREQUISITES.md](docs/en/PREREQUISITES.md)**.
+M12/M11 that are easy to miss. Full table + CLI commands: **[docs/en/ADMIN_GUIDE.md](docs/en/ADMIN_GUIDE.md)** and **[docs/en/PREREQUISITES.md](docs/en/PREREQUISITES.md)**.
 
 Check current values:
 ```bash
@@ -160,11 +172,11 @@ aws cognito-idp admin-create-user \
 
 # 6. Pre-cache NVIDIA models to S3 (background, 30–60 min)
 ./scripts/cache_models.sh
-#    M4/M5/M6 additionally need an offline HF cache, M6 a demo clip, and M7 a
+#    M5/M6/M9 additionally need an offline HF cache, M9 a demo clip, and M10 a
 #    one-time GPU-EC2 reference eval — see docs/en/ADMIN_GUIDE.md §6 and the
-#    per-module deep dives (COSMOS_M4_M5, ALPAMAYO_M6, ALPASIM_M7).
+#    per-module deep dives (COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10).
 
-# 7. Stage the nuScenes-mini dataset to S3 (required by M1 / M3 / M10)
+# 7. Stage the nuScenes-mini dataset to S3 (required by M1 / M3 / M7)
 ./scripts/stage_nuscenes.sh
 #    Pulls from the public AWS Open Data mirror (no login; nuScenes terms apply).
 
@@ -198,7 +210,7 @@ runbook — smoke test, bulk provisioning, monitoring, teardown — is in
             progress)                        │
                                        S3 shared-data bucket
                                         (model-cache / datasets / hf-cache /
-                                         notebook-templates / m7-reference)
+                                         notebook-templates / m10-reference)
 ```
 
 - **Network:** NAT-free VPC with isolated private subnets and a free S3 *gateway* endpoint.
@@ -225,7 +237,7 @@ av3.0-blueprint-lab/
 │   ├── stacks/av30_stack.py
 │   ├── av30_constructs/    # network, storage, database, sagemaker, auth, api, dashboards, monitoring
 │   └── lambda/             # create_user, delete_user, bulk_provision, change_instance, get_costs, update_progress, …
-├── notebooks/              # 12 workshop notebooks M0–M11
+├── notebooks/              # 12 workshop notebooks M0–M12
 ├── web/
 │   ├── admin/              # Admin dashboard (React + Vite)
 │   └── user/               # Participant pipeline map (React + Vite)
@@ -244,8 +256,8 @@ av3.0-blueprint-lab/
 | Scenario | Cost | Notes |
 |---|---|---|
 | Idle (infra only) | **~$1/mo per region** | KMS key. The S3 gateway endpoint is free and there is no NAT Gateway; DynamoDB (on-demand), CloudFront and Cognito are ~$0 at idle. Add **~$87.60/mo per region** only if you enable the 6 VPC interface endpoints (12 ENIs x $0.01/AZ-hour). S3 storage for the model cache is extra (~$2/mo per region). |
-| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 default). Full-resolution output needs ≥38 GB/GPU: `ml.g7e.2xlarge` ~$4.20/hr is the cheapest route (1× 96 GB — cheaper than the default, but quota defaults to 0 and it is unverified here), `ml.p4d.24xlarge` ~$25.25/hr otherwise |
-| M7 AlpaSim on EC2 | ~$30 one-time (admin) | reference eval on `g6e.12xlarge`; optional participant self-run ~$10.5/hr/host |
+| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M7), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M5/M6/M9 default). Full-resolution output needs ≥38 GB/GPU: `ml.g7e.2xlarge` ~$4.20/hr is the cheapest route (1× 96 GB — cheaper than the default, but quota defaults to 0 and it is unverified here), `ml.p4d.24xlarge` ~$25.25/hr otherwise |
+| M10 AlpaSim on EC2 | ~$30 one-time (admin) | reference eval on `g6e.12xlarge`; optional participant self-run ~$10.5/hr/host |
 | Full week (mixed) | ~$400–600+ | dominated by the p4d modules and user count |
 
 **Cost controls:** daily budget alarm (SNS → `<admin-email>`), admin
@@ -280,6 +292,6 @@ dashboards, scripts) is licensed under **MIT-0** — see [LICENSE](LICENSE).
 
 The **models and datasets** the notebooks download are **not** covered by that
 license and are **not redistributed** here. Each keeps its own terms — notably
-**Alpamayo-1.5-10B (M6/M7) is non-commercial (research/evaluation only)** and
+**Alpamayo-1.5-10B (M9/M10) is non-commercial (research/evaluation only)** and
 **nuScenes** is non-commercial. Review and comply with every applicable license;
 see [NOTICE](NOTICE) for the full list.

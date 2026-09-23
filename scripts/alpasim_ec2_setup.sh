@@ -1,23 +1,23 @@
 #!/bin/bash
 # alpasim_ec2_setup.sh — ADMIN one-time: build + run REAL AlpaSim closed-loop
 # evaluation of the Alpamayo 1.5 driver on a Docker-capable GPU EC2 host, then
-# upload the genuine results to the shared S3 bucket for M7 to visualize.
+# upload the genuine results to the shared S3 bucket for M10 to visualize.
 #
-# WHY THIS RUNS ON EC2, NOT IN THE M7 NOTEBOOK
+# WHY THIS RUNS ON EC2, NOT IN THE M10 NOTEBOOK
 # --------------------------------------------
 # AlpaSim (github.com/NVlabs/alpasim) is NOT a Python library — it is a fleet of
 # gRPC microservices (renderer / driver / physics / runtime / controller)
 # orchestrated by Docker Compose. A SageMaker Studio JupyterLab app is itself a
 # managed container with NO Docker daemon, so it cannot host AlpaSim (this is the
-# same reason M4/M5/M6 were built as uv venvs, not containers). Therefore the
+# same reason M5/M6/M9 were built as uv venvs, not containers). Therefore the
 # admin runs AlpaSim ONCE here on a dedicated GPU host, uploads the real outputs,
-# and the M7 notebook (CPU) downloads + visualizes them. Every participant sees
+# and the M10 notebook (CPU) downloads + visualizes them. Every participant sees
 # the same genuine closed-loop evaluation without each paying for a GPU host.
 #
-# M6 -> M7 LINK (honest): AlpaSim does NOT consume M6's predicted-trajectory .npy.
-# It loads the SAME Alpamayo-1.5-10B checkpoint (from the shared hf-cache that M6
-# populated) and drives it closed-loop. M6 = open-loop trajectory prediction of
-# Alpamayo; M7 = the same model driving in the AlpaSim loop. Shared artifact = the
+# M9 -> M10 LINK (honest): AlpaSim does NOT consume M9's predicted-trajectory .npy.
+# It loads the SAME Alpamayo-1.5-10B checkpoint (from the shared hf-cache that M9
+# populated) and drives it closed-loop. M9 = open-loop trajectory prediction of
+# Alpamayo; M10 = the same model driving in the AlpaSim loop. Shared artifact = the
 # checkpoint, not the trajectory file.
 #
 # HOST REQUIREMENTS
@@ -37,19 +37,19 @@
 #     export NGC_API_KEY=nvapi-xxx           # for the gated NuRec (NRE) image
 #     export SHARED_BUCKET=av30lab-shared-data-<acct>   # else derived via STS
 #     bash scripts/alpasim_ec2_setup.sh
-#     # → uploads to s3://<shared>/m7-reference/, then TERMINATE the instance.
+#     # → uploads to s3://<shared>/m10-reference/, then TERMINATE the instance.
 #
 # USAGE — PARTICIPANT self-run (participant on their own pre-provisioned GPU host,
-# reached via SSM; see docs/M7_PARTICIPANT_SSM_RUNBOOK.md):
+# reached via SSM; see docs/M10_PARTICIPANT_SSM_RUNBOOK.md):
 #     export PARTICIPANT_ID=<id>
-#     export M7_OUTPUT_PREFIX=users/<id>/m7
+#     export M10_OUTPUT_PREFIX=users/<id>/m7
 #     export OUTPUT_BUCKET=av30lab-user-workspace-<acct>
 #     export SHARED_BUCKET=av30lab-shared-data-<acct>   # hf-cache read
 #     bash scripts/alpasim_ec2_setup.sh
-#     # → uploads to s3://<user-workspace>/users/<id>/m7/; the admin terminates.
+#     # → uploads to s3://<user-workspace>/users/<id>/m10/; the admin terminates.
 #
-# With no PARTICIPANT_ID/M7_OUTPUT_PREFIX/OUTPUT_BUCKET set, behaviour is
-# byte-for-byte the legacy admin run (writes s3://$SHARED_BUCKET/m7-reference/).
+# With no PARTICIPANT_ID/M10_OUTPUT_PREFIX/OUTPUT_BUCKET set, behaviour is
+# byte-for-byte the legacy admin run (writes s3://$SHARED_BUCKET/m10-reference/).
 # It is idempotent where practical (re-clone/re-restore skip if present).
 set -uo pipefail
 
@@ -83,14 +83,14 @@ NRE_IMAGE="${NRE_IMAGE:-nvcr.io/nvidia/nre/nre-ga:26.04}"
 
 # Output routing. Two modes, decided purely by env (defaults => legacy admin mode):
 #   - ADMIN reference run (default): PARTICIPANT_ID unset, results go to the shared
-#     bucket under m7-reference/ (one run, shared by all participants).
-#   - PARTICIPANT self-run: set PARTICIPANT_ID=<id>, M7_OUTPUT_PREFIX=users/<id>/m7,
+#     bucket under m10-reference/ (one run, shared by all participants).
+#   - PARTICIPANT self-run: set PARTICIPANT_ID=<id>, M10_OUTPUT_PREFIX=users/<id>/m7,
 #     OUTPUT_BUCKET=<user-workspace-bucket> so each participant writes their OWN
-#     results and they never collide. See docs/M7_PARTICIPANT_SSM_RUNBOOK.md.
+#     results and they never collide. See docs/M10_PARTICIPANT_SSM_RUNBOOK.md.
 PARTICIPANT_ID="${PARTICIPANT_ID:-}"
-M7_OUTPUT_PREFIX="${M7_OUTPUT_PREFIX:-m7-reference}"
+M10_OUTPUT_PREFIX="${M10_OUTPUT_PREFIX:-m10-reference}"
 
-echo "=== AV 3.0 Blueprint Lab — M7 AlpaSim reference evaluation (admin, EC2) ==="
+echo "=== AV 3.0 Blueprint Lab — M10 AlpaSim reference evaluation (admin, EC2) ==="
 echo "work dir  : $WORK"
 echo "scene     : $SCENE_ID"
 echo "topology  : $TOPOLOGY"
@@ -178,14 +178,14 @@ echo "[s3] shared bucket: $SHARED_BUCKET"
 # mode); a participant self-run sets OUTPUT_BUCKET to their user-workspace bucket.
 OUTPUT_BUCKET="${OUTPUT_BUCKET:-$SHARED_BUCKET}"
 if [ -n "$PARTICIPANT_ID" ]; then
-    echo "[s3] participant self-run: id=$PARTICIPANT_ID output=s3://$OUTPUT_BUCKET/$M7_OUTPUT_PREFIX/"
+    echo "[s3] participant self-run: id=$PARTICIPANT_ID output=s3://$OUTPUT_BUCKET/$M10_OUTPUT_PREFIX/"
 else
-    echo "[s3] admin reference run: output=s3://$OUTPUT_BUCKET/$M7_OUTPUT_PREFIX/"
+    echo "[s3] admin reference run: output=s3://$OUTPUT_BUCKET/$M10_OUTPUT_PREFIX/"
 fi
 
 # --------------------------------------------------------------------------
 # Restore the Alpamayo 1.5 + Cosmos-Reason2 checkpoints from the shared hf-cache
-# (populated by M6). AlpaSim's driver container bind-mounts $HF_HOME into
+# (populated by M9). AlpaSim's driver container bind-mounts $HF_HOME into
 # /root/.cache/huggingface (base_config.yaml), so a warm cache means no
 # re-download and no re-accepting the gated MODEL license at driver-load time.
 # --------------------------------------------------------------------------
@@ -255,12 +255,12 @@ mkdir -p "$REPO_DIR/data/drivers" \
 # --------------------------------------------------------------------------
 # Run the real closed-loop evaluation (single demo scene, standard inference).
 # CFG-nav stays OFF (default) so the driver fits ~40 GB. REASONING_OVERLAY adds
-# the Chain-of-Causation overlay to the eval video (ties back to M6's reasoning).
+# the Chain-of-Causation overlay to the eval video (ties back to M9's reasoning).
 # --------------------------------------------------------------------------
 # Inject HF env into the DRIVER container so it loads Alpamayo from the mounted
 # HF cache OFFLINE (no token, no network). Without this the driver hits the gated
 # repo online and dies with a 401 — the base driver service has no `environments`.
-# (Same offline-cache lesson as M6; see docs/ALPAMAYO_M6.md.) CLI list overrides
+# (Same offline-cache lesson as M9; see docs/ALPAMAYO_M9.md.) CLI list overrides
 # with `KEY=VALUE` items break Hydra's grammar, so we drop a small deploy config
 # `deploy/local_m7.yaml` (extends `local`) that sets driver.environments, and
 # select it with deploy=local_m7.
@@ -268,7 +268,7 @@ DEPLOY_OVERRIDE="$REPO_DIR/src/wizard/configs/deploy/local_m7.yaml"
 echo "[run] writing $DEPLOY_OVERRIDE (driver HF-offline env) ..."
 cat > "$DEPLOY_OVERRIDE" <<'YAML'
 # @package _global_
-# M7 deploy: local containers + HF-offline env on the driver so Alpamayo loads
+# M10 deploy: local containers + HF-offline env on the driver so Alpamayo loads
 # from the mounted HF cache without a token or network (avoids the gated 401).
 defaults:
   - local
@@ -291,7 +291,7 @@ TOPO_OVERRIDE="$REPO_DIR/src/wizard/configs/topology/m7_4gpu.yaml"
 echo "[run] writing $TOPO_OVERRIDE (driver alone on GPU 0) ..."
 cat > "$TOPO_OVERRIDE" <<'YAML'
 # @package _global_
-# M7 4-GPU layout: driver alone on GPU 0 (40 GB Alpamayo fits an L40S 46 GB),
+# M10 4-GPU layout: driver alone on GPU 0 (40 GB Alpamayo fits an L40S 46 GB),
 # renderer GPU 1, physics GPU 2, trafficsim GPU 3. One replica each, 1 rollout.
 defines:
   nre_cache_size: 2
@@ -360,13 +360,13 @@ _mp4="$(ls "$LOG_DIR"/rollouts/*/*.mp4 "$AGG"/videos/*/*.mp4 2>/dev/null | head 
 echo "[verify] core outputs present."
 
 # --------------------------------------------------------------------------
-# Upload the genuine results for the M7 notebook to read.
-#   - admin mode  : s3://<shared>/m7-reference/           (shared by all)
-#   - participant : s3://<user-workspace>/users/<id>/m7/  (their own)
+# Upload the genuine results for the M10 notebook to read.
+#   - admin mode  : s3://<shared>/m10-reference/           (shared by all)
+#   - participant : s3://<user-workspace>/users/<id>/m10/  (their own)
 # The EC2 host uses an instance-profile that can write the chosen location; the
 # SageMaker exec role is not involved in this upload.
 # --------------------------------------------------------------------------
-REF="s3://${OUTPUT_BUCKET}/${M7_OUTPUT_PREFIX}"
+REF="s3://${OUTPUT_BUCKET}/${M10_OUTPUT_PREFIX}"
 echo "[upload] -> $REF/ ..."
 aws s3 sync "$AGG" "$REF/aggregate/" --only-show-errors
 # one representative eval video (keep the upload small)
@@ -386,7 +386,7 @@ else
 fi
 cat > "$WORK/run.json" <<JSON
 {
-  "module": "M7_AlpaSim_ClosedLoop",
+  "module": "M10_AlpaSim_ClosedLoop",
   "simulator": "AlpaSim (NVlabs/alpasim)",
   "driver": "alpamayo1_5",
   "model": "nvidia/Alpamayo-1.5-10B",
@@ -405,7 +405,7 @@ echo "=== DONE — genuine AlpaSim results uploaded to $REF/ ==="
 echo "    aggregate/metrics_results.txt|png, rollouts/**/metrics.parquet, eval/eval.mp4, run.json"
 echo ""
 if [ -n "$PARTICIPANT_ID" ]; then
-    echo ">>> Participant $PARTICIPANT_ID: results are in $REF/ — open M7 in your"
+    echo ">>> Participant $PARTICIPANT_ID: results are in $REF/ — open M10 in your"
     echo "    SageMaker workspace (CPU) and Run All to visualize them."
     echo ""
     echo "!!! You CANNOT terminate this instance yourself. Tell the workshop admin"

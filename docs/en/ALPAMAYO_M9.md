@@ -1,10 +1,10 @@
-# Alpamayo 1.5 (M6) — real VLA inference on the SMD image
+# Alpamayo 1.5 (M9) — real VLA inference on the SMD image
 
-**Status:** M6 (Alpamayo 1.5, Vision-Language-Action trajectory prediction) is
+**Status:** M9 (Alpamayo 1.5, Vision-Language-Action trajectory prediction) is
 **verified end-to-end** on the SageMaker Distribution (SMD) GPU image — real
 inference on a `PhysicalAI-Autonomous-Vehicles` demo clip producing a
 Chain-of-Causation explanation + a predicted ego trajectory (**minADE 0.375 m**
-on the verified clip). Like M4/M5 it runs **without a participant HF token**, via
+on the verified clip). Like M5/M6 it runs **without a participant HF token**, via
 an offline S3 checkpoint cache plus a pre-saved demo clip.
 
 ## The core problem this module had
@@ -13,12 +13,12 @@ The shipped notebook imported a **hallucinated `alpamayo` package**
 (`from alpamayo.model import AlpamayoForConditionalGeneration`,
 `alpamayo.inference.AlpamayoInferencePipeline`, `alpamayo.utils.load_frames_from_video`,
 `pipeline.predict_trajectory` / `predict_trajectory_multicam` / `visual_qa`) that
-**does not exist** — the same class of bug as M4/M5's fake `cosmos1`. There is no
+**does not exist** — the same class of bug as M5/M6's fake `cosmos1`. There is no
 `pip install alpamayo`. The real workflow is the official repo
 [`NVlabs/alpamayo1.5`](https://github.com/NVlabs/alpamayo1.5), package
 `alpamayo1_5` (underscore).
 
-Unlike M4/M5, Alpamayo is a **different stack**: Python **3.12** (Cosmos pins
+Unlike M5/M6, Alpamayo is a **different stack**: Python **3.12** (Cosmos pins
 3.10), torch 2.8, transformers 4.57.1, `physical-ai-av==0.2.0`, **no
 transformer-engine**, and **flash-attn excluded** (its source build fails on the
 SMD image). So it gets its own venv and its own setup path.
@@ -56,9 +56,9 @@ pred_xyz, _, extra = model.sample_trajectories_from_data_with_vlm_rollout(
 
 ## Two decisive offline findings
 
-M6 needs to run token-free like M4/M5, but the two halves behave differently:
+M9 needs to run token-free like M5/M6, but the two halves behave differently:
 
-1. **Model loads offline — use the hf-cache (same as M4/M5).** With `HF_TOKEN`
+1. **Model loads offline — use the hf-cache (same as M5/M6).** With `HF_TOKEN`
    unset and `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1`,
    `Alpamayo1_5.from_pretrained(...)` + `helper.get_processor` load from the
    S3-restored HF cache with **no token, no network** — including the *hidden*
@@ -113,9 +113,9 @@ defaults to `True`, which would reject the `int`/`str` entries in the dict).
 `scripts/alpamayo_save_clip.py` is the admin-only companion that produces those
 `.pt` files (online, with a token).
 
-## M6 notebook flow (rewritten)
+## M9 notebook flow (rewritten)
 
-`notebooks/M6_Alpamayo_VLA_Inference.ipynb` (11 cells):
+`notebooks/M9_Alpamayo_VLA_Inference.ipynb` (11 cells):
 
 1. **Title** + **License** (non-commercial weights) markdown.
 2. **Config** — profile/buckets, NVMe work dir, `DEMO_CLIPS`, `HF_TOKEN` optional.
@@ -126,10 +126,10 @@ defaults to `True`, which would reject the `int`/`str` entries in the dict).
    locate `alpamayo_infer.py`.
 6. **Inference** — `bash -lc` into the `a1_5` venv, run `alpamayo_infer.py`.
 7. **Visualize** — predicted vs. ground-truth trajectory + print the reasoning.
-8. **Upload** — outputs → `users/{profile}/m6/`; the manifest keeps the keys M7
+8. **Upload** — outputs → `users/{profile}/m9/`; the manifest keeps the keys M10
    reads (`model` / `modes_run` / `timestamp` / `results`).
 9. **Cost.**
-10. **Validate + inline preview + Next module (M7).**
+10. **Validate + inline preview + Next module (M10).**
 
 Default `DEMO_CLIPS = ["030c760c-..."]` (one clip) to keep a workshop run cheap;
 uncomment the other staged clips to run all.
@@ -184,11 +184,11 @@ our lane."* (89 chars).
   within tolerance).
 - **Full notebook Restart & Run All on g5** (2026-07-12, participant path, no HF
   token): cell-3 auto-selected `balanced-expert`, cell-6 minADE 0.3779 m, cell-10
-  `Status: PASS`, outputs written to `users/<profile>/m6/`.
+  `Status: PASS`, outputs written to `users/<profile>/m9/`.
 
 ## Multi-GPU (24 GB cards) — the `balanced-expert` device map
 
-p4d/p5 are frequently capacity-constrained. M6 also runs on **24 GB multi-GPU**
+p4d/p5 are frequently capacity-constrained. M9 also runs on **24 GB multi-GPU**
 boxes (g5.48xlarge = 8× A10G 24 GB, g6.48xlarge = 8× L4 24 GB), but **not** with a
 plain `device_map="auto"`:
 
@@ -222,12 +222,12 @@ plain `device_map="auto"`:
     untested floor; if it OOMs, either use p5 or force `balanced-expert`.
   - **24 GB multi-GPU** (g5, g6): `balanced-expert` shards the VLM and pins the
     action stack to cuda:0. This is the **capacity hedge** — when p4d/p5 are
-    unavailable, M6 still runs on whatever multi-GPU box is free.
+    unavailable, M9 still runs on whatever multi-GPU box is free.
 - The env + checkpoints live on the NVMe and are **reset on app restart**; the
   setup cell is idempotent, and a fresh app restores the checkpoints from S3
   (fast, in-region) instead of re-downloading.
 
 ## License
 
-Alpamayo-1.5-10B weights are **non-commercial** (research/evaluation only). M6
-and M7 both surface this notice; the inference code is Apache-2.0.
+Alpamayo-1.5-10B weights are **non-commercial** (research/evaluation only). M9
+and M10 both surface this notice; the inference code is Apache-2.0.

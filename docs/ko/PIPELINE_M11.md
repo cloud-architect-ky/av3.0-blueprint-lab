@@ -8,14 +8,14 @@ DAG(Caption → Curate → Augment)의 `upsert()` + `start()`를 완료까지 �
 
 ## M11이 무엇이었고, 이제 무엇인가
 
-M9처럼, M11은 **환각된 API 실패가 아니었습니다** — 모든 임포트와 클래스
+M12처럼, M11은 **환각된 API 실패가 아니었습니다** — 모든 임포트와 클래스
 (`Pipeline`, `ProcessingStep`, `PipelineSession`, `ScriptProcessor`)가 실제
-SageMaker Python SDK **v2**입니다. 그것의 문제는 M9가 겪은 것과 같은 계열에,
+SageMaker Python SDK **v2**입니다. 그것의 문제는 M12가 겪은 것과 같은 계열에,
 몇 가지 자체 문제가 더해졌습니다:
 
 | 배포된 M11 | 수정된 M11 |
 |---|---|
-| `from sagemaker import Session`(v2 최상위) → SDK-v3 커널에서 실패 | cell-1이 v2를 고정함(`>=2.257.2,<3`) + 자동 커널 재시작(M9에서) |
+| `from sagemaker import Session`(v2 최상위) → SDK-v3 커널에서 실패 | cell-1이 v2를 고정함(`>=2.257.2,<3`) + 자동 커널 재시작(M12에서) |
 | Step1이 `INPUT_DIR/*.jpg`를 glob했지만, M1은 `m1/`에 JSON만 씀 → 캡션 0개 | Step1이 M1의 `selected_scenes.json`(실제 장면 이름 + 설명)을 읽음 → 근거 있는 캡션 |
 | 3개 단계가 `ml.g5.12xlarge`/`g5.xlarge`(GPU)를 요청함 — 여기서 처리 할당량은 0 | CPU `ml.m5.xlarge`(처리 할당량 이용 가능); 스크립트가 순수 Python이라 GPU가 아무것도 추가하지 않음 |
 | GPU `pytorch-training` 이미지 | `image_uris.retrieve("sklearn", …)`를 통한 CPU sklearn 컨테이너 — **`image_scope` 없음**(sklearn에는 `processing` 스코프가 없음; 전달하면 `ValueError: Unsupported image scope` 발생) |
@@ -55,20 +55,20 @@ construction, intersection, turn left, following...")을 가집니다. 캡션은
 - `SageMakerProcessingJobs` — `processing-job/*`에서
   `CreateProcessingJob`/`DescribeProcessingJob`/`StopProcessingJob`/`AddTags`(SDK가
   처리 작업 이름을 자동 생성하므로, 리소스를 프리픽스로 범위 지정할 수 없음).
-- `iam:PassRole` — M9를 위해 추가된 자신 전용,
+- `iam:PassRole` — M12를 위해 추가된 자신 전용,
   `PassedToService=sagemaker.amazonaws.com` 구문을 재사용함; ProcessingStep들이
   이 역할을 그들의 컨테이너에 전달함.
 
-## 드러난 버그들(M9 미러링 + 파이프라인 특유)
+## 드러난 버그들(M12 미러링 + 파이프라인 특유)
 
-M9와 동일한 v2/v3 SDK 체인(#1 v3 커널, #2 인메모리 혼합 / 커널 재시작), 더하기:
-- **Pipeline/Processing IAM** — M9는 학습 작업 권한만 추가했음; M11은 위의
+M12와 동일한 v2/v3 SDK 체인(#1 v3 커널, #2 인메모리 혼합 / 커널 재시작), 더하기:
+- **Pipeline/Processing IAM** — M12는 학습 작업 권한만 추가했음; M11은 위의
   Pipeline + Processing 세트가 필요함(라이브 실행 역할
   `av30lab-sagemaker-execution-role`에서 배포 & 검증됨).
 - **업로드 범위** — 모든 SDK 업로드가 `users/<profile>/m11/` 아래에 오도록
   `default_bucket_prefix`(실행 역할이 쓸 수 있는 유일한 경로). 고정된 SDK
   2.257.3에서 `Session`과 `PipelineSession` 둘 다에 존재함을 확인함.
-- **GPU 할당량 0** — 단계들을 CPU로 옮김(M9가 CPU를 사용하는 것과 같은 이유).
+- **GPU 할당량 0** — 단계들을 CPU로 옮김(M12가 CPU를 사용하는 것과 같은 이유).
 - **빈 입력** — 없는 `*.jpg`가 아니라 M1의 `selected_scenes.json`을 소비함.
 - **`image_scope="processing"` 걸림돌(사전 실행 감사에서 발견됨)** — cell-3이
   `image_uris.retrieve(framework="sklearn", …, image_scope="processing")`으로
@@ -85,9 +85,9 @@ M9와 동일한 v2/v3 SDK 체인(#1 v3 커널, #2 인메모리 혼합 / 커널 �
   `…/m3/curated_captions.json`에 썼음 — 실제 M2/M3 모듈이 생성하는 *정확한 키와
   파일명*이지만, 호환되지 않는 데모 스키마(캡션별 `filename` 없음, 최상위
   `model` 없음)로. M11을 실행하면 참가자의 진짜 M2/M3 출력을 조용히 덮어쓰고,
-  나중에 **M8**(`m2_output["model"]`, `cap["filename"]`) 또는
+  나중에 **M4**(`m2_output["model"]`, `cap["filename"]`) 또는
   **M3**(`captions[0]["filename"]`)를 재실행하면 `KeyError`로 크래시했을 것.
-  M2/M3/M8 노트북 소스에 대해 검증함. 수정: 세 단계 출력을 모두 **M11 전용
+  M2/M3/M4 노트북 소스에 대해 검증함. 수정: 세 단계 출력을 모두 **M11 전용
   네임스페이스** `users/<profile>/m11/pipeline/stepN_*/`로 라우팅함(Step 1은
   여전히 실제 `m1/`을 읽기 전용으로 읽음). DAG/종속성/계보는 변경되지 않음;
   M11은 이제 자체 완결적이며 다른 모듈의 데이터를 오염시킬 수 없음. (실제 M1

@@ -326,7 +326,7 @@ class ApiConstruct(Construct):
             )
 
         # OpenSearch Serverless cleanup for delete_user — it tears down the
-        # collection + policies that M8 creates for a user. Lookup+delete of the
+        # collection + policies that M4 creates for a user. Lookup+delete of the
         # collection and its encryption/network/data-access policies. Policy and
         # collection management actions do not support resource ARNs, so "*".
         delete_user_fn.add_to_role_policy(

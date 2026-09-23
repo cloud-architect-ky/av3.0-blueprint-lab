@@ -188,7 +188,7 @@ export function ModuleDetailPanel({
               </Box>
             </Container>
 
-            {/* External execution (e.g. M7 AlpaSim on a GPU EC2 host over SSM) */}
+            {/* External execution (e.g. M10 AlpaSim on a GPU EC2 host over SSM) */}
             {module.externalExecution && (
               <Container
                 header={

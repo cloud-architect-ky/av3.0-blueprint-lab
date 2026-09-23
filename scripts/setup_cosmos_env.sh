@@ -1,6 +1,6 @@
 #!/bin/bash
-# setup_cosmos_env.sh — Install the NVIDIA Cosmos stacks (Transfer 2.5 for M4,
-# Predict 2.5 for M5) on a SageMaker Distribution (SMD) GPU JupyterLab app, so
+# setup_cosmos_env.sh — Install the NVIDIA Cosmos stacks (Transfer 2.5 for M5,
+# Predict 2.5 for M6) on a SageMaker Distribution (SMD) GPU JupyterLab app, so
 # the notebooks can run REAL inference.
 #
 # WHY THIS SCRIPT EXISTS
@@ -37,18 +37,18 @@
 # USAGE (from a GPU JupyterLab terminal, or `!bash scripts/setup_cosmos_env.sh`):
 #     export HF_TOKEN=hf_xxx            # account must have accepted Cosmos licenses
 #     bash scripts/setup_cosmos_env.sh          # both Cosmos repos (default)
-#     bash scripts/setup_cosmos_env.sh transfer # only Transfer 2.5 (M4)
-#     bash scripts/setup_cosmos_env.sh predict  # only Predict 2.5 (M5)
-#     bash scripts/setup_cosmos_env.sh alpamayo # only Alpamayo 1.5 (M6)
+#     bash scripts/setup_cosmos_env.sh transfer # only Transfer 2.5 (M5)
+#     bash scripts/setup_cosmos_env.sh predict  # only Predict 2.5 (M6)
+#     bash scripts/setup_cosmos_env.sh alpamayo # only Alpamayo 1.5 (M9)
 #     # then, to get an env into your current shell:
-#     source /mnt/sagemaker-nvme/cosmos-work/cosmos_env.sh          # Transfer (M4)
-#     source /mnt/sagemaker-nvme/cosmos-work/cosmos_predict_env.sh  # Predict (M5)
-#     source /mnt/sagemaker-nvme/cosmos-work/alpamayo_env.sh        # Alpamayo (M6)
+#     source /mnt/sagemaker-nvme/cosmos-work/cosmos_env.sh          # Transfer (M5)
+#     source /mnt/sagemaker-nvme/cosmos-work/cosmos_predict_env.sh  # Predict (M6)
+#     source /mnt/sagemaker-nvme/cosmos-work/alpamayo_env.sh        # Alpamayo (M9)
 #
-# M4 sources cosmos_env.sh; M5 sources cosmos_predict_env.sh; M6 sources
+# M5 sources cosmos_env.sh; M6 sources cosmos_predict_env.sh; M9 sources
 # alpamayo_env.sh. They point at SEPARATE venvs, so keep them distinct.
 #
-# ALPAMAYO (M6) is a DIFFERENT stack from Cosmos: package alpamayo1_5, Python
+# ALPAMAYO (M9) is a DIFFERENT stack from Cosmos: package alpamayo1_5, Python
 # 3.12 (not 3.10), torch 2.8, NO transformer-engine, and flash-attn EXCLUDED
 # (its source build fails on the SMD image; the model is loaded with
 # attn_implementation="sdpa"). So it skips the conda-3.10 / TE .so-symlink /
@@ -70,15 +70,15 @@ PY_VERSION="3.10"
 
 TRANSFER_REPO_DIR="$WORK/cosmos-transfer2.5"
 TRANSFER_REPO_URL="https://github.com/nvidia-cosmos/cosmos-transfer2.5.git"
-TRANSFER_ENV_FILE="$WORK/cosmos_env.sh"          # sourced by M4
+TRANSFER_ENV_FILE="$WORK/cosmos_env.sh"          # sourced by M5
 PREDICT_REPO_DIR="$WORK/cosmos-predict2.5"
 PREDICT_REPO_URL="https://github.com/nvidia-cosmos/cosmos-predict2.5.git"
-PREDICT_ENV_FILE="$WORK/cosmos_predict_env.sh"   # sourced by M5
+PREDICT_ENV_FILE="$WORK/cosmos_predict_env.sh"   # sourced by M6
 
-# Alpamayo 1.5 (M6) — separate stack: Python 3.12 venv, no TE, no flash-attn.
+# Alpamayo 1.5 (M9) — separate stack: Python 3.12 venv, no TE, no flash-attn.
 ALPAMAYO_REPO_DIR="$WORK/alpamayo1.5"
 ALPAMAYO_REPO_URL="https://github.com/NVlabs/alpamayo1.5.git"
-ALPAMAYO_ENV_FILE="$WORK/alpamayo_env.sh"        # sourced by M6
+ALPAMAYO_ENV_FILE="$WORK/alpamayo_env.sh"        # sourced by M9
 ALPAMAYO_VENV="$ALPAMAYO_REPO_DIR/a1_5"          # Python 3.12 uv venv (verified name)
 ALPAMAYO_PY_VERSION="3.12"
 
@@ -144,7 +144,7 @@ export UV_CACHE_DIR="$NVME/uv-cache"   # keep the huge wheel cache off the 5GB h
 # --------------------------------------------------------------------------
 # Restore the admin's pre-cached HuggingFace checkpoints into HF_HOME.
 # --------------------------------------------------------------------------
-# M4/M5's inference.py downloads gated Cosmos checkpoints from HF at runtime.
+# M5/M6's inference.py downloads gated Cosmos checkpoints from HF at runtime.
 # Rather than make every participant get an HF token + accept licenses, the admin
 # pre-caches the HF cache TREE to S3 (s3://<shared>/hf-cache/hub/) once. Here we
 # sync it back into $HF_HOME/hub so cosmos loads it offline (HF_HUB_OFFLINE=1,
@@ -170,7 +170,7 @@ if [ -n "$HF_CACHE_S3" ] && aws s3 ls "$HF_CACHE_S3" >/dev/null 2>&1; then
         || echo "[hf-cache] WARNING: restore failed; will fall back to online/token download."
 else
     echo "[hf-cache] No S3 HF cache at ${HF_CACHE_S3:-<unresolved>} — falling back to online"
-    echo "           download (needs HF_TOKEN + accepted licenses for M4/M5)."
+    echo "           download (needs HF_TOKEN + accepted licenses for M5/M6)."
 fi
 
 # --------------------------------------------------------------------------
@@ -297,7 +297,7 @@ EOF
 
 # --------------------------------------------------------------------------
 # prepare_alpamayo — clone + Python 3.12 uv venv (no flash-attn) + env file.
-# Alpamayo 1.5 (M6) has NO transformer-engine, so it skips the TE .so-symlink,
+# Alpamayo 1.5 (M9) has NO transformer-engine, so it skips the TE .so-symlink,
 # CUDA_HOME and ldconfig gymnastics entirely — torch 2.8's bundled CUDA loads
 # fine. flash-attn is EXCLUDED (source build needs nvcc the SMD image lacks);
 # the model is loaded with attn_implementation="sdpa". The hf-cache restore in
@@ -333,12 +333,12 @@ prepare_alpamayo() {
         VIRTUAL_ENV="$ALPAMAYO_VENV" uv sync --active --no-install-package flash-attn 2>&1 | tail -15
     fi
 
-    # Write the env file M6 sources. No conda, no TE, no CUDA_HOME/LD_LIBRARY_PATH
+    # Write the env file M9 sources. No conda, no TE, no CUDA_HOME/LD_LIBRARY_PATH
     # — and actively clear any leaked from a previously-sourced cosmos env (a
     # stale CUDA_HOME points the loader at the 3.10 pip tree and breaks torch 2.8).
     echo "[3/4] Writing $ALPAMAYO_ENV_FILE ..."
     cat > "$ALPAMAYO_ENV_FILE" <<EOF
-# $(basename "$ALPAMAYO_ENV_FILE") — source this to run M6 (alpamayo1_5).
+# $(basename "$ALPAMAYO_ENV_FILE") — source this to run M9 (alpamayo1_5).
 # Generated by setup_cosmos_env.sh. Safe to source repeatedly.
 source "$ALPAMAYO_VENV/bin/activate"
 export ALPAMAYO_REPO_DIR="$ALPAMAYO_REPO_DIR"
@@ -390,14 +390,14 @@ echo ""
 if [ "$FAILED" -eq 0 ]; then
     echo "=== SUCCESS ==="
     echo "Env files written under $WORK:"
-    [ -f "$TRANSFER_ENV_FILE" ] && echo "  M4 (Transfer): source $TRANSFER_ENV_FILE  ->  examples/inference.py ... control:edge"
-    [ -f "$PREDICT_ENV_FILE" ]  && echo "  M5 (Predict):  source $PREDICT_ENV_FILE  ->  examples/inference.py ... --inference-type=video2world"
-    [ -f "$ALPAMAYO_ENV_FILE" ] && echo "  M6 (Alpamayo): source $ALPAMAYO_ENV_FILE  ->  python scripts/alpamayo_infer.py --clips ... --out ..."
+    [ -f "$TRANSFER_ENV_FILE" ] && echo "  M5 (Transfer): source $TRANSFER_ENV_FILE  ->  examples/inference.py ... control:edge"
+    [ -f "$PREDICT_ENV_FILE" ]  && echo "  M6 (Predict):  source $PREDICT_ENV_FILE  ->  examples/inference.py ... --inference-type=video2world"
+    [ -f "$ALPAMAYO_ENV_FILE" ] && echo "  M9 (Alpamayo): source $ALPAMAYO_ENV_FILE  ->  python scripts/alpamayo_infer.py --clips ... --out ..."
     # Exit 0 EXPLICITLY. Without this, the script's exit code is that of the last
     # command above — the `[ -f "$ALPAMAYO_ENV_FILE" ]` test — which is FALSE (1)
     # whenever Alpamayo wasn't part of this run (e.g. WHICH=both installs only
     # transfer+predict). That made a fully-successful setup return exit 1, which
-    # the M4/M5 notebooks correctly flagged as a failure.
+    # the M5/M6 notebooks correctly flagged as a failure.
     exit 0
 else
     echo "=== One or more stacks failed to verify — see errors above ==="

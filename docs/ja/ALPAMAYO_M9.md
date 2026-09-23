@@ -1,10 +1,10 @@
-# Alpamayo 1.5 (M6) — SMD イメージ上での実際の VLA 推論
+# Alpamayo 1.5 (M9) — SMD イメージ上での実際の VLA 推論
 
-**ステータス:** M6 (Alpamayo 1.5、Vision-Language-Action の軌跡予測) は
+**ステータス:** M9 (Alpamayo 1.5、Vision-Language-Action の軌跡予測) は
 SageMaker Distribution (SMD) GPU イメージ上で **エンドツーエンドで検証済み** です
 — `PhysicalAI-Autonomous-Vehicles` のデモクリップに対する実際の推論で、
 Chain-of-Causation の説明と予測された自車軌跡を生成します (検証済みクリップで
-**minADE 0.375 m**)。M4/M5 と同様に、オフライン S3 チェックポイントキャッシュと
+**minADE 0.375 m**)。M5/M6 と同様に、オフライン S3 チェックポイントキャッシュと
 事前保存したデモクリップを介して、**参加者の HF トークンなし** で動作します。
 
 ## このモジュールが抱えていた中核的な問題
@@ -13,12 +13,12 @@ Chain-of-Causation の説明と予測された自車軌跡を生成します (�
 (`from alpamayo.model import AlpamayoForConditionalGeneration`、
 `alpamayo.inference.AlpamayoInferencePipeline`、`alpamayo.utils.load_frames_from_video`、
 `pipeline.predict_trajectory` / `predict_trajectory_multicam` / `visual_qa`) を
-インポートしていました — M4/M5 の偽の `cosmos1` と同じ種類のバグです。
+インポートしていました — M5/M6 の偽の `cosmos1` と同じ種類のバグです。
 `pip install alpamayo` は存在しません。実際のワークフローは公式リポジトリ
 [`NVlabs/alpamayo1.5`](https://github.com/NVlabs/alpamayo1.5)、パッケージ
 `alpamayo1_5` (アンダースコア) です。
 
-M4/M5 とは異なり、Alpamayo は **別のスタック** です: Python **3.12** (Cosmos は
+M5/M6 とは異なり、Alpamayo は **別のスタック** です: Python **3.12** (Cosmos は
 3.10 に固定)、torch 2.8、transformers 4.57.1、`physical-ai-av==0.2.0`、**transformer-engine
 なし**、そして **flash-attn を除外** (そのソースビルドは SMD イメージ上で失敗します)。
 そのため、独自の venv と独自のセットアップパスを持ちます。
@@ -57,9 +57,9 @@ pred_xyz, _, extra = model.sample_trajectories_from_data_with_vlm_rollout(
 
 ## 決定的な 2 つのオフラインに関する知見
 
-M6 は M4/M5 と同様にトークンなしで動作する必要がありますが、2 つの部分は異なる挙動をします:
+M9 は M5/M6 と同様にトークンなしで動作する必要がありますが、2 つの部分は異なる挙動をします:
 
-1. **モデルはオフラインでロードされる — hf-cache を使う (M4/M5 と同じ)。** `HF_TOKEN`
+1. **モデルはオフラインでロードされる — hf-cache を使う (M5/M6 と同じ)。** `HF_TOKEN`
    を未設定にし、`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1` にすると、
    `Alpamayo1_5.from_pretrained(...)` + `helper.get_processor` は S3 から復元された
    HF キャッシュから **トークンなし、ネットワークなし** でロードされます — これには、
@@ -114,9 +114,9 @@ alpamayo`) が追加されました。共有のプリアンブル (バケット�
 `scripts/alpamayo_save_clip.py` は、それらの `.pt` ファイルを生成する管理者専用の
 コンパニオンです (オンラインで、トークンを使用)。
 
-## M6 ノートブックのフロー (書き直し済み)
+## M9 ノートブックのフロー (書き直し済み)
 
-`notebooks/M6_Alpamayo_VLA_Inference.ipynb` (11 セル):
+`notebooks/M9_Alpamayo_VLA_Inference.ipynb` (11 セル):
 
 1. **タイトル** + **ライセンス** (非商用の重み) の markdown。
 2. **設定** — プロファイル/バケット、NVMe 作業ディレクトリ、`DEMO_CLIPS`、`HF_TOKEN` はオプション。
@@ -127,10 +127,10 @@ alpamayo`) が追加されました。共有のプリアンブル (バケット�
    `alpamayo_infer.py` を特定。
 6. **推論** — `a1_5` venv に `bash -lc` で入り、`alpamayo_infer.py` を実行。
 7. **可視化** — 予測軌跡と正解軌跡の比較 + 推論内容を出力。
-8. **アップロード** — 出力 → `users/{profile}/m6/`; マニフェストは M7 が読み取るキー
+8. **アップロード** — 出力 → `users/{profile}/m9/`; マニフェストは M10 が読み取るキー
    (`model` / `modes_run` / `timestamp` / `results`) を保持します。
 9. **コスト。**
-10. **検証 + インラインプレビュー + 次のモジュール (M7)。**
+10. **検証 + インラインプレビュー + 次のモジュール (M10)。**
 
 ワークショップの実行を安価に保つため、デフォルトは `DEMO_CLIPS = ["030c760c-..."]`
 (1 クリップ) です; すべて実行するには、ステージングされた他のクリップのコメントを解除してください。
@@ -183,11 +183,11 @@ our lane."* (89 文字)。
   0.378 m** — H100 の実行から 0.003 m の差 (アーキテクチャ間での bf16 演算順序; 許容範囲内)。
 - **g5 でのノートブック全体の Restart & Run All** (2026-07-12、参加者パス、HF トークンなし):
   cell-3 が `balanced-expert` を自動選択、cell-6 で minADE 0.3779 m、cell-10 で
-  `Status: PASS`、出力は `users/<profile>/m6/` に書き込まれました。
+  `Status: PASS`、出力は `users/<profile>/m9/` に書き込まれました。
 
 ## マルチ GPU (24 GB カード) — `balanced-expert` デバイスマップ
 
-p4d/p5 はしばしば容量制約を受けます。M6 は **24 GB のマルチ GPU** ボックス
+p4d/p5 はしばしば容量制約を受けます。M9 は **24 GB のマルチ GPU** ボックス
 (g5.48xlarge = 8× A10G 24 GB、g6.48xlarge = 8× L4 24 GB) でも動作しますが、単純な
 `device_map="auto"` では **動作しません**:
 
@@ -221,12 +221,12 @@ p4d/p5 はしばしば容量制約を受けます。M6 は **24 GB のマルチ 
     未検証の下限です; OOM になる場合は、p5 を使うか `balanced-expert` を強制してください。
   - **24 GB マルチ GPU** (g5、g6): `balanced-expert` は VLM をシャーディングし、
     アクションスタックを cuda:0 に固定します。これは **容量のヘッジ** です — p4d/p5 が
-    利用できない場合でも、M6 は空いている任意のマルチ GPU ボックスで動作します。
+    利用できない場合でも、M9 は空いている任意のマルチ GPU ボックスで動作します。
 - env + チェックポイントは NVMe 上に存在し、**アプリ再起動時にリセットされます**;
   セットアップセルは冪等で、新しいアプリは再ダウンロードする代わりに S3 (高速、同一リージョン)
   からチェックポイントを復元します。
 
 ## ライセンス
 
-Alpamayo-1.5-10B の重みは **非商用** です (研究/評価のみ)。M6 と M7 の両方がこの通知を
+Alpamayo-1.5-10B の重みは **非商用** です (研究/評価のみ)。M9 と M10 の両方がこの通知を
 表示します; 推論コードは Apache-2.0 です。

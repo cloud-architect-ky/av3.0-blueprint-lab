@@ -1,8 +1,8 @@
-# Cosmos Transfer / Predict (M4, M5) — real inference on the SMD image
+# Cosmos Transfer / Predict (M5, M6) — real inference on the SMD image
 
-**Status:** M4 (Cosmos Transfer 2.5, edge → weather) and M5 (Cosmos Predict 2.5,
+**Status:** M5 (Cosmos Transfer 2.5, edge → weather) and M6 (Cosmos Predict 2.5,
 video2world) are both **verified end-to-end** on the SageMaker Distribution (SMD)
-GPU image — M4 on the repo example + a real nuScenes CAM_FRONT clip, M5 via a
+GPU image — M5 on the repo example + a real nuScenes CAM_FRONT clip, M6 via a
 full JupyterLab "Restart & Run All". Both now run **without a participant HF
 token** via an offline S3 checkpoint cache (see "Offline checkpoint cache" below).
 
@@ -18,7 +18,7 @@ There is no `pip install cosmos-transfer2`. The real workflow is:
    megatron — all **prebuilt** wheels, no source compile).
 3. Run `examples/inference.py -i <spec.json> -o <outdir> control:edge`.
 
-Unlike M10 (gsplat needs a source CUDA compile the SMD image can't do), **M4 is
+Unlike M7 (gsplat needs a source CUDA compile the SMD image can't do), **M5 is
 all prebuilt** — so once the environment is wired up, it just works, and it is
 reproducible via a script.
 
@@ -47,15 +47,15 @@ didn't pick up the conf.d file).
 - https://huggingface.co/nvidia/Cosmos-Guardrail1
 - https://huggingface.co/nvidia/Cosmos-Transfer2.5-2B
 - https://huggingface.co/nvidia/Cosmos-Reason1-7B  (used as the prompt/guardrail reasoner)
-- (M5) https://huggingface.co/nvidia/Cosmos-Predict2.5-2B
+- (M6) https://huggingface.co/nvidia/Cosmos-Predict2.5-2B
 
 Set `export HF_TOKEN=hf_xxx` before running the setup cell. **Do not commit the
 token.** If a token is ever exposed, revoke it at
 https://huggingface.co/settings/tokens.
 
-## M4 notebook flow (rewritten)
+## M5 notebook flow (rewritten)
 
-`notebooks/M4_Cosmos_Transfer_Augmentation.ipynb` now:
+`notebooks/M5_Cosmos_Transfer_Augmentation.ipynb` now:
 
 1. **Config** — profile/buckets, NVMe work dir, weather prompts, `HF_TOKEN`.
 2. **GPU check** — any GPU box ≥ 24 GB (`total_memory`, not `total_mem`).
@@ -68,7 +68,7 @@ https://huggingface.co/settings/tokens.
    so Cosmos computes the Canny edge control on the fly (`--video-path` only).
 6. **Inference** — `examples/inference.py ... control:edge` per spec (35
    diffusion steps; ~3-5 min/clip on p4d/p5).
-7. **Upload** — generated + edge-control mp4s + source clip + manifest → `m4/`.
+7. **Upload** — generated + edge-control mp4s + source clip + manifest → `m5/`.
 8. **Cost + validate + inline preview.**
 
 Default `CONDITIONS = ["rain"]` to keep a workshop run cheap; extend to
@@ -81,9 +81,9 @@ Default `CONDITIONS = ["rain"]` to keep a workshop run cheap; extend to
   (`{'edge': None}` in the log confirms on-the-fly edge; 35/35 steps, ~4m38s on
   the running GPU box).
 
-## M5 (Cosmos Predict 2.5) — verified
+## M6 (Cosmos Predict 2.5) — verified
 
-M5 shipped the same hallucinated API (`WorldGenerationPipeline`). The real path
+M6 shipped the same hallucinated API (`WorldGenerationPipeline`). The real path
 is the sibling repo **`github.com/nvidia-cosmos/cosmos-predict2.5`** — same
 install shape as Transfer (`cosmos-oss[cu128_torch27]`, `uv sync --extra=cu128`,
 same CUDA/opencv fixes) but a **separate** top-level package (`cosmos_predict2`)
@@ -93,12 +93,12 @@ H100×8).
 - `scripts/setup_cosmos_env.sh` now takes an arg: `transfer` | `predict` | `both`
   (default). `prepare_repo()` clones + `uv sync`s each repo into its own venv,
   applies the shared fixes, and writes a per-stack env file: **`cosmos_env.sh`**
-  (Transfer/M4) and **`cosmos_predict_env.sh`** (Predict/M5). M5 sources the
+  (Transfer/M5) and **`cosmos_predict_env.sh`** (Predict/M6). M6 sources the
   latter.
-- M5 notebook (`notebooks/M5_Cosmos_Predict_Synthesis.ipynb`) rewritten to the
-  real flow: run setup (`predict`) → reuse M4's nuScenes clip (`m4/source/`, else
+- M6 notebook (`notebooks/M6_Cosmos_Predict_Synthesis.ipynb`) rewritten to the
+  real flow: run setup (`predict`) → reuse M5's nuScenes clip (`m5/source/`, else
   rebuild from M1) → build a Video2World spec → `examples/inference.py -i spec
-  -o out --inference-type=video2world` → upload to `m5/`.
+  -o out --inference-type=video2world` → upload to `m6/`.
 - **Input spec** (Predict 2.5): `{"inference_type":"video2world", "name":..,
   "prompt":.., "input_path":<mp4>}`. Note `input_path` (NOT Transfer's
   `video_path`). Base 2B needs **no** `--experiment`/`--checkpoint-path`; the
@@ -108,11 +108,11 @@ H100×8).
 - **Verified run**: nuScenes CAM_FRONT clip → `near_collision` prompt →
   `Generating video with standard mode... 36/36 [~4m07s]` → `nuscenes_near_collision.mp4`.
 
-### Two bugs found while wiring M5 (fixed in setup_cosmos_env.sh)
+### Two bugs found while wiring M6 (fixed in setup_cosmos_env.sh)
 - **uv venv has no `pip`.** The refactor briefly used `"$venv/bin/python" -m pip`
   for the opencv cleanup → `No module named pip`, so the GUI `opencv-python` was
   left in place and `import cv2` hit `libgthread-2.0.so.0` (same libGL family as
-  M4). Fix: use **`VIRTUAL_ENV=$venv uv pip ...`** (uv venvs always have `uv pip`,
+  M5). Fix: use **`VIRTUAL_ENV=$venv uv pip ...`** (uv venvs always have `uv pip`,
   never `pip`).
 - **git-lfs not on the bare SMD shell PATH** → `git clone` checkout fails
   (`git-lfs filter-process: git-lfs: not found`). Fix: clone with
@@ -121,12 +121,12 @@ H100×8).
 
 ## Offline checkpoint cache — no participant HF token
 
-M4/M5's `examples/inference.py` pulls gated Cosmos checkpoints through Hugging
+M5/M6's `examples/inference.py` pulls gated Cosmos checkpoints through Hugging
 Face's own cache at runtime (`checkpoint_db` → `uvx hf download`). To spare every
 participant an HF account + token + license approvals, we cache once and run
 offline:
 
-- **Admin (once):** run M4 + M5 on a GPU app with an admin HF token (licenses
+- **Admin (once):** run M5 + M6 on a GPU app with an admin HF token (licenses
   accepted), then `aws s3 sync /mnt/sagemaker-nvme/hf/hub s3://<shared>/hf-cache/hub/`.
   Running the modules (vs a bare `hf download`) guarantees every revision + side
   file cosmos needs (Wan2.1 VAE, Reason1.1, Guardrail1, …) is in the tree.
@@ -134,9 +134,9 @@ offline:
   into `$HF_HOME/hub`, and the generated `cosmos_env.sh` / `cosmos_predict_env.sh`
   export **`HF_HUB_OFFLINE=1`** (+ `TRANSFORMERS_OFFLINE=1`) **only when that
   cache is present**. cosmos then loads from cache with no token, no network.
-- **Verified (2026-07-09):** with `HF_TOKEN=""` and `HF_HUB_OFFLINE=1`, M5
+- **Verified (2026-07-09):** with `HF_TOKEN=""` and `HF_HUB_OFFLINE=1`, M6
   video2world completed 36/36 steps — `uvx hf download` honored offline mode and
-  hit the local cache. Same mechanism covers M4.
+  hit the local cache. Same mechanism covers M5.
 - **Fallback:** if `hf-cache/hub/` is absent in S3, setup leaves online mode on
   and a caller-supplied `HF_TOKEN` still downloads (accepted licenses required).
   The notebooks no longer hard-fail when the token is missing — they assume the
@@ -154,7 +154,7 @@ offline:
 - Cell 2 picks the run strategy from **per-GPU VRAM** (never the sum), so the
   instance you choose changes the *output*, not just the speed:
 
-  | per-GPU | Strategy | M4 output | M5 output | Guardrails | Example (~$/hr) |
+  | per-GPU | Strategy | M5 output | M6 output | Guardrails | Example (~$/hr) |
   |---|---|---|---|---|---|
   | ≥70 GB | single GPU | 720p | native | ON | `ml.g7e.2xlarge` (**4.20**), `ml.p5.48xlarge` (63.30) |
   | ≥38 GB | N-GPU shard | 720p | native | ON | `ml.p4d.24xlarge` (25.25) |

@@ -1,8 +1,8 @@
-# Cosmos Transfer / Predict (M4, M5) — SMD イメージ上での実際の推論
+# Cosmos Transfer / Predict (M5, M6) — SMD イメージ上での実際の推論
 
-**ステータス:** M4 (Cosmos Transfer 2.5、edge → weather) と M5 (Cosmos Predict 2.5、
+**ステータス:** M5 (Cosmos Transfer 2.5、edge → weather) と M6 (Cosmos Predict 2.5、
 video2world) は、いずれも SageMaker Distribution (SMD) GPU イメージ上で **エンドツーエンドで
-検証済み** です — M4 はリポジトリの例 + 実際の nuScenes CAM_FRONT クリップで、M5 は完全な
+検証済み** です — M5 はリポジトリの例 + 実際の nuScenes CAM_FRONT クリップで、M6 は完全な
 JupyterLab の "Restart & Run All" で検証しました。両方とも、オフライン S3 チェックポイント
 キャッシュを介して **参加者の HF トークンなし** で動作するようになりました (下記の
 「オフラインチェックポイントキャッシュ」を参照)。
@@ -19,8 +19,8 @@ JupyterLab の "Restart & Run All" で検証しました。両方とも、オフ
    megatron — すべて **プリビルド** ホイールで、ソースコンパイルなし)。
 3. `examples/inference.py -i <spec.json> -o <outdir> control:edge` を実行する。
 
-M10 (gsplat は SMD イメージができないソース CUDA コンパイルを必要とする) とは異なり、
-**M4 はすべてプリビルド** です — そのため、いったん環境が配線されれば、そのまま動作し、
+M7 (gsplat は SMD イメージができないソース CUDA コンパイルを必要とする) とは異なり、
+**M5 はすべてプリビルド** です — そのため、いったん環境が配線されれば、そのまま動作し、
 スクリプトで再現可能です。
 
 ## `scripts/setup_cosmos_env.sh`
@@ -47,15 +47,15 @@ M10 (gsplat は SMD イメージができないソース CUDA コンパイルを
 - https://huggingface.co/nvidia/Cosmos-Guardrail1
 - https://huggingface.co/nvidia/Cosmos-Transfer2.5-2B
 - https://huggingface.co/nvidia/Cosmos-Reason1-7B  (プロンプト/ガードレールの推論器として使用)
-- (M5) https://huggingface.co/nvidia/Cosmos-Predict2.5-2B
+- (M6) https://huggingface.co/nvidia/Cosmos-Predict2.5-2B
 
 セットアップセルを実行する前に `export HF_TOKEN=hf_xxx` を設定してください。**トークンを
 コミットしないでください。** トークンが露出した場合は、
 https://huggingface.co/settings/tokens で失効させてください。
 
-## M4 ノートブックのフロー (書き直し済み)
+## M5 ノートブックのフロー (書き直し済み)
 
-`notebooks/M4_Cosmos_Transfer_Augmentation.ipynb` は現在:
+`notebooks/M5_Cosmos_Transfer_Augmentation.ipynb` は現在:
 
 1. **設定** — プロファイル/バケット、NVMe 作業ディレクトリ、天候プロンプト、`HF_TOKEN`。
 2. **GPU チェック** — 任意の ≥ 24 GB GPU ボックス (`total_memory`、`total_mem` ではない)。
@@ -68,7 +68,7 @@ https://huggingface.co/settings/tokens で失効させてください。
    Canny エッジコントロールをオンザフライで計算するようにする (`--video-path` のみ)。
 6. **推論** — spec ごとに `examples/inference.py ... control:edge` (35 拡散ステップ;
    p4d/p5 上でクリップあたり ~3-5 分)。
-7. **アップロード** — 生成された + エッジコントロールの mp4 + ソースクリップ + マニフェスト → `m4/`。
+7. **アップロード** — 生成された + エッジコントロールの mp4 + ソースクリップ + マニフェスト → `m5/`。
 8. **コスト + 検証 + インラインプレビュー。**
 
 ワークショップの実行を安価に保つため、デフォルトは `CONDITIONS = ["rain"]` です;
@@ -81,9 +81,9 @@ https://huggingface.co/settings/tokens で失効させてください。
   (ログ内の `{'edge': None}` がオンザフライのエッジを確認; 35/35 ステップ、実行中の
   GPU ボックスで ~4m38s)。
 
-## M5 (Cosmos Predict 2.5) — 検証済み
+## M6 (Cosmos Predict 2.5) — 検証済み
 
-M5 は同じハルシネーションによる API (`WorldGenerationPipeline`) を出荷していました。実際の
+M6 は同じハルシネーションによる API (`WorldGenerationPipeline`) を出荷していました。実際の
 パスは兄弟リポジトリ **`github.com/nvidia-cosmos/cosmos-predict2.5`** です — Transfer と
 同じインストール形状 (`cosmos-oss[cu128_torch27]`、`uv sync --extra=cu128`、同じ
 CUDA/opencv 修正) ですが、**独自の `.venv`** 内に **別個の** トップレベルパッケージ
@@ -93,11 +93,11 @@ H100×8)。
 - `scripts/setup_cosmos_env.sh` は引数を取るようになりました: `transfer` | `predict` | `both`
   (デフォルト)。`prepare_repo()` は各リポジトリをクローン + `uv sync` して独自の venv に入れ、
   共有の修正を適用し、スタックごとの env ファイルを書き出します: **`cosmos_env.sh`**
-  (Transfer/M4) と **`cosmos_predict_env.sh`** (Predict/M5)。M5 は後者を source します。
-- M5 ノートブック (`notebooks/M5_Cosmos_Predict_Synthesis.ipynb`) は実際のフローに書き直されました:
-  セットアップを実行 (`predict`) → M4 の nuScenes クリップを再利用 (`m4/source/`、なければ
+  (Transfer/M5) と **`cosmos_predict_env.sh`** (Predict/M6)。M6 は後者を source します。
+- M6 ノートブック (`notebooks/M6_Cosmos_Predict_Synthesis.ipynb`) は実際のフローに書き直されました:
+  セットアップを実行 (`predict`) → M5 の nuScenes クリップを再利用 (`m5/source/`、なければ
   M1 から再構築) → Video2World の spec を構築 → `examples/inference.py -i spec
-  -o out --inference-type=video2world` → `m5/` にアップロード。
+  -o out --inference-type=video2world` → `m6/` にアップロード。
 - **入力 spec** (Predict 2.5): `{"inference_type":"video2world", "name":..,
   "prompt":.., "input_path":<mp4>}`。`input_path` に注意 (Transfer の `video_path` ではない)。
   ベース 2B には `--experiment`/`--checkpoint-path` は **不要** です; モードは自動検出されます
@@ -107,10 +107,10 @@ H100×8)。
 - **検証済みの実行**: nuScenes CAM_FRONT クリップ → `near_collision` プロンプト →
   `Generating video with standard mode... 36/36 [~4m07s]` → `nuscenes_near_collision.mp4`。
 
-### M5 の配線中に見つかった 2 つのバグ (setup_cosmos_env.sh で修正済み)
+### M6 の配線中に見つかった 2 つのバグ (setup_cosmos_env.sh で修正済み)
 - **uv venv には `pip` がない。** リファクタリングで一時的に opencv クリーンアップに
   `"$venv/bin/python" -m pip` を使用 → `No module named pip`。そのため GUI の `opencv-python`
-  がそのまま残り、`import cv2` が `libgthread-2.0.so.0` に当たった (M4 と同じ libGL ファミリー)。
+  がそのまま残り、`import cv2` が `libgthread-2.0.so.0` に当たった (M5 と同じ libGL ファミリー)。
   修正: **`VIRTUAL_ENV=$venv uv pip ...`** を使う (uv venv には常に `uv pip` があり、`pip` は
   決してない)。
 - **git-lfs が素の SMD シェルの PATH にない** → `git clone` のチェックアウトが失敗する
@@ -120,12 +120,12 @@ H100×8)。
 
 ## オフラインチェックポイントキャッシュ — 参加者の HF トークン不要
 
-M4/M5 の `examples/inference.py` は、ランタイムに Hugging Face 自身のキャッシュ
+M5/M6 の `examples/inference.py` は、ランタイムに Hugging Face 自身のキャッシュ
 (`checkpoint_db` → `uvx hf download`) を通じてゲート付き Cosmos チェックポイントを取得します。
 すべての参加者に HF アカウント + トークン + ライセンス承認を強いることを避けるため、一度
 キャッシュしてオフラインで実行します:
 
-- **管理者 (一度):** 管理者の HF トークン (ライセンス承認済み) を持つ GPU アプリ上で M4 + M5 を
+- **管理者 (一度):** 管理者の HF トークン (ライセンス承認済み) を持つ GPU アプリ上で M5 + M6 を
   実行し、その後 `aws s3 sync /mnt/sagemaker-nvme/hf/hub s3://<shared>/hf-cache/hub/`。
   モジュールを実行すること (素の `hf download` ではなく) が、cosmos が必要とするすべての
   リビジョン + サイドファイル (Wan2.1 VAE、Reason1.1、Guardrail1、…) がツリーにあることを保証します。
@@ -133,9 +133,9 @@ M4/M5 の `examples/inference.py` は、ランタイムに Hugging Face 自身�
   `aws s3 sync` で戻し、生成された `cosmos_env.sh` / `cosmos_predict_env.sh` が **そのキャッシュが
   存在する場合にのみ** **`HF_HUB_OFFLINE=1`** (+ `TRANSFORMERS_OFFLINE=1`) を export します。
   すると cosmos はトークンなし、ネットワークなしでキャッシュからロードします。
-- **検証済み (2026-07-09):** `HF_TOKEN=""` および `HF_HUB_OFFLINE=1` で、M5 の video2world が
+- **検証済み (2026-07-09):** `HF_TOKEN=""` および `HF_HUB_OFFLINE=1` で、M6 の video2world が
   36/36 ステップを完了しました — `uvx hf download` がオフラインモードを尊重し、ローカル
-  キャッシュにヒットしました。同じメカニズムが M4 をカバーします。
+  キャッシュにヒットしました。同じメカニズムが M5 をカバーします。
 - **フォールバック:** `hf-cache/hub/` が S3 に存在しない場合、セットアップはオンラインモードを
   有効なままにし、呼び出し元が提供する `HF_TOKEN` で依然ダウンロードします (ライセンス承認が
   必要)。ノートブックはトークンが欠けていても、もはやハードに失敗しません — オフライン

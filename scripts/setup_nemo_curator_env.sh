@@ -20,7 +20,7 @@
 #      video_cuda12 caps torch<=2.9.1 and drags in vllm / flash-attn / pycuda /
 #      PyNvVideoCodec + a transformers==4.55.2 override — these fight the SMD
 #      image's own torch/transformers/CUDA userspace. A separate venv is the
-#      natural fit: the M3 notebook shells out to it (like M4 shells out to the
+#      natural fit: the M3 notebook shells out to it (like M5 shells out to the
 #      cosmos venv), so the kernel itself stays clean.
 #   3. Use the libopenh264 (software H.264) encoder — NOT libvpx-vp9. NeMo
 #      Curator's motion filter reads motion-vector side data, which ffmpeg

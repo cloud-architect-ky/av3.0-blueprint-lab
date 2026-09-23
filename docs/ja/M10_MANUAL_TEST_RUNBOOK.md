@@ -1,10 +1,10 @@
-# M7 手動テストランブック (Part A: admin GPU 実行 → Part B: 参加者ノートブック)
+# M10 手動テストランブック (Part A: admin GPU 実行 → Part B: 参加者ノートブック)
 
-M7 は 2 層構造です。**Part A** = admin が GPU EC2 上で本物の AlpaSim を実行して `m7-reference/`
+M10 は 2 層構造です。**Part A** = admin が GPU EC2 上で本物の AlpaSim を実行して `m10-reference/`
 を作る (重く、1 回限り)。**Part B** = 参加者が CPU ノートブックでその結果を可視化する (軽く、
 反復可能)。「両方を順番に」とは、A で参照結果を新たに作り → B でそれをノートブックで見る流れです。
 
-> リファレンス配備で既に正常に実行され、`s3://av30lab-shared-data-<aws-account-id>/m7-reference/`
+> リファレンス配備で既に正常に実行され、`s3://av30lab-shared-data-<aws-account-id>/m10-reference/`
 > に本物の結果がアップロードされたことがあります。そのような参照結果が既にあれば、**Part B だけを
 > 単独で実行しても完全な検証**になります。Part A は「最初からやり直して再現」したいときにのみ
 > 必要です (~$30、2〜3 時間)。
@@ -38,7 +38,7 @@ UN aws sts get-caller-identity --query '[Account,Arn]' --output text
 # このラボが配備されたアカウント/リージョン → 以降すべてのブロックが使う変数 (ハードコードの代わりにここで一度定義)
 export REGION=<region>                                    # あなたが配備したリージョンに (例: us-west-2)
 export ACCOUNT=$(UN aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # モデル/データ/ノートブックテンプレート + m7-reference
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # モデル/データ/ノートブックテンプレート + m10-reference
 export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}      # 参加者ごとの users/<id>/ (Part C で使用)
 echo "ACCOUNT=$ACCOUNT REGION=$REGION"
 echo "SHARED_BUCKET=$SHARED_BUCKET"
@@ -64,7 +64,7 @@ echo "SHARED_BUCKET=$SHARED_BUCKET"
 > `g6e.16xlarge` を選ぶと GPU 1 枚なので実行直前に
 > `Service renderer requested GPUs [1] but only 0 .. 0 are available` で落ちます。
 >
-> | g6e size | GPUs | vCPU | M7(2gpu) |
+> | g6e size | GPUs | vCPU | M10(2gpu) |
 > |---|---|---|---|
 > | xlarge / 2xlarge / 4xlarge / 8xlarge | **1** | 4–32 | ❌ |
 > | **g6e.12xlarge** | **4** | 48 | ✅ **推奨** |
@@ -106,11 +106,11 @@ echo "VPC=$VPC SUBNET=$SUBNET"
 
 # (c) セキュリティグループ (egress のみ必要; SSM 接続なのでインバウンド不要)
 SG=$(UN aws ec2 create-security-group --region $REGION \
-  --group-name av30-alpasim-m7 --description "M7 AlpaSim egress" \
+  --group-name av30-alpasim-m7 --description "M10 AlpaSim egress" \
   --vpc-id $VPC --query GroupId --output text)
 # (インバウンドルールは追加しない — SSM Session Manager で接続)
 
-# (d) IAM instance-profile (ラボアカウントにない → その場で作成)。hf-cache read + m7-reference write + KMS + SSM。
+# (d) IAM instance-profile (ラボアカウントにない → その場で作成)。hf-cache read + m10-reference write + KMS + SSM。
 UN aws iam create-role --role-name av30-alpasim-m7 \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
 UN aws iam attach-role-policy --role-name av30-alpasim-m7 \
@@ -120,7 +120,7 @@ UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
-  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${SHARED_BUCKET}/m7-reference/*"},
+  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${SHARED_BUCKET}/m10-reference/*"},
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
@@ -178,7 +178,7 @@ tail -f /var/log/alpasim_m7.log   # Ctrl-C で抜けてもバックグラウン�
 スクリプトがやること: preflight(nvidia-smi/docker/uv/cargo) → hf-cache 復元 → alpasim clone
 (tag alpasim-base-v0.96.0) → NGC login(オプション)+イメージアクセス確認 → `source setup_local_env.sh`
 → mount ディレクトリ作成 → `deploy/local_m7.yaml`(driver HF-offline) + `topology/m7_4gpu.yaml`
-(driver 単独 GPU0) 作成 → `uv run alpasim_wizard ...` 実行 → 結果検証 → `s3://.../m7-reference/`
+(driver 単独 GPU0) 作成 → `uv run alpasim_wizard ...` 実行 → 結果検証 → `s3://.../m10-reference/`
 アップロード。**初回ビルドは時間がかかります (protos コンパイル + イメージ pull + NuRec シーンのダウンロード)。**
 再実行時は clone/ビルド/hf-cache/NuRec シーンが残っているので wizard ステップからになり、はるかに速い。
 
@@ -190,8 +190,8 @@ tail -f /var/log/alpasim_m7.log   # Ctrl-C で抜けてもバックグラウン�
   ```
   runtime-0-1 exited with code 0            # eval コンテナが 0 で正常終了
   [verify] core outputs present.
-  [upload] -> s3://.../m7-reference/ ...
-  === DONE — genuine AlpaSim results uploaded to s3://.../m7-reference/ ===
+  [upload] -> s3://.../m10-reference/ ...
+  === DONE — genuine AlpaSim results uploaded to s3://.../m10-reference/ ===
   ```
   成功時に `tail -f` が止まるのは **正常**です (スクリプトが終わってバックグラウンドプロセスが終了 —
   死んだのではない)。最終確定は A4 の S3 確認 (今日の日付)。
@@ -209,15 +209,15 @@ tail -f /var/log/alpasim_m7.log   # Ctrl-C で抜けてもバックグラウン�
 
 素早く成功可否だけ確認:
 ```bash
-grep -q "=== DONE" /var/log/alpasim_m7.log && echo "M7 成功 (S3 アップロード完了)" \
-  || echo "M7 未完 — ログ末尾(tail -n 40)で ERROR/RuntimeError/中断地点を確認"
+grep -q "=== DONE" /var/log/alpasim_m7.log && echo "M10 成功 (S3 アップロード完了)" \
+  || echo "M10 未完 — ログ末尾(tail -n 40)で ERROR/RuntimeError/中断地点を確認"
 ```
 
 ## A4. 成功確認 → **即座に terminate** (課金停止)
 ```bash
 # ⟸ 先に §0 の UN() ラッパー + SHARED_BUCKET/REGION 変数を定義しておくこと。
 # ローカル(資格情報)で:
-UN aws s3 ls s3://$SHARED_BUCKET/m7-reference/ --recursive --region $REGION
+UN aws s3 ls s3://$SHARED_BUCKET/m10-reference/ --recursive --region $REGION
 # aggregate/results-summary.json + metrics_results.{txt,png,parquet} + rollouts/**/metrics.parquet
 # + eval/eval.mp4 + run.json が見えれば成功。
 
@@ -240,24 +240,24 @@ UN aws ec2 delete-security-group --region $REGION --group-id $SG
 
 # Part C — admin: 参加者ごとのセルフラン用プロビジョニング (参加者が自分で AlpaSim を回すとき)
 
-Part A は admin が **共有参照結果 1 式** (`m7-reference/`) を作るものです。以下の Part C は
+Part A は admin が **共有参照結果 1 式** (`m10-reference/`) を作るものです。以下の Part C は
 **参加者ごとに自分の GPU ホストで直接 AlpaSim を回させる**とき (参加者実行ガイド =
-[M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md)) に admin が行う事前配線です。
+[M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md)) に admin が行う事前配線です。
 
 > **コスト/上限の警告**: g6e.12xlarge = **48 vCPU/台**、~**$10.5/hr/台**。G-vCPU quota 768 →
 > **同時最大 16 台 (=16 名)**。launch 前に必ず quota を確認:
 > `UN aws service-quotas get-service-quota --region $REGION --service-code ec2 --quota-code L-DB2E81BA`
 
 ## C1. instance-profile ポリシーの拡張 (参加者は user-workspace に書く)
-Part A の `av30-alpasim-m7` インスタンスロールは `m7-reference/` にのみ write します。参加者のセルフランは
-`users/<id>/m7/` に書く必要があるのでポリシーを拡張します (prefix 制限で複数参加者の共有が可能):
+Part A の `av30-alpasim-m7` インスタンスロールは `m10-reference/` にのみ write します。参加者のセルフランは
+`users/<id>/m10/` に書く必要があるのでポリシーを拡張します (prefix 制限で複数参加者の共有が可能):
 ```bash
 # ⟸ 先に §0 の UN() ラッパー + SHARED_BUCKET/USER_BUCKET 変数を定義しておくこと。
 UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-participant-m7 \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
-  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${USER_BUCKET}/users/*/m7/*"},
+  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${USER_BUCKET}/users/*/m10/*"},
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
@@ -267,7 +267,7 @@ JSON
 Part A2 の (e) `run-instances` に参加者タグを追加します (共有 SG/instance-profile を再利用):
 ```bash
 # ⟸ 先に §0 の UN() ラッパーを定義 + 資格情報を更新しておくこと (しないと 'command not found: UN')。
-PID=m7-test01     # 参加者 id
+PID=m10-test01     # 参加者 id
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
@@ -288,7 +288,7 @@ UN aws ec2 wait instance-status-ok --region $REGION --instance-ids $IID
 # ⟸ 先に §0 の UN() ラッパーを定義 + 資格情報を更新しておくこと (しないと 'command not found: UN')。
 UN aws iam create-user --user-name $PID
 # heredoc で $REGION/$ACCOUNT/$IID は展開し、IAM ポリシー変数 ${aws:...} は \$ で保存。
-UN aws iam put-user-policy --user-name $PID --policy-name m7-ssm --policy-document "$(cat <<JSON
+UN aws iam put-user-policy --user-name $PID --policy-name m10-ssm --policy-document "$(cat <<JSON
 {
   "Version":"2012-10-17","Statement":[
    {"Sid":"StartOwnInstance","Effect":"Allow","Action":["ssm:StartSession"],
@@ -310,7 +310,7 @@ UN aws iam create-access-key --user-name $PID   # → 参加者に out-of-band �
 # ⟸ 先に §0 の UN() ラッパーを定義 + 資格情報を更新しておくこと (しないと 'command not found: UN')。
 UN aws iam create-user --user-name $PID --tags Key=Participant,Value=$PID
 # heredoc で $REGION/$ACCOUNT は展開、IAM ポリシー変数 ${aws:...} は \$ で保存。
-UN aws iam put-user-policy --user-name $PID --policy-name m7-ssm-abac --policy-document "$(cat <<JSON
+UN aws iam put-user-policy --user-name $PID --policy-name m10-ssm-abac --policy-document "$(cat <<JSON
 {
   "Version":"2012-10-17","Statement":[
    {"Sid":"StartTaggedInstance","Effect":"Allow","Action":["ssm:StartSession"],
@@ -338,8 +338,8 @@ aws ec2 terminate-instances --instance-ids $IID --region $REGION # ✗ 拒否の
 ```
 
 ## C5. 参加者実行 → 完了通知 → admin 整理
-- 参加者は [M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md) に従って実行し、
-  結果を `users/<id>/m7/` にアップロードした後 **完了を通知**します。
+- 参加者は [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md) に従って実行し、
+  結果を `users/<id>/m10/` にアップロードした後 **完了を通知**します。
 - admin は通知を受けたら即座に整理 (タグで一括照会が可能):
 ```bash
 # ⟸ 先に §0 の UN() ラッパーを定義 + 資格情報を更新しておくこと (しないと 'command not found: UN')。
@@ -352,8 +352,8 @@ UN aws ec2 describe-instances --region $REGION \
 # IAM user 整理 (キーを先に削除)
 UN aws iam list-access-keys --user-name $PID --query 'AccessKeyMetadata[].AccessKeyId' --output text \
   | tr '\t' '\n' | while read k; do UN aws iam delete-access-key --user-name $PID --access-key-id "$k"; done
-UN aws iam delete-user-policy --user-name $PID --policy-name m7-ssm 2>/dev/null || \
-  UN aws iam delete-user-policy --user-name $PID --policy-name m7-ssm-abac 2>/dev/null
+UN aws iam delete-user-policy --user-name $PID --policy-name m10-ssm 2>/dev/null || \
+  UN aws iam delete-user-policy --user-name $PID --policy-name m10-ssm-abac 2>/dev/null
 UN aws iam delete-user --user-name $PID
 ```
 
@@ -362,7 +362,7 @@ UN aws iam delete-user --user-name $PID
 
 ---
 
-# Part B — 参加者: Studio CPU ノートブックで M7 を可視化 (~$0、5 分)
+# Part B — 参加者: Studio CPU ノートブックで M10 を可視化 (~$0、5 分)
 
 これが参加者が実際に体験する内容で、ゲート 3 の「実際の Studio 環境」ギャップを埋めます。
 
@@ -372,22 +372,22 @@ UN aws iam delete-user --user-name $PID
    なければ admin ダッシュボード → Users → Provision で新しいユーザーを 1 人作るとリンクが出ます。
 2. ブラウザでそのリンクを開く → Pipeline Map が表示される。
 
-## B2. インスタンス = CPU の確認 (M7 は GPU 不要)
-- M7 ノートは **`ml.t3.medium`(CPU)** で回ります。ワークスペースのデフォルトが t3.medium なので
-  **インスタンス変更は不要**。(M6 で GPU に上げた場合は、M7 の前に Instance Options → t3.medium に
+## B2. インスタンス = CPU の確認 (M10 は GPU 不要)
+- M10 ノートは **`ml.t3.medium`(CPU)** で回ります。ワークスペースのデフォルトが t3.medium なので
+  **インスタンス変更は不要**。(M9 で GPU に上げた場合は、M10 の前に Instance Options → t3.medium に
   戻すのがコスト上望ましい — GPU でも回りはするが無駄。)
 
 ## B3. ワークスペースを開いてノートブックを実行
 1. ダッシュボード右上の **Open Workspace** → JupyterLab タブ。
-2. ファイルブラウザで **`M7_AlpaSim_ClosedLoop.ipynb`** を開く。
+2. ファイルブラウザで **`M10_AlpaSim_ClosedLoop.ipynb`** を開く。
 3. **Run ▸ Run All Cells** (または Shift+Enter で上→下)。
 
 ## B4. 合格基準 (各セルがこう出るはず)
 | セル | 期待される出力 |
 |---|---|
-| cell-2 config | Profile/Reference eval/M6 provenance のパスを出力 |
-| cell-3 provenance | M6 manifest があれば open-loop minADE を表示、なければ "stand alone" (どちらも正常) |
-| cell-4 download | `aws s3 sync m7-reference/` → アーティファクト一覧 (aggregate/、rollouts/、eval/、run.json) |
+| cell-2 config | Profile/Reference eval/M9 provenance のパスを出力 |
+| cell-3 provenance | M9 manifest があれば open-loop minADE を表示、なければ "stand alone" (どちらも正常) |
+| cell-4 download | `aws s3 sync m10-reference/` → アーティファクト一覧 (aggregate/、rollouts/、eval/、run.json) |
 | cell-5 parse | AlpaSim 集計表 verbatim + 11 個の driving score (collision 0.00、dist_to_gt 4.37m、progress 0.92) + "Per-rollout time-series: N rows" |
 | cell-6 viz | metrics_results.png インライン + safety-rate バー + dist_to_gt_trajectory 時系列 |
 | cell-7 video | eval.mp4 (~4.7MB) インライン再生 |
@@ -397,7 +397,7 @@ UN aws iam delete-user --user-name $PID
 ## B5. よくある失敗 → 原因
 | 症状 | 原因/解決 |
 |---|---|
-| cell-4 `M7 reference eval not found in S3` | m7-reference/ 未アップロード → Part A を先に (または既存バンドルを確認) |
+| cell-4 `M10 reference eval not found in S3` | m10-reference/ 未アップロード → Part A を先に (または既存バンドルを確認) |
 | cell-4 download failed / AccessDenied | 実行ロールが shared バケットの read 権限なし → 既に付与済み (正常)。なければ IAM を確認 |
 | cell-7 video 未表示 | eval.mp4 欠落 (必須ではない) — メトリクスだけでも PASS |
 | STS/import エラー | CPU カーネルに pandas/matplotlib はデフォルト同梱 — ダメなら最初のセルで `%pip install pandas matplotlib` |

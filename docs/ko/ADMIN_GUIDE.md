@@ -6,8 +6,8 @@
 
 > **황금률:** 무겁고, 게이트가 걸려 있고, GPU가 필요하고, 자격 증명이 얽힌 작업은 모두 관리자의 몫입니다.
 > 아래 이벤트 전 체크리스트를 완료하면, 참가자는 **AWS 계정 없이, Hugging Face 토큰 없이, 라이선스 클릭 없이**
-> 브라우저에서 M0–M11을 실행할 수 있습니다
-> (유일한 예외는 선택 사항인 M7 자가 실행입니다 — §7 참고).
+> 브라우저에서 M0–M12을 실행할 수 있습니다
+> (유일한 예외는 선택 사항인 M10 자가 실행입니다 — §7 참고).
 
 ---
 
@@ -20,7 +20,7 @@
 - **S3 버킷 2개** (이름은 **당신의** 계정 + 리전에서 파생됩니다 — 이 가이드의
   예시는 레퍼런스 배포인 계정 `<aws-account-id>` / `us-west-2`를 사용합니다.
   당신의 값으로 치환하세요 — §1.5 참고):
-  - `av30lab-shared-data-<account>` — 모델, 데이터셋, 노트북 템플릿, M7 레퍼런스.
+  - `av30lab-shared-data-<account>` — 모델, 데이터셋, 노트북 템플릿, M10 레퍼런스.
   - `av30lab-user-workspace-<account>` — 참가자당 `users/<id>/` 프리픽스 하나.
 
 > **이 가이드의 ID에 관한 참고.** `<aws-account-id>`나
@@ -29,8 +29,8 @@
 > 계정은 당신의 자격 증명에서, 리전은 배포 시점의 `$AWS_REGION`에서 가져옵니다(§5).
 > §1.5에서 당신의 값을 고른 다음, 예시를 당신의 값으로
 > 치환해서 읽으세요.
-- **12개 노트북 M0–M11**. 대부분 참가자 셀프서비스이며, 일부는 일회성
-  관리자 사전 작업(모델, 데이터셋, M7 레퍼런스 실행)이 필요합니다. §4의 매트릭스 참고.
+- **13개 노트북 M0–M12**. 대부분 참가자 셀프서비스이며, 일부는 일회성
+  관리자 사전 작업(모델, 데이터셋, M10 레퍼런스 실행)이 필요합니다. §4의 매트릭스 참고.
 
 ---
 
@@ -42,7 +42,7 @@
 | **D−7** | 관리자 계정에서 게이트된 HF 라이선스를 모두 수락(§3) | 즉시 처리되지만, 하나를 빠뜨리기 쉬움 |
 | **D−3** | `cdk bootstrap` + `deploy.sh`(§5) | ~25분; 문제 수정할 여유 확보 |
 | **D−3** | nuScenes 스테이징 + 모델 프리캐시 + HF 오프라인 캐시(§6) | 백그라운드 전송 30–90분 |
-| **D−2** | M7을 사용한다면 EC2에서 M7 AlpaSim 레퍼런스 평가 실행(§6.4) | ~$30, GPU 박스에서 수십 분–2시간 |
+| **D−2** | M10을 사용한다면 EC2에서 M10 AlpaSim 레퍼런스 평가 실행(§6.4) | ~$30, GPU 박스에서 수십 분–2시간 |
 | **D−1** | 노트북 템플릿 업로드, 사용자 1명 엔드투엔드 스모크 테스트(§8) | 프로비저닝/쿼터 누락 포착 |
 | **D0** | 참가자 프로비저닝, 대시보드 링크 배포(§9), 모니터링(§10) | — |
 | **D+0** | 사용자 삭제, **HF 토큰 폐기, NGC 키 로테이션**(§12) | 보안 위생 |
@@ -106,7 +106,7 @@ aws service-quotas list-service-quotas --service-code sagemaker --region "$AWS_R
 ## 2. 서비스 쿼터 (D−7에 요청)
 
 두 종류의 쿼터가 중요합니다. README의 쿼터 표가 첫 번째를 다루며,
-아래의 **작업(job) 쿼터**는 놓치기 쉽고 방 하나 전체 규모에서 M9/M11을 막습니다.
+아래의 **작업(job) 쿼터**는 놓치기 쉽고 방 하나 전체 규모에서 M12/M11을 막습니다.
 
 ### 2a. Studio JupyterLab App 쿼터 (인터랙티브 노트북)
 Service Quotas 콘솔에서 "**Studio JupyterLab Apps running on**"을 검색하세요. 이것들은
@@ -118,33 +118,33 @@ Service Quotas 콘솔에서 "**Studio JupyterLab Apps running on**"을 검색하
 
 **이번 사이클에 검증된 GPU:** 모든 GPU 모듈이 g6 계열에서 성공적으로 실행되었습니다 —
 특히 **ml.g6.24xlarge(4× L4, 96 GB)**가 M2/M3(캡셔닝,
-큐레이션)와 M4/M5/M6(Cosmos Transfer/Predict, Alpamayo)를 완료했습니다. g6는 현세대
+큐레이션)와 M5/M6/M9(Cosmos Transfer/Predict, Alpamayo)를 완료했습니다. g6는 현세대
 L4 계열이며 대개 p4d/p5보다 용량 확보가 훨씬 쉽기 때문에 실제 방 운영에서
 권장되는 주력입니다. 쿼터가 있다면 p4d/p5는 여전히 "네이티브 해상도 / 전체
 720p" 경로로 남습니다.
 
 | 인스턴스 | 쿼터 코드 | Current | 10인 방 최소치 | 대시보드에서의 역할 |
 |---|---|---|---|---|
-| ml.t3.medium | L-71FAF417 | 2500 | ≥20 | 모든 CPU 노트북(M0, M1, M7, M8, M9, M11)의 **권장** |
+| ml.t3.medium | L-71FAF417 | 2500 | ≥20 | 모든 CPU 노트북(M0, M1, M10, M4, M12, M11)의 **권장** |
 | ml.t3.large | L-2733D4D5 | 30 | ≥0 | CPU 대안 |
 | ml.t3.xlarge | L-61F9C762 | 30 | ≥0 | CPU 대안(M1) |
 | ml.m5.large | L-3BDCD216 | 11 | ≥0 | CPU 대안 |
-| ml.m5.xlarge | L-77B8159A | 11 | ≥0 | CPU 대안(M9) |
-| ml.g5.xlarge | L-988CE6C5 | 5 | ≥5 | M10(Nerfstudio)의 **권장** |
-| ml.g5.2xlarge | L-F73C7DB9 | 5 | ≥0 | M10 대안 |
-| ml.g5.4xlarge | L-81940D85 | 5 | ≥0 | M10 대안 |
+| ml.m5.xlarge | L-77B8159A | 11 | ≥0 | CPU 대안(M12) |
+| ml.g5.xlarge | L-988CE6C5 | 5 | ≥5 | M7(Nerfstudio)의 **권장** |
+| ml.g5.2xlarge | L-F73C7DB9 | 5 | ≥0 | M7 대안 |
+| ml.g5.4xlarge | L-81940D85 | 5 | ≥0 | M7 대안 |
 | ml.g5.12xlarge | L-8D2ED7BF | 5 | ≥5 | M2, M3의 **권장**(4× A10G, 96 GB) |
-| ml.g5.24xlarge | L-F087CCFC | 2 | ≥1 | M2–M6 대안 |
-| ml.g5.48xlarge | L-83AB5D73 | 2 | ≥1 | M2–M6 대안 / OOM 폴백 |
-| ml.g6.xlarge | L-AABA5942 | 5 | ≥0 | M10 대안(L4) |
-| ml.g6.2xlarge | L-92D1521D | 5 | ≥0 | M10 대안(L4) |
-| ml.g6.4xlarge | L-692B8304 | 5 | ≥0 | M10 대안(L4) |
+| ml.g5.24xlarge | L-F087CCFC | 2 | ≥1 | M2/M3/M5–M9 대안 |
+| ml.g5.48xlarge | L-83AB5D73 | 2 | ≥1 | M2/M3/M5–M9 대안 / OOM 폴백 |
+| ml.g6.xlarge | L-AABA5942 | 5 | ≥0 | M7 대안(L4) |
+| ml.g6.2xlarge | L-92D1521D | 5 | ≥0 | M7 대안(L4) |
+| ml.g6.4xlarge | L-692B8304 | 5 | ≥0 | M7 대안(L4) |
 | ml.g6.12xlarge | L-962247BA | 2 | ≥2 | M2/M3 용량 폴백(4× L4, 96 GB) |
-| **ml.g6.24xlarge** | **L-8ACE1754** | **2** | **≥2** | **M2–M6 주력(4× L4, 96 GB) — 이번 사이클 검증됨** |
-| ml.g6.48xlarge | L-125B7142 | 2 | ≥0 | M4/M5/M6 대안(8× L4) |
-| ml.g7e.2xlarge | L-7A3E0A2C | **0** | ≥0 | M2–M6 **가장 저렴한 네이티브 해상도 경로**(RTX PRO 6000 1장, 96 GB; **기본값 0 — 반드시 요청해야 함**) |
-| ml.g7e.24xlarge | L-E481E4F8 | **0** | ≥0 | M4/M5/M6 대안(RTX PRO 6000 4장; **기본값 0**) |
-| ml.p4d.24xlarge | L-AD63F1D2 | 2 | ≥2 | M4, M5, M6 네이티브 해상도 경로(8× A100; **기본값 0 — 반드시 요청해야 함**) |
+| **ml.g6.24xlarge** | **L-8ACE1754** | **2** | **≥2** | **M2/M3/M5–M9 주력(4× L4, 96 GB) — 이번 사이클 검증됨** |
+| ml.g6.48xlarge | L-125B7142 | 2 | ≥0 | M5/M6/M9 대안(8× L4) |
+| ml.g7e.2xlarge | L-7A3E0A2C | **0** | ≥0 | M2/M3/M5–M9 **가장 저렴한 네이티브 해상도 경로**(RTX PRO 6000 1장, 96 GB; **기본값 0 — 반드시 요청해야 함**) |
+| ml.g7e.24xlarge | L-E481E4F8 | **0** | ≥0 | M5/M6/M9 대안(RTX PRO 6000 4장; **기본값 0**) |
+| ml.p4d.24xlarge | L-AD63F1D2 | 2 | ≥2 | M5, M6, M9 네이티브 해상도 경로(8× A100; **기본값 0 — 반드시 요청해야 함**) |
 | ml.p5.48xlarge | L-B41FBF28 | 1 | ≥1 | 헤비 모델 폴백(8× H100; us-west-2 / us-east-1 전용) |
 
 > **g7e는 선택 사항이며 이 랩에서 미검증입니다.** 이 계정의 `us-west-2`에서 6개
@@ -153,7 +153,7 @@ L4 계열이며 대개 p4d/p5보다 용량 확보가 훨씬 쉽기 때문에 실
 > 티어로 가는 *가장 저렴한* 경로이기 때문입니다 — 96 GB 카드 1장이 시간당 약
 > $4.20으로 `ml.p4d.24xlarge`(약 $25.25/시간)보다 싸고 24 GB 기본값(약 $8.34/시간)
 > 보다도 저렴합니다. 다만 **이 랩에서 g7e로 엔드투엔드 실행한 모듈이 없습니다.**
-> 쿼터를 받으면 방 전체에 안내하기 전에 사용자 1명으로 M4를 스모크 테스트하세요.
+> 쿼터를 받으면 방 전체에 안내하기 전에 사용자 1명으로 M5를 스모크 테스트하세요.
 > 다른 g7e 사이즈(4xl/8xl/12xl/48xl)도 쿼터 코드가 있습니다(L-B7228EBF,
 > L-0407753C, L-5F015F52, L-A48244DF). 단 대시보드에는 노출되지 않습니다.
 
@@ -164,18 +164,18 @@ L4 계열이며 대개 p4d/p5보다 용량 확보가 훨씬 쉽기 때문에 실
 GPU 모듈을 **g6.24xlarge**로 표준화한다면(권장), 그것만 인원수 이상으로
 요청하면 되고 p4d/p5는 기본값으로 두어도 됩니다.
 
-### 2b. SageMaker **작업(job)** 쿼터 (M9 및 M11 — 사람들이 잊는 것들)
-M9는 실제 **트레이닝 작업**을 제출하고 M11은 별도의 관리형 인스턴스(노트북의
+### 2b. SageMaker **작업(job)** 쿼터 (M12 및 M11 — 사람들이 잊는 것들)
+M12는 실제 **트레이닝 작업**을 제출하고 M11은 별도의 관리형 인스턴스(노트북의
 인스턴스가 아님)에서 실제 **프로세싱 작업**을 실행합니다. 이들은 자체
 쿼터가 있습니다:
 
 | 쿼터 | 코드 | 검증된 값 (레퍼런스 배포 예시: us-west-2) | 필요한 곳 |
 |---|---|---|---|
-| **training** 작업 사용을 위한 ml.m5.xlarge | L-CCE2AFA6 | 30 | M9(≥2 필요 — 2노드 작업) |
+| **training** 작업 사용을 위한 ml.m5.xlarge | L-CCE2AFA6 | 30 | M12(≥2 필요 — 2노드 작업) |
 | **processing** 작업 사용을 위한 ml.m5.xlarge | L-0307F515 | 16 | M11(≥1 필요 — 순차 3단계 DAG) |
 
 둘 다 오늘 워크샵 필요치를 넉넉히 상회하지만 **확인하세요** — 어느 하나라도
-당신의 계정에서 0이면, 노트북이 열리더라도 M9/M11은 작업 제출 시점에 실패합니다.
+당신의 계정에서 0이면, 노트북이 열리더라도 M12/M11은 작업 제출 시점에 실패합니다.
 여기서 `ml.g5.*` **processing** 작업 쿼터는 0인데, M11은 설계상 CPU에서 실행되므로 괜찮습니다.
 
 ```bash
@@ -203,15 +203,15 @@ aws service-quotas request-service-quota-increase \
 | 리포 | 필요한 곳 | 라이선스 |
 |---|---|---|
 | nvidia/Cosmos-Reason1-7B | M2 | NVIDIA Open Model (게이트 아님, 단 로그인 필요) |
-| nvidia/Cosmos-Guardrail1 | M4, M5 | NVIDIA Open Model |
-| nvidia/Cosmos-Transfer2.5-2B | M4 | NVIDIA Open Model |
-| nvidia/Cosmos-Predict2.5-2B | M5 | NVIDIA Open Model |
-| nvidia/Alpamayo-1.5-10B | M6, M7 | **비상업용**(연구/평가 전용) |
-| nvidia/Cosmos-Reason2-8B | M6, M7 (숨겨진 Alpamayo 백본) | NVIDIA Open Model |
-| nvidia/PhysicalAI-Autonomous-Vehicles | M6 (데모 클립) | NVIDIA AV Dataset (12개월 만료) |
-| nvidia/PhysicalAI-Autonomous-Vehicles-NuRec | M7 (AlpaSim 장면) | NVIDIA AV NuRec Dataset |
+| nvidia/Cosmos-Guardrail1 | M5, M6 | NVIDIA Open Model |
+| nvidia/Cosmos-Transfer2.5-2B | M5 | NVIDIA Open Model |
+| nvidia/Cosmos-Predict2.5-2B | M6 | NVIDIA Open Model |
+| nvidia/Alpamayo-1.5-10B | M9, M10 | **비상업용**(연구/평가 전용) |
+| nvidia/Cosmos-Reason2-8B | M9, M10 (숨겨진 Alpamayo 백본) | NVIDIA Open Model |
+| nvidia/PhysicalAI-Autonomous-Vehicles | M9 (데모 클립) | NVIDIA AV Dataset (12개월 만료) |
+| nvidia/PhysicalAI-Autonomous-Vehicles-NuRec | M10 (AlpaSim 장면) | NVIDIA AV NuRec Dataset |
 
-**M7은 NGC도 필요합니다**(HF와 별개): NuRec 렌더러 이미지
+**M10은 NGC도 필요합니다**(HF와 별개): NuRec 렌더러 이미지
 `nvcr.io/nvidia/nre/nre-ga:26.04`. 키는
 `https://org.ngc.nvidia.com/setup/api-key`에서 받으세요. (테스트에서는 이 이미지가
 익명으로 풀 가능했지만, 바뀔 경우를 대비해 키를 준비해 두세요.)
@@ -230,18 +230,19 @@ aws service-quotas request-service-quota-increase \
 | M1 Data Exploration | CPU t3.medium | nuScenes-mini 스테이징(§6.1) | — |
 | M2 Cosmos Reason | GPU g5.12xlarge (또는 g6.24xlarge) | 모델을 `model-cache/`에 프리캐시(§6.2) | — |
 | M3 Cosmos Curator | GPU g5.12xlarge (또는 g6.24xlarge) | (M2 출력 사용; 추가 캐시 없음) | — |
-| M4 Cosmos Transfer | GPU g6.24xlarge (720p는 p4d.24xlarge) | HF **오프라인 캐시**를 `hf-cache/hub/`로(§6.3) | [COSMOS_M4_M5.md](COSMOS_M4_M5.md) |
-| M5 Cosmos Predict | GPU g6.24xlarge (네이티브는 p4d.24xlarge) | HF 오프라인 캐시(§6.3) | [COSMOS_M4_M5.md](COSMOS_M4_M5.md) |
-| M6 Alpamayo VLA | GPU g6.24xlarge (또는 p4d.24xlarge) | HF 오프라인 캐시 **+ 데모 클립**(§6.3) | [ALPAMAYO_M6.md](ALPAMAYO_M6.md) |
-| M7 AlpaSim | CPU t3.medium (비주얼라이저) | **EC2에서 레퍼런스 평가 1회 실행**(§6.4) | [ALPASIM_M7.md](ALPASIM_M7.md) |
-| M8 OpenSearch | CPU t3.medium | (M2 출력 사용; 추가 캐시 없음) | — |
-| M9 HyperPod | CPU t3.medium (실제 DDP 작업 제출) | 없음 (작업 쿼터 §2b) | [HYPERPOD_M9.md](HYPERPOD_M9.md) |
-| M10 Nerfstudio | GPU g5.xlarge (또는 g6.xlarge) | gsplat CUDA 빌드가 `scripts/setup_gsplat_env.sh`를 통해 세션마다 실행(§11) | 아래 §11 참고 |
+| M4 OpenSearch | CPU t3.medium | (M2 출력 사용; 추가 캐시 없음) | — |
+| M5 Cosmos Transfer | GPU g6.24xlarge (720p는 p4d.24xlarge) | HF **오프라인 캐시**를 `hf-cache/hub/`로(§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M6 Cosmos Predict | GPU g6.24xlarge (네이티브는 p4d.24xlarge) | HF 오프라인 캐시(§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M7 Nerfstudio | GPU g5.xlarge (또는 g6.xlarge) | gsplat CUDA 빌드가 `scripts/setup_gsplat_env.sh`를 통해 세션마다 실행(§11) | 아래 §11 참고 |
+| M8 Cosmos Reason SFT | GPU g6.24xlarge (또는 g7e.2xlarge) | (M2의 `model-cache/cosmos-reason1/` 재사용; 추가 캐시 없음) | — |
+| M9 Alpamayo VLA | GPU g6.24xlarge (또는 p4d.24xlarge) | HF 오프라인 캐시 **+ 데모 클립**(§6.3) | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
+| M10 AlpaSim | CPU t3.medium (비주얼라이저) | **EC2에서 레퍼런스 평가 1회 실행**(§6.4) | [ALPASIM_M10.md](ALPASIM_M10.md) |
 | M11 Pipeline | CPU t3.medium (실제 SageMaker Pipeline 실행) | 없음 (작업 쿼터 §2b) | [PIPELINE_M11.md](PIPELINE_M11.md) |
+| M12 HyperPod | CPU t3.medium (실제 DDP 작업 제출) | 없음 (작업 쿼터 §2b) | [HYPERPOD_M12.md](HYPERPOD_M12.md) |
 
 **요점:** 필요한 일회성 관리자 캐시는 **nuScenes(M1) + model-cache
-(M2) + hf-cache(M4/M5/M6) + M6 데모 클립**이며, M7을 실행한다면 여기에
-**M7 레퍼런스 실행**이 추가됩니다. M9와 M11은 **캐시가 필요 없습니다** — §2b의 작업
+(M2) + hf-cache(M5/M6/M9) + M9 데모 클립**이며, M10을 실행한다면 여기에
+**M10 레퍼런스 실행**이 추가됩니다. M12와 M11은 **캐시가 필요 없습니다** — §2b의 작업
 쿼터만 있으면 됩니다.
 
 ---
@@ -288,7 +289,7 @@ aws cognito-idp admin-create-user \
 이 모든 작업은 **공유** 버킷에 씁니다. 6.3/6.4 단계는 당신의 토큰으로 게이트된
 리포에 접근할 수 있는 머신에서 실행해야 합니다.
 
-### 6.1 nuScenes-mini (M1/M2/M10)
+### 6.1 nuScenes-mini (M1/M2/M7)
 ```bash
 ./scripts/stage_nuscenes.sh    # pulls the public AWS Open Data mirror → datasets/nuscenes-mini/
 ```
@@ -299,16 +300,16 @@ pip install huggingface_hub && hf auth login --token "$HF_TOKEN"
 ./scripts/cache_models.sh      # → s3://<shared>/model-cache/ (Cosmos-Reason1-7B, Transfer2.5, Predict2.5)
 ```
 
-### 6.3 HF 오프라인 캐시 (M4/M5/M6) — "참가자 토큰 불필요" 트릭
-M4/M5/M6은 런타임에 HF의 **자체 캐시 레이아웃**을 통해 게이트된 체크포인트를 로드합니다
-(M6은 숨겨진 Cosmos-Reason2-8B 백본도 가져옵니다). 이를 견고하게 채우는 방법:
-당신의 관리자 토큰으로 **GPU JupyterLab 앱에서 M4, M5, M6을 각각 한 번씩 실행**한 뒤,
+### 6.3 HF 오프라인 캐시 (M5/M6/M9) — "참가자 토큰 불필요" 트릭
+M5/M6/M9은 런타임에 HF의 **자체 캐시 레이아웃**을 통해 게이트된 체크포인트를 로드합니다
+(M9은 숨겨진 Cosmos-Reason2-8B 백본도 가져옵니다). 이를 견고하게 채우는 방법:
+당신의 관리자 토큰으로 **GPU JupyterLab 앱에서 M5, M6, M9을 각각 한 번씩 실행**한 뒤,
 캐시 트리를 동기화하세요:
 ```bash
 aws s3 sync /mnt/sagemaker-nvme/hf/hub s3://<shared>/hf-cache/hub/ --only-show-errors
 ```
 `setup_cosmos_env.sh`는 이것을 `HF_HOME`으로 복원하고 `HF_HUB_OFFLINE=1`을 설정하므로,
-참가자는 토큰 없이 오프라인으로 실행합니다. **M6은 데모 클립도 필요합니다**(그 데이터셋은
+참가자는 토큰 없이 오프라인으로 실행합니다. **M9은 데모 클립도 필요합니다**(그 데이터셋은
 오프라인으로 읽을 수 없음):
 ```bash
 source /mnt/sagemaker-nvme/cosmos-work/alpamayo_env.sh
@@ -317,9 +318,9 @@ python scripts/alpamayo_save_clip.py --clip 030c760c-ae38-49aa-9ad8-f5650a545d26
   --t0-us 5100000 --out /mnt/sagemaker-nvme/m6_work/clips
 aws s3 cp /mnt/sagemaker-nvme/m6_work/clips/030c760c-*.pt s3://<shared>/hf-cache/alpamayo-demo/
 ```
-전체 순서: [COSMOS_M4_M5.md](COSMOS_M4_M5.md), [ALPAMAYO_M6.md](ALPAMAYO_M6.md).
+전체 순서: [COSMOS_M5_M6.md](COSMOS_M5_M6.md), [ALPAMAYO_M9.md](ALPAMAYO_M9.md).
 
-### 6.4 M7 AlpaSim 레퍼런스 평가 (M7을 실행하는 경우에만)
+### 6.4 M10 AlpaSim 레퍼런스 평가 (M10을 실행하는 경우에만)
 AlpaSim은 ≥40 GB GPU가 필요한 Docker-Compose 마이크로서비스 시스템입니다 —
 Studio 노트북에서는 **실행할 수 없습니다**. Docker가 가능한 GPU EC2 호스트에서 한 번 실행하세요:
 ```bash
@@ -327,12 +328,12 @@ Studio 노트북에서는 **실행할 수 없습니다**. Docker가 가능한 GP
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 export HF_TOKEN=hf_... NGC_API_KEY=nvapi-... \
   SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
-bash scripts/alpasim_ec2_setup.sh    # → uploads s3://<shared>/m7-reference/
+bash scripts/alpasim_ec2_setup.sh    # → uploads s3://<shared>/m10-reference/
 # then TERMINATE the instance.
 ```
-M7 노트북(CPU)은 모든 참가자를 위해 이 결과를 다운로드하고 시각화합니다.
+M10 노트북(CPU)은 모든 참가자를 위해 이 결과를 다운로드하고 시각화합니다.
 일회성 ~$30; 참가자 비용 $0. 전체 세부 사항 + 선택적 참가자
-자가 실행 경로: [ALPASIM_M7.md](ALPASIM_M7.md), [M7_MANUAL_TEST_RUNBOOK.md](M7_MANUAL_TEST_RUNBOOK.md).
+자가 실행 경로: [ALPASIM_M10.md](ALPASIM_M10.md), [M10_MANUAL_TEST_RUNBOOK.md](M10_MANUAL_TEST_RUNBOOK.md).
 
 ### 6.5 노트북 템플릿 + 스크립트 업로드 (노트북 편집 후 맨 마지막에 실행)
 ```bash
@@ -340,6 +341,23 @@ M7 노트북(CPU)은 모든 참가자를 위해 이 결과를 다운로드하고
 aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
 aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
 ```
+
+> **재번호 이전 노트북이 이미 들어 있는 버킷에 다시 동기화하나요?**
+> `aws s3 sync`는 삭제하지 않으므로 옛 이름(`M4_Cosmos_Transfer_…`,
+> `M8_OpenSearch_…`, `M9_HyperPod_…`, `M10_Nerfstudio_…`)이 새 이름과 함께 남아
+> 참가자에게 둘 다 보입니다. `--delete`는 **쓰지 마세요** — 이 동기화가 다시 채우지
+> 않는 `notebook-templates/scripts/` 폴더까지 지워버립니다. 대신 옛 객체를 명시적으로
+> 삭제하세요:
+> ```bash
+> for f in M4_Cosmos_Transfer_Augmentation M5_Cosmos_Predict_Synthesis \
+>          M6_Alpamayo_VLA_Inference M7_AlpaSim_ClosedLoop \
+>          M8_OpenSearch_Semantic_Search M9_HyperPod_Distributed_Training \
+>          M10_Nerfstudio_3D_Reconstruction; do
+>   aws s3 rm "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/$f.ipynb" \
+>     --region "$AWS_REGION" 2>/dev/null
+> done
+> ```
+> `teardown.sh` 후 새로 배포하는 경우에는 필요하지 않습니다.
 이것들은 프로비저닝 시점에 각 사용자의 워크스페이스로 복사됩니다(그리고 노트북은
 이 경로에서 스크립트를 다운로드하는 방식으로 폴백합니다). **노트북이나 스크립트를
 변경할 때마다 다시 실행하세요** — 그렇지 않으면 참가자가 이전 버전을 받습니다.
@@ -357,9 +375,9 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 
 ---
 
-## 7. 선택 사항: M7 참가자 자가 실행 (고급)
+## 7. 선택 사항: M10 참가자 자가 실행 (고급)
 
-기본적으로 모든 참가자는 당신의 M7 레퍼런스 평가(§6.4) 하나를 공유하며 토큰이
+기본적으로 모든 참가자는 당신의 M10 레퍼런스 평가(§6.4) 하나를 공유하며 토큰이
 필요 없습니다. 대신 **각 참가자가 자신의 관리자 프로비저닝 GPU 호스트에서 SSM을 통해
 직접 AlpaSim을 실행**하도록 하려면:
 - 참가자당 GPU EC2 호스트를 사전 프로비저닝하고 최소 권한 SSM
@@ -369,8 +387,8 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
   공유 캐시에 없습니다).
 - 비용 ~$10.5/시간/호스트, G-vCPU 쿼터에 따라 동시 ≤16.
 
-전체 런북: [M7_MANUAL_TEST_RUNBOOK.md](M7_MANUAL_TEST_RUNBOOK.md) Part C(관리자
-프로비저닝 + IAM) 및 [M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md)
+전체 런북: [M10_MANUAL_TEST_RUNBOOK.md](M10_MANUAL_TEST_RUNBOOK.md) Part C(관리자
+프로비저닝 + IAM) 및 [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md)
 (참가자 단계). 이것은 옵트인이며, 표준 워크샵에서는 건너뛰세요.
 
 ---
@@ -385,7 +403,7 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
    **Apply & Restart** → **Open Workspace** → JupyterLab이 열립니다.
 5. **M1**(CPU)을 엔드투엔드로 실행한 뒤 **M2**(GPU)를 실행 — GPU 이미지가
    자동 선택되고 모델 캐시가 해석되는지 확인합니다.
-6. M9/M11을 실행한다면, 테스트 사용자로 각각 한 번씩 실행하여 작업
+6. M12/M11을 실행한다면, 테스트 사용자로 각각 한 번씩 실행하여 작업
    쿼터(§2b)와 IAM이 갖춰졌는지 확인하세요 — 실제 관리형 작업을 제출합니다.
 7. 테스트 사용자를 **Delete**하세요(Users 탭 → Delete) — 앱/스페이스/프로필 + S3를 제거합니다.
 
@@ -427,12 +445,12 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 
 ---
 
-## 11. M10 Nerfstudio — gsplat 빌드 (세션별)
+## 11. M7 Nerfstudio — gsplat 빌드 (세션별)
 
-**M10은 이제 트레이닝을 합니다** — 일회성 gsplat CUDA 빌드 이후 `splatfacto`
+**M7은 이제 트레이닝을 합니다** — 일회성 gsplat CUDA 빌드 이후 `splatfacto`
 셀이 작동합니다. `gsplat`은 순수 Python 휠을 제공하고 첫 사용 시 CUDA 커널을
 소스에서 컴파일하지만, SageMaker Distribution 이미지의 conda CUDA dev
-패키지가 불완전합니다. **`scripts/setup_gsplat_env.sh`**(M10 셀 3이 호출)가
+패키지가 불완전합니다. **`scripts/setup_gsplat_env.sh`**(M7 셀 3이 호출)가
 전체 체인을 고칩니다: 누락된 dev 헤더를 설치하고, `nvcc`가 `cicc`를 찾도록 `nvvm`을
 심링크하고, CUDA 헤더/라이브러리를 표준 `$CUDA_HOME` 경로로 미러링하고
 (그래서 `ns-train`의 서브프로세스 안에서도 env 변수 없이 빌드가 작동함),
@@ -443,8 +461,8 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 - 데모는 **합성 사인파 카메라 포즈**를 사용하므로, 트레이닝은 엔드투엔드로 실행되지만
   (진짜 Gaussian-Splatting 파이프라인) 재구성은 스모크 테스트이지
   계량적으로 정확한 장면은 아닙니다. 실제 nuScenes 캘리브레이션 연결이 다음 단계입니다.
-- **M10 주의:** gsplat CUDA 빌드가
-  `scripts/setup_gsplat_env.sh`를 통해 세션마다 실행됩니다; M10을 선택/데모 모듈로 취급하고
+- **M7 주의:** gsplat CUDA 빌드가
+  `scripts/setup_gsplat_env.sh`를 통해 세션마다 실행됩니다; M7을 선택/데모 모듈로 취급하고
   최종 트레이닝 셀은 GPU 이미지의 CUDA 툴체인에 민감할 것으로 예상하세요.
 
 ---
@@ -466,7 +484,7 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
   RETAIN임에 유의하세요 — 이 버킷과 캐시된 모델은 destroy를 견디고 살아남으며 수동으로 비워야 합니다.
 - **관리자 HF 토큰 `hf_...` 폐기** — 참가자가 접촉하는 것은 오직 S3 캐시뿐이므로,
   스테이징 이후에는 토큰이 필요 없습니다.
-- M7을 사용했다면 **NGC API 키 로테이션**.
+- M10을 사용했다면 **NGC API 키 로테이션**.
 - 유휴 상태의 스택도 여전히 ~$80/월(NAT, VPC 엔드포인트, DynamoDB, CloudFront)의 비용이 듭니다 —
   끝났다면 destroy하세요.
 
@@ -477,12 +495,12 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 | 증상 | 원인 / 해결 |
 |---|---|
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU 앱 쿼터가 증설되지 않음 — §2a. |
-| M9 작업이 제출에서 실패 / M11 프로세싱 단계가 시작되지 않음 | m5.xlarge **작업** 쿼터(§2b) 또는 exec-role IAM — 둘 다 이 계정에서 존재함이 검증됨; 재배포했다면 다시 확인. |
+| M12 작업이 제출에서 실패 / M11 프로세싱 단계가 시작되지 않음 | m5.xlarge **작업** 쿼터(§2b) 또는 exec-role IAM — 둘 다 이 계정에서 존재함이 검증됨; 재배포했다면 다시 확인. |
 | GPU 인스턴스에서 참가자 "No GPU detected" | CPU 이미지가 선택됨 — Instance Options로 다시 Apply. |
-| M4/M5/M6이 HF 토큰을 요구 | `hf-cache/hub/`가 스테이징되지 않음(§6.3) — 참가자가 온라인 다운로드로 폴백. |
-| M6이 클립 로드에 실패 | 데모 `.pt`가 `hf-cache/alpamayo-demo/`에 업로드되지 않음(§6.3). |
-| M7 노트북이 아무것도 표시하지 않음 | `m7-reference/` 레퍼런스 평가가 실행되지 않음(§6.4). |
-| M10 트레이닝 셀이 gsplat에서 실패 | M10 셀 3(`scripts/setup_gsplat_env.sh`) 재실행 — CUDA 빌드는 세션별이며 앱 재시작 시 리셋됨. §11. |
+| M5/M6/M9이 HF 토큰을 요구 | `hf-cache/hub/`가 스테이징되지 않음(§6.3) — 참가자가 온라인 다운로드로 폴백. |
+| M9이 클립 로드에 실패 | 데모 `.pt`가 `hf-cache/alpamayo-demo/`에 업로드되지 않음(§6.3). |
+| M10 노트북이 아무것도 표시하지 않음 | `m10-reference/` 레퍼런스 평가가 실행되지 않음(§6.4). |
+| M7 트레이닝 셀이 gsplat에서 실패 | M7 셀 3(`scripts/setup_gsplat_env.sh`) 재실행 — CUDA 빌드는 세션별이며 앱 재시작 시 리셋됨. §11. |
 | SNS 예산 경보가 placeholder@example.com으로 감 | `--context admin_email` 없이 배포됨 — `deploy.sh`로 재배포. |
 | 참가자 링크가 "Demo Mode"를 표시 | 맨 URL을 열었음; 전체 `?userId=&token=` 링크를 다시 보내세요. |
 | 대량 프로비저닝 부분 실패 | 실패한 행을 개별 재시도; `bulk_provision` CloudWatch 로그를 확인. |
@@ -493,7 +511,7 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 - [PRE_LEARNING_GUIDE.md](PRE_LEARNING_GUIDE.md) — 이벤트 전에 참가자에게 보내세요.
 - [PARTICIPANT_GUIDE.md](PARTICIPANT_GUIDE.md) — 당일 참가자에게 전달하세요.
 - [PREREQUISITES.md](PREREQUISITES.md) — §3/§6 뒤에 있는 토큰/라이선스 세부 사항.
-- 모듈 심화: [COSMOS_M4_M5.md](COSMOS_M4_M5.md), [ALPAMAYO_M6.md](ALPAMAYO_M6.md),
-  [ALPASIM_M7.md](ALPASIM_M7.md), [HYPERPOD_M9.md](HYPERPOD_M9.md),
+- 모듈 심화: [COSMOS_M5_M6.md](COSMOS_M5_M6.md), [ALPAMAYO_M9.md](ALPAMAYO_M9.md),
+  [ALPASIM_M10.md](ALPASIM_M10.md), [HYPERPOD_M12.md](HYPERPOD_M12.md),
   [PIPELINE_M11.md](PIPELINE_M11.md).
 - [README.md](../../README.md) — 전체 배포 + 아키텍처 레퍼런스.

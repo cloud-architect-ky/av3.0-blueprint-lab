@@ -6,7 +6,7 @@
 
 [NVIDIA와 함께 AWS에서 자율주행 3.0을 위한 End-to-End Physical AI 데이터 파이프라인 구축하기](https://aws.amazon.com/ko/blogs/tech/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/)를 직접 실행해 볼 수 있는 셀프
 서비스 AWS 플랫폼입니다. 참가자는 자율주행 데이터 파이프라인 전체를 다루는
-**12개의 Jupyter 노트북 모듈(M0–M11)**을 차례로 진행합니다 — 데이터 탐색,
+**12개의 Jupyter 노트북 모듈(M0–M12)**을 차례로 진행합니다 — 데이터 탐색,
 비디오 캡셔닝(Cosmos Reason), 데이터 큐레이션(Cosmos Curator), 합성 데이터
 증강(Cosmos Transfer & Predict), 비전-언어-행동 추론(Alpamayo),
 폐루프 시뮬레이션(AlpaSim), 시맨틱 검색, 분산 학습, 3D 재구성, 프로덕션
@@ -31,17 +31,18 @@
 | **M1** | 데이터 탐색 — 실제 **nuScenes-mini** 센서 데이터 수집 및 탐색, 씬 선택 | `ml.t3.medium` (CPU) |
 | **M2** | Cosmos Reason 캡셔닝 — 샘플링된 클립의 VLM 캡션 생성 | `ml.g5.12xlarge` (GPU) |
 | **M3** | Cosmos Curator — **NeMo Curator** 비디오 큐레이션(분할, 트랜스코딩, 필터링, 중복 제거) | `ml.g5.12xlarge` (GPU) |
-| **M4** | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g6.24xlarge` 검증됨) |
-| **M5** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g6.24xlarge` 검증됨) |
-| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU (`ml.g6.24xlarge` 검증됨) |
-| **M7** | AlpaSim 폐루프 평가 — 진정한 폐루프 정책 평가 시각화 | `ml.t3.medium` (CPU) + GPU EC2 |
-| **M8** | OpenSearch 시맨틱 검색 — 캡션 임베딩에 대한 k-NN 검색 | `ml.t3.medium` (CPU) |
-| **M9** | HyperPod 분산 학습 — 실제 2노드 `torch.distributed` DDP 작업 | `ml.t3.medium` (CPU) + 작업 노드 |
-| **M10** | Nerfstudio 3D 재구성 — NeRF / 3D Gaussian Splatting(선택/데모) | `ml.g5.xlarge` (GPU) |
+| **M4** | OpenSearch 시맨틱 검색 — 캡션 임베딩에 대한 k-NN 검색 | `ml.t3.medium` (CPU) |
+| **M5** | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g6.24xlarge` 검증됨) |
+| **M6** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g6.24xlarge` 검증됨) |
+| **M7** | Nerfstudio 3D 재구성 — NeRF / 3D Gaussian Splatting(선택/데모) | `ml.g5.xlarge` (GPU) |
+| **M8** | Cosmos Reason LoRA SFT — nuScenes **사람 라벨**로 파라미터 효율 파인튜닝 | GPU (`ml.g6.24xlarge`, 네이티브 해상도 실측) |
+| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU (`ml.g6.24xlarge` 검증됨) |
+| **M10** | AlpaSim 폐루프 평가 — 진정한 폐루프 정책 평가 시각화 | `ml.t3.medium` (CPU) + GPU EC2 |
 | **M11** | 파이프라인 자동화 — 실제 SageMaker Pipeline(Caption→Curate→Augment) | `ml.t3.medium` (CPU) + 프로세싱 작업 |
+| **M12** | HyperPod 분산 학습 — 실제 2노드 `torch.distributed` DDP 작업 | `ml.t3.medium` (CPU) + 작업 노드 |
 
-권장 경로: **M0 → M1 → M2 → M3**, 이후 합성 데이터(M4/M5), 정책 + 시뮬레이션
-(M6/M7), 검색(M8), 프로덕션 패턴(M9/M11)으로 분기합니다. 표시된 인스턴스는
+권장 경로: **M0 → M1 → M2 → M3**, 이후 합성 데이터(M5/M6), 정책 + 시뮬레이션
+(M9/M10), 검색(M4), 프로덕션 패턴(M12/M11)으로 분기합니다. 표시된 인스턴스는
 대시보드 기본값이며, 각 GPU 모듈은 대안도 제공합니다(예: `ml.g5.12xlarge` 용량이
 부족할 때 `ml.g6.12xlarge`).
 
@@ -56,10 +57,16 @@
 배포하기 전에 이 랩이 무엇을 만들어내는지 미리 보고 싶으신가요?
 
 **실행된 노트북 결과.** [`examples/notebooks-with-outputs.tar.gz`](../../examples/notebooks-with-outputs.tar.gz)에는
-12개 모듈 노트북(M0–M11)이 실제 실행 후의 **출력 셀과 함께** 담겨 있습니다 — 그래프,
+12개 모듈 노트북이 실제 실행 후의 **출력 셀과 함께** 담겨 있습니다 — 그래프,
 생성된 비디오의 메타데이터, 지표, 로그. 내려받아 아무 Jupyter 뷰어에서 열면 **설치하거나
 실행하지 않고도** 각 모듈의 실제 결과를 볼 수 있습니다. (계정 관련 식별자는 자리표시자로
 치환되어 있습니다.)
+
+> **이 번들은 블로그 stage 순서로 재번호하기 전의 실행 기록입니다.** 따라서 파일명과
+> 출력에 인쇄된 S3 경로는 **이전 번호**를 사용합니다. 인쇄된 경로를 고치면 실행 기록을
+> 위조하는 것이 되므로, 캡처된 상태 그대로 두었습니다. 구 → 신: `M4`→M5, `M5`→M6,
+> `M6`→M9, `M7`→M10, `M8`→M4, `M9`→M12, `M10`→M7이며 M0–M3과 M11은 그대로입니다.
+> 신규 **M8**(Cosmos Reason LoRA SFT)은 아직 실행 기록이 없어 번들에 없습니다.
 
 **관리자 대시보드.** 관리자는 여기서 참가자를 추가하거나 삭제합니다. 각 행의
 **Dashboard Link → Copy link**를 누르면 해당 참가자의 개인 대시보드 링크가 복사되어
@@ -85,8 +92,8 @@
 |---|---|
 | **관리자 — 랩 설정 담당** | [PREREQUISITES](PREREQUISITES.md) → [ADMIN_GUIDE](ADMIN_GUIDE.md) → [DATA_CONTRACT](DATA_CONTRACT.md) |
 | **참가자** | [PRE_LEARNING_GUIDE](PRE_LEARNING_GUIDE.md) → [PARTICIPANT_GUIDE](PARTICIPANT_GUIDE.md) |
-| **모듈별 심화** | [COSMOS_M4_M5](COSMOS_M4_M5.md) · [ALPAMAYO_M6](ALPAMAYO_M6.md) · [ALPASIM_M7](ALPASIM_M7.md) · [HYPERPOD_M9](HYPERPOD_M9.md) · [PIPELINE_M11](PIPELINE_M11.md) |
-| **M7 GPU / SSM(고급)** | [M7_MANUAL_TEST_RUNBOOK](M7_MANUAL_TEST_RUNBOOK.md)(관리자) · [M7_PARTICIPANT_SSM_RUNBOOK](M7_PARTICIPANT_SSM_RUNBOOK.md)(참가자) |
+| **모듈별 심화** | [COSMOS_M5_M6](COSMOS_M5_M6.md) · [ALPAMAYO_M9](ALPAMAYO_M9.md) · [ALPASIM_M10](ALPASIM_M10.md) · [HYPERPOD_M12](HYPERPOD_M12.md) · [PIPELINE_M11](PIPELINE_M11.md) |
+| **M10 GPU / SSM(고급)** | [M10_MANUAL_TEST_RUNBOOK](M10_MANUAL_TEST_RUNBOOK.md)(관리자) · [M10_PARTICIPANT_SSM_RUNBOOK](M10_PARTICIPANT_SSM_RUNBOOK.md)(참가자) |
 
 ---
 
@@ -100,13 +107,13 @@
 | Python | 3.12+ | CDK 인프라 코드 |
 | AWS CDK | 2.x | `npm install -g aws-cdk` |
 | jq | — | 배포 스크립트의 JSON 파싱 |
-| Hugging Face 토큰 | — | **관리자 전용** — 게이트된 모델(M2/M4/M5/M6)을 사전 캐싱하고 M7 레퍼런스 평가를 실행합니다. **참가자에게는 HF 토큰이 필요 없습니다.** [docs/ko/PREREQUISITES.md](PREREQUISITES.md)를 참고하세요. |
-| NGC API 키 | — | **관리자 전용, M7 전용** — AlpaSim NuRec 렌더러 이미지용. |
+| Hugging Face 토큰 | — | **관리자 전용** — 게이트된 모델(M2/M5/M6/M9)을 사전 캐싱하고 M10 레퍼런스 평가를 실행합니다. **참가자에게는 HF 토큰이 필요 없습니다.** [docs/ko/PREREQUISITES.md](PREREQUISITES.md)를 참고하세요. |
+| NGC API 키 | — | **관리자 전용, M10 전용** — AlpaSim NuRec 렌더러 이미지용. |
 
 ### 서비스 할당량(조기 요청 — 24–48시간 리드 타임)
 
 GPU **Studio JupyterLab App** 할당량은 새 계정에서 기본적으로 낮거나 **0**입니다 —
-워크숍 전에 증설을 요청하세요. 또한 M9/M11에는 놓치기 쉬운 별도의 **작업(job)**
+워크숍 전에 증설을 요청하세요. 또한 M12/M11에는 놓치기 쉬운 별도의 **작업(job)**
 할당량이 있습니다. 전체 표 + CLI 명령: **[docs/ko/ADMIN_GUIDE.md](ADMIN_GUIDE.md)**
 및 **[docs/ko/PREREQUISITES.md](PREREQUISITES.md)**.
 
@@ -159,11 +166,11 @@ aws cognito-idp admin-create-user \
 
 # 6. NVIDIA 모델을 S3에 사전 캐싱(백그라운드, 30–60분)
 ./scripts/cache_models.sh
-#    M4/M5/M6은 추가로 오프라인 HF 캐시가 필요하고, M6은 데모 클립이, M7은
+#    M5/M6/M9은 추가로 오프라인 HF 캐시가 필요하고, M9은 데모 클립이, M10은
 #    일회성 GPU-EC2 레퍼런스 평가가 필요합니다 — docs/ko/ADMIN_GUIDE.md §6 및
-#    모듈별 심화 문서(COSMOS_M4_M5, ALPAMAYO_M6, ALPASIM_M7)를 참고하세요.
+#    모듈별 심화 문서(COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10)를 참고하세요.
 
-# 7. nuScenes-mini 데이터셋을 S3에 스테이징(M1 / M3 / M10에서 필요)
+# 7. nuScenes-mini 데이터셋을 S3에 스테이징(M1 / M3 / M7에서 필요)
 ./scripts/stage_nuscenes.sh
 #    공개 AWS Open Data 미러에서 가져옵니다(로그인 불필요; nuScenes 약관 적용).
 
@@ -197,7 +204,7 @@ Dashboard Link**를 열어 파이프라인 맵을 확인하세요. 스모크 테
             progress)                        │
                                        S3 shared-data bucket
                                         (model-cache / datasets / hf-cache /
-                                         notebook-templates / m7-reference)
+                                         notebook-templates / m10-reference)
 ```
 
 - **네트워크:** NAT 없는 VPC — 격리 프라이빗 서브넷 + 무료 S3 *게이트웨이* 엔드포인트.
@@ -223,7 +230,7 @@ av3.0-blueprint-lab/
 │   ├── stacks/av30_stack.py
 │   ├── av30_constructs/    # network, storage, database, sagemaker, auth, api, dashboards, monitoring
 │   └── lambda/             # create_user, delete_user, bulk_provision, change_instance, get_costs, update_progress, …
-├── notebooks/              # 12 workshop notebooks M0–M11
+├── notebooks/              # 12 workshop notebooks M0–M12
 ├── web/
 │   ├── admin/              # Admin dashboard (React + Vite)
 │   └── user/               # Participant pipeline map (React + Vite)
@@ -242,8 +249,8 @@ av3.0-blueprint-lab/
 | 시나리오 | 비용 | 비고 |
 |---|---|---|
 | 유휴(인프라만) | **리전당 ~$1/월** | KMS 키. S3 게이트웨이 엔드포인트는 무료이고 NAT Gateway는 없습니다. DynamoDB(온디맨드)·CloudFront·Cognito는 유휴 시 ~$0. VPC 인터페이스 엔드포인트 6종을 켤 때만 **리전당 ~$87.60/월**이 추가됩니다(ENI 12개 × $0.01/AZ·시간). 모델 캐시 S3 저장료는 별도(리전당 ~$2/월). |
-| GPU 모듈 | 시간당 | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 기본값). 최대 해상도 출력은 GPU당 ≥38 GB가 필요합니다: `ml.g7e.2xlarge` ~$4.20/hr이 가장 저렴한 경로(96 GB 1장 — 기본값보다 저렴하지만 쿼터 기본값 0이며 이 랩에서 미검증), 그 외에는 `ml.p4d.24xlarge` ~$25.25/hr |
-| EC2의 M7 AlpaSim | ~$30 일회성(관리자) | `g6e.12xlarge`에서 레퍼런스 평가; 선택적 참가자 자체 실행 시 ~$10.5/hr/호스트 |
+| GPU 모듈 | 시간당 | `ml.g5.xlarge` ~$1.41/hr (M7), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M5/M6/M9 기본값). 최대 해상도 출력은 GPU당 ≥38 GB가 필요합니다: `ml.g7e.2xlarge` ~$4.20/hr이 가장 저렴한 경로(96 GB 1장 — 기본값보다 저렴하지만 쿼터 기본값 0이며 이 랩에서 미검증), 그 외에는 `ml.p4d.24xlarge` ~$25.25/hr |
+| EC2의 M10 AlpaSim | ~$30 일회성(관리자) | `g6e.12xlarge`에서 레퍼런스 평가; 선택적 참가자 자체 실행 시 ~$10.5/hr/호스트 |
 | 전체 1주(혼합) | ~$400–600+ | p4d 모듈과 사용자 수가 비용의 대부분을 차지 |
 
 **비용 제어:** 일일 예산 알람(SNS → `<admin-email>`), Sessions 탭에서 관리자
@@ -279,6 +286,6 @@ S3 모델 캐시 경로는 리전 로컬입니다 — 리전을 변경한 후에
 
 노트북이 다운로드하는 **모델과 데이터셋**은 그 라이선스의 대상이 **아니며**
 여기서 **재배포되지 않습니다**. 각각은 고유한 약관을 유지합니다 — 특히
-**Alpamayo-1.5-10B (M6/M7)는 비상업용(연구/평가 전용)**이며 **nuScenes**는
+**Alpamayo-1.5-10B (M9/M10)는 비상업용(연구/평가 전용)**이며 **nuScenes**는
 비상업용입니다. 적용되는 모든 라이선스를 검토하고 준수하세요; 전체 목록은
 [NOTICE](../../NOTICE)를 참고하세요.

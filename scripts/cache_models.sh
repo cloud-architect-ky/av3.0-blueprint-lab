@@ -13,11 +13,11 @@ TEMP_DIR="${TMPDIR:-/tmp}/av30-model-cache"
 
 # Model registry: name | HF repo | S3 prefix | gated flag
 #
-# NOTE: Alpamayo-1.5-10B (M6) is intentionally NOT here. M6 loads its weights
+# NOTE: Alpamayo-1.5-10B (M9) is intentionally NOT here. M9 loads its weights
 # from the HuggingFace OFFLINE cache tree (hf-cache/hub/), not this flat
 # model-cache, because at runtime it also pulls a hidden Cosmos-Reason2-8B VLM
-# backbone that a flat weights-only copy would miss. The admin populates M6's
-# checkpoints as part of the hf-cache run (see README Step 6b / docs/ALPAMAYO_M6.md),
+# backbone that a flat weights-only copy would miss. The admin populates M9's
+# checkpoints as part of the hf-cache run (see README Step 6b / docs/ALPAMAYO_M9.md),
 # so a flat model-cache/alpamayo-1.5/ copy would just be unused dead weight.
 declare -a MODELS=(
     "Cosmos Reason 1 (7B)|nvidia/Cosmos-Reason1-7B|cosmos-reason1|false"

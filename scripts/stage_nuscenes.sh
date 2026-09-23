@@ -1,6 +1,6 @@
 #!/bin/bash
 # stage_nuscenes.sh — Upload the nuScenes v1.0-mini dataset to the shared S3
-# bucket for AV 3.0 Blueprint Lab (consumed by M1, M2, M10).
+# bucket for AV 3.0 Blueprint Lab (consumed by M1, M2, M7).
 #
 # nuScenes-mini is available two ways:
 #
@@ -135,7 +135,7 @@ if [ ! -f "$SRC_DIR/v1.0-mini/scene.json" ]; then
     exit 1
 fi
 if [ ! -d "$SRC_DIR/samples/CAM_FRONT" ]; then
-    echo "WARNING: samples/CAM_FRONT not found — M1 image display / M10 will fail,"
+    echo "WARNING: samples/CAM_FRONT not found — M1 image display / M7 will fail,"
     echo "         but metadata-only M1 exploration will still work."
 fi
 echo "Layout verified: v1.0-mini/ metadata present."
@@ -164,4 +164,4 @@ echo "  metadata JSON files in v1.0-mini/: $JSON_COUNT"
 
 echo ""
 echo "=== Done. nuScenes-mini staged at s3://$BUCKET/$DEST_PREFIX ==="
-echo "M1 / M2 / M10 can now read the dataset."
+echo "M1 / M2 / M7 can now read the dataset."

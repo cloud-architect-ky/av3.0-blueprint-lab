@@ -1,19 +1,19 @@
-# HyperPod (M9) — 実際の分散トレーニングデモ、設計上 CPU
+# HyperPod (M12) — 実際の分散トレーニングデモ、設計上 CPU
 
-**ステータス:** M9 は、M3 のキュレーション済みキャプションに対して **実際の分散 PyTorch DDP
+**ステータス:** M12 は、M3 のキュレーション済みキャプションに対して **実際の分散 PyTorch DDP
 トレーニングジョブ** (SageMaker Training Job、`instance_count=2`) を実行し、ジョブ自身の
 アーティファクトから **測定された** エポックごとの損失とスループットを可視化します。何も
 シミュレートされていません。これは HyperPod クラスターでは **ありません** — それはノートブックが
-プロビジョニングできない別のインフラです (下記参照)。M9 は、HyperPod がスケールさせる
+プロビジョニングできない別のインフラです (下記参照)。M12 は、HyperPod がスケールさせる
 *分散トレーニングのパターン* を、手頃な CPU インスタンス上で実演します。
 
-## M9 が何だったか、そして今何であるか
+## M12 が何だったか、そして今何であるか
 
-出荷された M9 は、M4/M5/M6/M7 のような **ハルシネーション API の失敗ではありませんでした** —
+出荷された M12 は、M5/M6/M9/M10 のような **ハルシネーション API の失敗ではありませんでした** —
 すべてのインポートと AWS 呼び出しは実在しました (`sagemaker.pytorch.PyTorch`、
 `torch.distributed`、`describe_training_job`)。その問題は別のものでした:
 
-| 出荷された M9 | 修正された M9 |
+| 出荷された M12 | 修正された M12 |
 |---|---|
 | タイトルは「HyperPod」と言っていたが、素の SageMaker Training Job を使っていた | 正直に位置づけ: 分散 *パターン*、HyperPod = 概念 (冒頭で明記) |
 | M3 入力を宣言していたが決して読まなかった (`estimator.fit()` に `inputs=` がなかった) | `fit(inputs={"training": …})` が M3 の `curated_captions.json` をマウントする; スクリプトは実際のキャプションから特徴量を設計する |
@@ -36,7 +36,7 @@
 ## CPU 対 GPU のトレードオフ (将来の GPU 実行のために)
 
 **同じトレーニングスクリプト** が GPU/`nccl` で変更なしに動作します — `torch.cuda.is_available()`
-を検出し、バックエンド + デバイスを選択します。M9 を GPU で実行するには:
+を検出し、バックエンド + デバイスを選択します。M12 を GPU で実行するには:
 
 1. **GPU トレーニングクォータを引き上げる。** 2026-07 の事前テスト時点で、リファレンスラボ
    アカウント (`us-west-2`; あなたのリージョンは異なる場合があります — 自身のクォータを確認してください) では:
@@ -65,20 +65,20 @@ SageMaker HyperPod は **永続的なクラスター** であり、`aws sagemake
 または EKS オーケストレーション) に加えて VPC/サブネット/セキュリティグループ、共有ストレージ
 用の FSx for Lustre、EFA ネットワーキングで作成されます。クラスターの作成だけで ~20 分かかり、
 その後クラスターは継続的に課金されます — これは長時間稼働する大規模トレーニングのインフラで
-あり、ノートブックのセルではありません。(概念的には、M7 の AlpaSim がノートブックの外の GPU EC2
+あり、ノートブックのセルではありません。(概念的には、M10 の AlpaSim がノートブックの外の GPU EC2
 ホストで実行されるのと同じ理由です。) さらに、`ml.p4d.24xlarge for cluster usage` と
 `... for training job usage` はどちらもこのラボアカウントで **0** なので、本物の HyperPod p4d
-クラスターはいずれにせよここでは作成できません。したがって M9 は、HyperPod がスケールさせる
+クラスターはいずれにせよここでは作成できません。したがって M12 は、HyperPod がスケールさせる
 パターンを教え、HyperPod の付加価値 (自動ノード置換、FSx、Slurm/EKS スケジューリング、
 EFA/NCCL) を説明し、実際にプロビジョニングはしません。
 
 ## 出力アーティファクト
 
-- `users/<profile>/m9/training_metadata.json` — ジョブサマリー、データソース
+- `users/<profile>/m12/training_metadata.json` — ジョブサマリー、データソース
   (`real_m3` | `synthetic`)、測定されたエポックごとのメトリクス、HyperPod ノート。
-- `users/<profile>/m9/<job-name>/output/model.tar.gz` — チェックポイント +
+- `users/<profile>/m12/<job-name>/output/model.tar.gz` — チェックポイント +
   `training_log.json` (ノートブックがプロットする実際のメトリクス)。
-- `users/<profile>/m9/input/curated_captions.json` — トレーニングチャネルとして
+- `users/<profile>/m12/input/curated_captions.json` — トレーニングチャネルとして
   ステージングされた M3 データ (M3 が実行された場合のみ)。
 
 ## 検証済みの実行
@@ -105,8 +105,8 @@ Checkpoint + training_log.json saved
 **`ml.m5.xlarge`×2** での `estimator.fit()` が完了しました — `Training job completed`、
 320 課金秒、**`Data source: real_m3`** (`training` チャネル経由で M3 のキュレーション済み
 キャプションでトレーニング)、モデルアーティファクトは
-`users/ky-5-34x1bx/m9/.../output/model.tar.gz`、デモコスト ~$0.02。実際の Studio 環境で
-M3→M9→メトリクスの完全なパイプラインがエンドツーエンドで確認されました。
+`users/ky-5-34x1bx/m12/.../output/model.tar.gz`、デモコスト ~$0.02。実際の Studio 環境で
+M3→M12→メトリクスの完全なパイプラインがエンドツーエンドで確認されました。
 
 ### 参加者の Run-All が浮上させた 6 つの実際のバグ (どれもローカルでは再現不可)
 Studio カーネル + マネージドトレーニングジョブは、ローカルドライランでは決して当たれない
@@ -122,7 +122,7 @@ Studio カーネル + マネージドトレーニングジョブは、ローカ�
    {"processes_per_host": 1}}` を使う。
 4. **exec ロールの書き込みスコープは `users/*`** — estimator のデフォルトのコードアップロード先
    であるバケットルート `<job>/source/...` は拒否される。修正: `code_location=
-   s3://<bucket>/users/<profile>/m9/code`。
+   s3://<bucket>/users/<profile>/m12/code`。
 5. **`iam:PassRole` + `sagemaker:CreateTrainingJob` の欠如** — exec ロールは Studio アプリ
    管理用に構築されており、トレーニングジョブの投入用ではなかった。修正:
    `infra/av30_constructs/sagemaker.py` にスコープ付きの `SageMakerTrainingJobs` (av30-m9-* ARN)

@@ -1,4 +1,4 @@
-# M7 参加者実行ガイド — 自分の GPU ホストで本物の AlpaSim を回す (SSM)
+# M10 参加者実行ガイド — 自分の GPU ホストで本物の AlpaSim を回す (SSM)
 
 > ## ⚠️ 先に読んでください — コストと時間
 > - この実行は **admin があなたのために立ち上げておいた GPU サーバー (g6e.12xlarge)** 上で回ります。
@@ -7,10 +7,10 @@
 >   ダウンロード + NuRec シーンのダウンロード)。ノートブックのように 5 分では終わりません。
 > - **あなたはサーバーを消せません。** 終わったら **必ず admin に「完了」を知らせて** admin に
 >   サーバーを終了 (terminate) させてください。知らせないと料金が積み上がり続けます。
-> - これは M7 の **任意の上級パス**です。結果だけを見たいなら admin の共有参照
->   結果をノートブックで可視化すればよいです (この文書なし、CPU、$0) — [ALPASIM_M7.md](ALPASIM_M7.md)。
+> - これは M10 の **任意の上級パス**です。結果だけを見たいなら admin の共有参照
+>   結果をノートブックで可視化すればよいです (この文書なし、CPU、$0) — [ALPASIM_M10.md](ALPASIM_M10.md)。
 
-M7 は 2 層構造です。**(1) 本物の AlpaSim 実行**は GPU サーバーで (この文書)、**(2) 結果の可視化**は
+M10 は 2 層構造です。**(1) 本物の AlpaSim 実行**は GPU サーバーで (この文書)、**(2) 結果の可視化**は
 SageMaker CPU ノートブックで行います。AlpaSim は Docker-Compose で立ち上がる gRPC マイクロサービスの fleet で
 ドライバーが ≥40GB GPU を使うため、Docker デーモンのない SageMaker Studio ノートブックでは実行が
 不可能です。そのため実行は別の GPU EC2 ホストで行い、ノートブックはその結果をダウンロードして見ます。
@@ -64,20 +64,20 @@ aws ssm start-session --target <your-instance-id> --region $AWS_DEFAULT_REGION
 ```bash
 sudo su -
 export PARTICIPANT_ID=<your-id>
-export M7_OUTPUT_PREFIX=users/<your-id>/m7
+export M10_OUTPUT_PREFIX=users/<your-id>/m7
 export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT
 export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
 export HF_TOKEN=hf_xxx          # 必須 — ゲート NuRec シーンのダウンロード用 (準備物 3 番)
 
 # 伝達確認 (スクリプトを回す前に必ず): 5 個がすべて見えて tok_len が 0 でないこと
-env | grep -E 'PARTICIPANT_ID|M7_OUTPUT_PREFIX|OUTPUT_BUCKET|SHARED_BUCKET'; echo "tok_len=${#HF_TOKEN}"
+env | grep -E 'PARTICIPANT_ID|M10_OUTPUT_PREFIX|OUTPUT_BUCKET|SHARED_BUCKET'; echo "tok_len=${#HF_TOKEN}"
 
 # スクリプトを取得してバックグラウンド(detached)で実行 + ログをリアルタイムで見る
 aws s3 cp s3://$SHARED_BUCKET/notebook-templates/scripts/alpasim_ec2_setup.sh /root/
 setsid bash /root/alpasim_ec2_setup.sh > /var/log/m7.log 2>&1 &
 tail -f /var/log/m7.log
 ```
-- ログの序盤に `[s3] participant self-run: id=<your-id> output=s3://…/users/<your-id>/m7/` が
+- ログの序盤に `[s3] participant self-run: id=<your-id> output=s3://…/users/<your-id>/m10/` が
   見えれば per-user パスに行っています。`admin reference run` が見えたら上の env が伝達されていない —
   Ctrl-C 後に export をやり直して再実行してください。
 - `setsid ... &` で立ち上げると SSM セッションが切れても続きます。`tail -f` は Ctrl-C で抜けても
@@ -92,7 +92,7 @@ tail -f /var/log/m7.log
 ```
 runtime-0-1 exited with code 0
 [verify] core outputs present.
-=== DONE — genuine AlpaSim results uploaded to s3://av30lab-user-workspace-.../users/<id>/m7/ ===
+=== DONE — genuine AlpaSim results uploaded to s3://av30lab-user-workspace-.../users/<id>/m10/ ===
 >>> Participant <id>: results are in ...
 ```
 - 成功時に `tail -f` が止まるのは **正常** (スクリプトが終わったこと — 死んだのではない)。
@@ -114,7 +114,7 @@ grep -q "=== DONE" /var/log/m7.log && echo "成功 (S3 アップロード完了)
 ```bash
 # 新しいローカルシェルなら ACCOUNT を再導出 (§3 セッション内なら既に export 済み)
 ACCOUNT=${ACCOUNT:-$(aws sts get-caller-identity --query Account --output text)}
-aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m7/ --recursive
+aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m10/ --recursive
 # aggregate/results-summary.json, rollouts/**/metrics.parquet, eval/eval.mp4, run.json が見えれば OK
 ```
 
@@ -123,9 +123,9 @@ aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m7/ --recursive
 admin が確認後 `terminate-instances` で終了し、課金を止めます。
 
 ## 6. SageMaker ノートブックで自分の結果を可視化 (CPU)
-1. 参加者ダッシュボード → **M7 ノード** (インスタンスは `ml.t3.medium` CPU のまま) → **Open Workspace**
-2. `M7_AlpaSim_ClosedLoop.ipynb` を開いて **Run All**
-3. ノートブックが `users/<your-id>/m7/` を自動検出して **あなたの** 結果を可視化します
+1. 参加者ダッシュボード → **M10 ノード** (インスタンスは `ml.t3.medium` CPU のまま) → **Open Workspace**
+2. `M10_AlpaSim_ClosedLoop.ipynb` を開いて **Run All**
+3. ノートブックが `users/<your-id>/m10/` を自動検出して **あなたの** 結果を可視化します
    (cell-2 が `Result source: your own EC2 run` を出力)。なければ admin 共有参照にフォールバック。
 
 **合格基準**: cell-5 に driving score (collision_at_fault など)、cell-9 に **PASS** + headline。
@@ -145,4 +145,4 @@ admin が確認後 `terminate-instances` で終了し、課金を止めます。
 | ノートブック cell-4 `not found` | 3〜4 番のステップがまだ成功していない → ログを確認後に再実行 |
 | 全部終わったのにサーバーが消えない | admin のみ終了可能 → admin に通知 |
 
-管理者用のプロビジョニング・IAM・整理手順: [M7_MANUAL_TEST_RUNBOOK.md](M7_MANUAL_TEST_RUNBOOK.md)。
+管理者用のプロビジョニング・IAM・整理手順: [M10_MANUAL_TEST_RUNBOOK.md](M10_MANUAL_TEST_RUNBOOK.md)。

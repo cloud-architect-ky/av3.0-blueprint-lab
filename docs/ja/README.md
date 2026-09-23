@@ -4,7 +4,7 @@
 
 **ドキュメント言語:** [English](../en/README.md) · [한국어](../ko/README.md) · **日本語**
 
-[Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/) をハンズオンで実行するための、セルフサービス型 AWS プラットフォームです。参加者は **12 個の Jupyter ノートブックモジュール（M0〜M11）**に取り組み、自動運転車データパイプラインの全体像 — データ探索、動画キャプション生成（Cosmos Reason）、データキュレーション（Cosmos Curator）、合成データ拡張（Cosmos Transfer & Predict）、Vision-Language-Action 推論（Alpamayo）、クローズドループシミュレーション（AlpaSim）、セマンティック検索、分散学習、3D 再構成、本番パイプライン自動化 — を通して学びます。
+[Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/) をハンズオンで実行するための、セルフサービス型 AWS プラットフォームです。参加者は **12 個の Jupyter ノートブックモジュール（M0〜M12）**に取り組み、自動運転車データパイプラインの全体像 — データ探索、動画キャプション生成（Cosmos Reason）、データキュレーション（Cosmos Curator）、合成データ拡張（Cosmos Transfer & Predict）、Vision-Language-Action 推論（Alpamayo）、クローズドループシミュレーション（AlpaSim）、セマンティック検索、分散学習、3D 再構成、本番パイプライン自動化 — を通して学びます。
 
 このプラットフォームは、管理者ダッシュボードと参加者ダッシュボード、マルチユーザー SageMaker Studio のプロビジョニング、自動コスト管理を備えた**単一の AWS CDK スタック**としてデプロイされます。誰でも**自分自身の AWS アカウント**にデプロイできます。
 
@@ -20,16 +20,17 @@
 | **M1** | データ探索 — 実際の **nuScenes-mini** センサーデータの取り込みと探索、シーンの選択 | `ml.t3.medium`（CPU） |
 | **M2** | Cosmos Reason キャプション生成 — サンプリングしたクリップの VLM キャプション | `ml.g5.12xlarge`（GPU） |
 | **M3** | Cosmos Curator — **NeMo Curator** による動画キュレーション（分割、トランスコード、フィルタ、重複排除） | `ml.g5.12xlarge`（GPU） |
-| **M4** | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g6.24xlarge` で検証済み） |
-| **M5** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g6.24xlarge` で検証済み） |
-| **M6** | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU（`ml.g6.24xlarge` で検証済み） |
-| **M7** | AlpaSim クローズドループ評価 — 本物のクローズドループポリシー評価を可視化 | `ml.t3.medium`（CPU）+ GPU EC2 |
-| **M8** | OpenSearch セマンティック検索 — キャプション埋め込みに対する k-NN 検索 | `ml.t3.medium`（CPU） |
-| **M9** | HyperPod 分散学習 — 本物の 2 ノード `torch.distributed` DDP ジョブ | `ml.t3.medium`（CPU）+ ジョブノード |
-| **M10** | Nerfstudio 3D 再構成 — NeRF / 3D Gaussian Splatting（オプション/デモ） | `ml.g5.xlarge`（GPU） |
+| **M4** | OpenSearch セマンティック検索 — キャプション埋め込みに対する k-NN 検索 | `ml.t3.medium`（CPU） |
+| **M5** | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g6.24xlarge` で検証済み） |
+| **M6** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g6.24xlarge` で検証済み） |
+| **M7** | Nerfstudio 3D 再構成 — NeRF / 3D Gaussian Splatting（オプション/デモ） | `ml.g5.xlarge`（GPU） |
+| **M8** | Cosmos Reason LoRA SFT — nuScenes の**人手ラベル**でパラメータ効率ファインチューニング | GPU（`ml.g6.24xlarge`、ネイティブ解像度で実測） |
+| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU（`ml.g6.24xlarge` で検証済み） |
+| **M10** | AlpaSim クローズドループ評価 — 本物のクローズドループポリシー評価を可視化 | `ml.t3.medium`（CPU）+ GPU EC2 |
 | **M11** | パイプライン自動化 — 本物の SageMaker Pipeline（Caption→Curate→Augment） | `ml.t3.medium`（CPU）+ 処理ジョブ |
+| **M12** | HyperPod 分散学習 — 本物の 2 ノード `torch.distributed` DDP ジョブ | `ml.t3.medium`（CPU）+ ジョブノード |
 
-推奨の進め方: **M0 → M1 → M2 → M3** の順に進み、その後は合成データ（M4/M5）、ポリシー + シミュレーション（M6/M7）、検索（M8）、本番パターン（M9/M11）へと分岐します。表示されているインスタンスはダッシュボードのデフォルト値であり、各 GPU モジュールには代替インスタンスも用意されています（例: `ml.g5.12xlarge` のキャパシティが不足している場合の `ml.g6.12xlarge`）。
+推奨の進め方: **M0 → M1 → M2 → M3** の順に進み、その後は合成データ（M5/M6）、ポリシー + シミュレーション（M9/M10）、検索（M4）、本番パターン（M12/M11）へと分岐します。表示されているインスタンスはダッシュボードのデフォルト値であり、各 GPU モジュールには代替インスタンスも用意されています（例: `ml.g5.12xlarge` のキャパシティが不足している場合の `ml.g6.12xlarge`）。
 
 上記の AWS ブログ記事で説明されている **8 ステージのパイプライン**に各モジュールがどう対応するかは、[参加者向け事前学習ガイド § 2「8 ステージのパイプライン（とモジュールの対応関係）」](PRE_LEARNING_GUIDE.md#the-8-stage-pipeline)を参照してください。
 
@@ -39,7 +40,13 @@
 
 デプロイする前に、このラボが何を生成するのか見てみたいですか？
 
-**実行済みノートブックの結果。** [`examples/notebooks-with-outputs.tar.gz`](../../examples/notebooks-with-outputs.tar.gz) には、12 個のモジュールノートブック（M0〜M11）が実際の実行後の**出力セル付き**で含まれています — グラフ、生成された動画のメタデータ、メトリクス、ログ。ダウンロードして任意の Jupyter ビューアーで開けば、**インストールも実行もせずに**各モジュールの実際の結果を確認できます。（アカウント固有の識別子はプレースホルダーに置き換えてあります。）
+**実行済みノートブックの結果。** [`examples/notebooks-with-outputs.tar.gz`](../../examples/notebooks-with-outputs.tar.gz) には、12 個のモジュールノートブックが実際の実行後の**出力セル付き**で含まれています — グラフ、生成された動画のメタデータ、メトリクス、ログ。ダウンロードして任意の Jupyter ビューアーで開けば、**インストールも実行もせずに**各モジュールの実際の結果を確認できます。（アカウント固有の識別子はプレースホルダーに置き換えてあります。）
+
+> **このバンドルはブログのステージ順への番号変更より前の実行記録です。** そのため
+> ファイル名と出力に印字された S3 パスは**旧番号**を使っています。印字されたパスを
+> 書き換えると実行記録の改変になるため、取得時のまま残しています。旧 → 新:
+> `M4`→M5、`M5`→M6、`M6`→M9、`M7`→M10、`M8`→M4、`M9`→M12、`M10`→M7。M0〜M3 と M11 は
+> 変更なし。新しい **M8**（Cosmos Reason LoRA SFT）は実行記録がまだ無いため未収録です。
 
 **管理者ダッシュボード。** 管理者はここで参加者を追加・削除します。各行の **Dashboard Link → Copy link** をクリックすると、その参加者専用のダッシュボード URL がコピーされて配布でき、**Sessions** / **Costs** タブでリアルタイムの利用状況を確認できます。
 
@@ -59,8 +66,8 @@
 |---|---|
 | **管理者 — ラボのセットアップ** | [PREREQUISITES](PREREQUISITES.md) → [ADMIN_GUIDE](ADMIN_GUIDE.md) → [DATA_CONTRACT](DATA_CONTRACT.md) |
 | **参加者** | [PRE_LEARNING_GUIDE](PRE_LEARNING_GUIDE.md) → [PARTICIPANT_GUIDE](PARTICIPANT_GUIDE.md) |
-| **モジュール別の詳細解説** | [COSMOS_M4_M5](COSMOS_M4_M5.md) · [ALPAMAYO_M6](ALPAMAYO_M6.md) · [ALPASIM_M7](ALPASIM_M7.md) · [HYPERPOD_M9](HYPERPOD_M9.md) · [PIPELINE_M11](PIPELINE_M11.md) |
-| **M7 GPU / SSM（応用）** | [M7_MANUAL_TEST_RUNBOOK](M7_MANUAL_TEST_RUNBOOK.md)（管理者向け） · [M7_PARTICIPANT_SSM_RUNBOOK](M7_PARTICIPANT_SSM_RUNBOOK.md)（参加者向け） |
+| **モジュール別の詳細解説** | [COSMOS_M5_M6](COSMOS_M5_M6.md) · [ALPAMAYO_M9](ALPAMAYO_M9.md) · [ALPASIM_M10](ALPASIM_M10.md) · [HYPERPOD_M12](HYPERPOD_M12.md) · [PIPELINE_M11](PIPELINE_M11.md) |
+| **M10 GPU / SSM（応用）** | [M10_MANUAL_TEST_RUNBOOK](M10_MANUAL_TEST_RUNBOOK.md)（管理者向け） · [M10_PARTICIPANT_SSM_RUNBOOK](M10_PARTICIPANT_SSM_RUNBOOK.md)（参加者向け） |
 
 ---
 
@@ -74,12 +81,12 @@
 | Python | 3.12+ | CDK インフラストラクチャコード |
 | AWS CDK | 2.x | `npm install -g aws-cdk` |
 | jq | — | デプロイスクリプト内での JSON パース |
-| Hugging Face トークン | — | **管理者のみ** — ゲート付きモデル（M2/M4/M5/M6）を事前キャッシュし、M7 のリファレンス評価を実行します。**参加者に HF トークンは不要です。** [docs/ja/PREREQUISITES.md](PREREQUISITES.md) を参照してください。 |
-| NGC API キー | — | **管理者のみ、M7 のみ** — AlpaSim NuRec レンダラーイメージ用。 |
+| Hugging Face トークン | — | **管理者のみ** — ゲート付きモデル（M2/M5/M6/M9）を事前キャッシュし、M10 のリファレンス評価を実行します。**参加者に HF トークンは不要です。** [docs/ja/PREREQUISITES.md](PREREQUISITES.md) を参照してください。 |
+| NGC API キー | — | **管理者のみ、M10 のみ** — AlpaSim NuRec レンダラーイメージ用。 |
 
 ### サービスクォータ（早めに申請 — 24〜48 時間のリードタイム）
 
-GPU **Studio JupyterLab App** のクォータは、新規アカウントではデフォルトで低い値または **0** になっています。ワークショップの前に増加申請してください。M9/M11 用には別途**ジョブ**クォータもあり、見落としがちなので注意してください。完全な表と CLI コマンドは **[docs/ja/ADMIN_GUIDE.md](ADMIN_GUIDE.md)** および **[docs/ja/PREREQUISITES.md](PREREQUISITES.md)** にあります。
+GPU **Studio JupyterLab App** のクォータは、新規アカウントではデフォルトで低い値または **0** になっています。ワークショップの前に増加申請してください。M12/M11 用には別途**ジョブ**クォータもあり、見落としがちなので注意してください。完全な表と CLI コマンドは **[docs/ja/ADMIN_GUIDE.md](ADMIN_GUIDE.md)** および **[docs/ja/PREREQUISITES.md](PREREQUISITES.md)** にあります。
 
 現在の値を確認する:
 ```bash
@@ -130,11 +137,11 @@ aws cognito-idp admin-create-user \
 
 # 6. NVIDIA モデルを S3 に事前キャッシュ（バックグラウンド、30〜60 分）
 ./scripts/cache_models.sh
-#    M4/M5/M6 は追加でオフライン HF キャッシュが、M6 はデモクリップが、M7 は
+#    M5/M6/M9 は追加でオフライン HF キャッシュが、M9 はデモクリップが、M10 は
 #    一度きりの GPU-EC2 リファレンス評価が必要です — docs/ja/ADMIN_GUIDE.md §6 および
-#    モジュール別の詳細解説（COSMOS_M4_M5、ALPAMAYO_M6、ALPASIM_M7）を参照してください。
+#    モジュール別の詳細解説（COSMOS_M5_M6、ALPAMAYO_M9、ALPASIM_M10）を参照してください。
 
-# 7. nuScenes-mini データセットを S3 にステージング（M1 / M3 / M10 で必須）
+# 7. nuScenes-mini データセットを S3 にステージング（M1 / M3 / M7 で必須）
 ./scripts/stage_nuscenes.sh
 #    公開の AWS Open Data ミラーから取得します（ログイン不要。nuScenes の利用規約が適用されます）。
 
@@ -164,7 +171,7 @@ aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/scr
             progress)                        │
                                        S3 shared-data bucket
                                         (model-cache / datasets / hf-cache /
-                                         notebook-templates / m7-reference)
+                                         notebook-templates / m10-reference)
 ```
 
 - **ネットワーク:** NAT なしの VPC — 分離プライベートサブネット ＋ 無料の S3 *ゲートウェイ* エンドポイント。
@@ -191,7 +198,7 @@ av3.0-blueprint-lab/
 │   ├── stacks/av30_stack.py
 │   ├── av30_constructs/    # network, storage, database, sagemaker, auth, api, dashboards, monitoring
 │   └── lambda/             # create_user, delete_user, bulk_provision, change_instance, get_costs, update_progress, …
-├── notebooks/              # 12 workshop notebooks M0–M11
+├── notebooks/              # 12 workshop notebooks M0–M12
 ├── web/
 │   ├── admin/              # Admin dashboard (React + Vite)
 │   └── user/               # Participant pipeline map (React + Vite)
@@ -210,8 +217,8 @@ av3.0-blueprint-lab/
 | シナリオ | コスト | 備考 |
 |---|---|---|
 | アイドル状態（インフラのみ） | **リージョンあたり約 $1/月** | KMS キー。S3 ゲートウェイエンドポイントは無料で、NAT Gateway はありません。DynamoDB（オンデマンド）・CloudFront・Cognito はアイドル時ほぼ $0。VPC インターフェースエンドポイント 6 種を有効にした場合のみ **リージョンあたり約 $87.60/月** が加算されます（ENI 12 個 × $0.01/AZ・時間）。モデルキャッシュの S3 保管料は別途（リージョンあたり約 $2/月）。 |
-| GPU モジュール | 時間課金 | `ml.g5.xlarge` 約 $1.41/時（M10）、`ml.g5.12xlarge` 約 $7.09/時（M2/M3）、`ml.g6.24xlarge` 約 $8.34/時（M4/M5/M6 のデフォルト）。フル解像度の出力には GPU あたり ≥38 GB が必要です: `ml.g7e.2xlarge` 約 $4.20/時 が最も安価な経路（96 GB 1 枚 — デフォルトより安価だが、クォータの初期値は 0 で、このラボでは未検証）、それ以外は `ml.p4d.24xlarge` 約 $25.25/時 |
-| M7 AlpaSim（EC2 上） | 約 $30 の一度きり（管理者） | `g6e.12xlarge` でのリファレンス評価。任意で参加者が自身で実行する場合は約 $10.5/時/ホスト |
+| GPU モジュール | 時間課金 | `ml.g5.xlarge` 約 $1.41/時（M7）、`ml.g5.12xlarge` 約 $7.09/時（M2/M3）、`ml.g6.24xlarge` 約 $8.34/時（M5/M6/M9 のデフォルト）。フル解像度の出力には GPU あたり ≥38 GB が必要です: `ml.g7e.2xlarge` 約 $4.20/時 が最も安価な経路（96 GB 1 枚 — デフォルトより安価だが、クォータの初期値は 0 で、このラボでは未検証）、それ以外は `ml.p4d.24xlarge` 約 $25.25/時 |
+| M10 AlpaSim（EC2 上） | 約 $30 の一度きり（管理者） | `g6e.12xlarge` でのリファレンス評価。任意で参加者が自身で実行する場合は約 $10.5/時/ホスト |
 | 1 週間フル（混在） | 約 $400〜600+ | p4d モジュールとユーザー数が支配的 |
 
 **コスト管理:** 日次予算アラーム（SNS → `<admin-email>`）、Sessions タブからの管理者による強制終了、アイドル状態のアプリのライフサイクルによる自動停止（約 180 分）。**撤去:** `scripts/teardown.sh`（デフォルトはドライラン。`--yes`、`--user <id>`、`--destroy`）は、ユーザーごとのアプリ/スペース/プロファイルを削除し、孤立した OpenSearch Serverless コレクションを一掃し、タグ付けされた GPU EC2 ホストを終了します。イベント終了後は、**管理者の HF トークンを失効させ、NGC キーをローテーション**してください。詳細は [docs/ja/ADMIN_GUIDE.md](ADMIN_GUIDE.md) にあります。
@@ -236,4 +243,4 @@ S3 モデルキャッシュのパスはリージョンローカルです。リ�
 
 このリポジトリ内の**ワークショップコード**（CDK インフラ、Lambda、ノートブック、ダッシュボード、スクリプト）は **MIT-0** ライセンスの下で提供されます — [LICENSE](../../LICENSE) を参照してください。
 
-ノートブックがダウンロードする**モデルおよびデータセット**は、そのライセンスの対象**ではなく**、ここでは**再配布されません**。それぞれが独自の規約を保持しています — 特に **Alpamayo-1.5-10B（M6/M7）は商用利用不可（研究/評価目的のみ）**であり、**nuScenes** も商用利用不可です。適用されるすべてのライセンスを確認し、遵守してください。完全なリストは [NOTICE](../../NOTICE) を参照してください。
+ノートブックがダウンロードする**モデルおよびデータセット**は、そのライセンスの対象**ではなく**、ここでは**再配布されません**。それぞれが独自の規約を保持しています — 特に **Alpamayo-1.5-10B（M9/M10）は商用利用不可（研究/評価目的のみ）**であり、**nuScenes** も商用利用不可です。適用されるすべてのライセンスを確認し、遵守してください。完全なリストは [NOTICE](../../NOTICE) を参照してください。

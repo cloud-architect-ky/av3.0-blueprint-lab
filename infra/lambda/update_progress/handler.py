@@ -23,20 +23,32 @@ logger.setLevel(logging.INFO)
 # Boto3 clients — created at module level for connection reuse
 dynamodb = boto3.resource("dynamodb")
 
-# Valid module IDs (m0 through m11) — short back-compat ids
-VALID_MODULE_IDS = {f"m{i}" for i in range(12)}
+# Valid module IDs (m0 through m12) — short back-compat ids
+VALID_MODULE_IDS = {f"m{i}" for i in range(13)}
 
 # Also accept the MODULE_CONFIG keys (module-1 through module-5)
 VALID_MODULE_IDS.update(MODULE_CONFIG.keys())
 
 # Canonical LONG ids emitted by the frontend + the notebook mark-complete cells
-# (web/user/src/data/pipeline-config.ts). Kept alongside the m0..m11 short ids so
+# (web/user/src/data/pipeline-config.ts). Kept alongside the m0..m12 short ids so
 # older callers keep working.
+#
+# The numbers follow the blog's 8-stage order (see docs/*/PRE_LEARNING_GUIDE.md),
+# which is NOT the order these modules were originally written in — that is why the
+# slugs look "out of sequence" here. Listed in stage order:
 VALID_MODULE_IDS.update({
-    "m01-data-exploration", "m02-cosmos-reason", "m03-cosmos-curator",
-    "m04-cosmos-transfer", "m05-cosmos-predict", "m06-alpamayo-vla",
-    "m07-alpasim", "m08-opensearch", "m09-hyperpod",
-    "m10-nerfstudio", "m11-orchestration",
+    "m01-data-exploration",     # stage 1-2
+    "m02-cosmos-reason",        # stage 3   captioning
+    "m03-cosmos-curator",       # stage 3   curation
+    "m04-opensearch",           # stage 4   search + indexing
+    "m05-cosmos-transfer",      # stage 5   augmentation
+    "m06-cosmos-predict",       # stage 5   scenario generation
+    "m07-nerfstudio",           # stage 6   neural reconstruction
+    "m08-cosmos-sft",           # stage 7   model training (LoRA SFT)
+    "m09-alpamayo-vla",         # stage 7   VLA inference
+    "m10-alpasim",              # stage 8   closed-loop eval
+    "m11-orchestration",        # ext       SageMaker Pipelines
+    "m12-hyperpod",             # ext       distributed-training scale-up
 })
 
 # Valid progress statuses
@@ -88,7 +100,7 @@ def handler(event, context):
         raise ApiError(
             400,
             f"Invalid moduleId: {module_id}",
-            details=f"Valid IDs: m0-m11 or {sorted(MODULE_CONFIG.keys())}",
+            details=f"Valid IDs: {sorted(VALID_MODULE_IDS)}",
         )
 
     # Validate status

@@ -67,7 +67,7 @@ USER_WS_BUCKET="${WS_ARN#arn:aws:s3:::}"
 echo "  Domain: $DOMAIN   Workspace bucket: $USER_WS_BUCKET"; echo ""
 
 # AOSS collection name — byte-matches infra/lambda/shared/config.aoss_collection_name
-# and M8's _aoss_name (lower, [^a-z0-9-]->-, first 8, strip stray -, letter start).
+# and M4's _aoss_name (lower, [^a-z0-9-]->-, first 8, strip stray -, letter start).
 aoss_name() {
   local slug
   slug=$(echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' \
@@ -181,7 +181,7 @@ else
   echo ">>> §2 Global AOSS sweep SKIPPED (--user scope)"
 fi
 
-# ── §3. M7 AlpaSim participant EC2 (double-guarded) ──────────────────────────
+# ── §3. M10 AlpaSim participant EC2 (double-guarded) ──────────────────────────
 echo ">>> §3 Participant EC2 termination"
 IDS=$(aws ec2 describe-instances --region "$REGION" \
   --filters 'Name=tag-key,Values=Participant' \
@@ -210,7 +210,7 @@ cat <<'EOF'
 
 ============ MANUAL POST-EVENT SECURITY CHECKLIST ============
   [ ] Revoke the admin Hugging Face token used to stage model caches.
-  [ ] Rotate the NGC API key if M7 (AlpaSim) was run this event.
+  [ ] Rotate the NGC API key if M10 (AlpaSim) was run this event.
   [ ] Scrub any HF/NGC creds from staged scripts in the RETAINED
       shared-data bucket before archiving or deleting it.
 ==============================================================

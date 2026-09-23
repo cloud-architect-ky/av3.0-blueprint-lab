@@ -1,19 +1,19 @@
-# HyperPod (M9) — 실제 분산 학습 데모, 설계상 CPU
+# HyperPod (M12) — 실제 분산 학습 데모, 설계상 CPU
 
-**상태:** M9는 **M3의 큐레이션된 캡션**에 대해 **실제 분산 PyTorch DDP 학습
+**상태:** M12는 **M3의 큐레이션된 캡션**에 대해 **실제 분산 PyTorch DDP 학습
 작업**(SageMaker Training Job, `instance_count=2`)을 실행하고, 작업 자체의
 아티팩트에서 **측정된** 에폭별 손실과 처리량을 시각화합니다. 시뮬레이션되는
 것은 없습니다. 이는 HyperPod 클러스터가 **아닙니다** — 그것은 노트북이
-프로비저닝할 수 없는 별도의 인프라입니다(아래 참조). M9는 HyperPod이 확장하는
+프로비저닝할 수 없는 별도의 인프라입니다(아래 참조). M12는 HyperPod이 확장하는
 *분산 학습 패턴*을 저렴한 CPU 인스턴스에서 시연합니다.
 
-## M9가 무엇이었고, 이제 무엇인가
+## M12가 무엇이었고, 이제 무엇인가
 
-배포된 M9는 M4/M5/M6/M7처럼 **환각된 API 실패가 아니었습니다** — 모든 임포트와
+배포된 M12는 M5/M6/M9/M10처럼 **환각된 API 실패가 아니었습니다** — 모든 임포트와
 AWS 호출이 실제였습니다(`sagemaker.pytorch.PyTorch`, `torch.distributed`,
 `describe_training_job`). 그것의 문제는 달랐습니다:
 
-| 배포된 M9 | 수정된 M9 |
+| 배포된 M12 | 수정된 M12 |
 |---|---|
 | 제목은 "HyperPod"라고 했지만 평범한 SageMaker Training Job을 사용함 | 정직하게 표현됨: 분산 *패턴*, HyperPod = 개념(처음에 명시됨) |
 | M3 입력을 선언했지만 결코 읽지 않음(`estimator.fit()`에 `inputs=`가 없음) | `fit(inputs={"training": …})`가 M3의 `curated_captions.json`을 마운트함; 스크립트는 실제 캡션에서 피처를 엔지니어링함 |
@@ -37,7 +37,7 @@ all-reduce**입니다 — 작은 모델은 GPU의 이점을 보여줄 수 없습
 
 **동일한 학습 스크립트**가 변경 없이 GPU/`nccl`로 실행됩니다 —
 `torch.cuda.is_available()`를 감지하고 백엔드 + 디바이스를 선택합니다. GPU에서
-M9를 실행하려면:
+M12를 실행하려면:
 
 1. **GPU 학습 할당량을 올리세요.** 2026-07 사전 테스트 기준, 레퍼런스 랩
    계정에서(`us-west-2`; 여러분의 리전은 다를 수 있음 — 본인 할당량을 확인하세요):
@@ -66,20 +66,20 @@ SageMaker HyperPod은 **영구 클러스터**로, `aws sagemaker create-cluster`
 또는 EKS 오케스트레이션)에 VPC/서브넷/보안 그룹, 공유 스토리지용 FSx for Lustre,
 그리고 EFA 네트워킹을 더해 생성됩니다. 클러스터 생성만 해도 ~20분이 걸리고
 클러스터는 그다음 계속 과금됩니다 — 이것은 노트북 셀이 아니라 장기 실행,
-대규모 학습 인프라입니다. (개념적으로 M7의 AlpaSim이 노트북 밖의 GPU EC2
+대규모 학습 인프라입니다. (개념적으로 M10의 AlpaSim이 노트북 밖의 GPU EC2
 호스트에서 실행되는 것과 같은 이유입니다.) 또한 `ml.p4d.24xlarge for cluster
 usage`와 `... for training job usage`가 이 랩 계정에서 둘 다 **0**이므로,
-실제 HyperPod p4d 클러스터는 어차피 여기서 생성될 수 없습니다. 따라서 M9는
+실제 HyperPod p4d 클러스터는 어차피 여기서 생성될 수 없습니다. 따라서 M12는
 프로비저닝하는 대신 HyperPod이 확장하는 패턴을 가르치고 HyperPod의 부가 가치
 (자동 노드 교체, FSx, Slurm/EKS 스케줄링, EFA/NCCL)를 설명합니다.
 
 ## 출력 아티팩트
 
-- `users/<profile>/m9/training_metadata.json` — 작업 요약, 데이터 소스
+- `users/<profile>/m12/training_metadata.json` — 작업 요약, 데이터 소스
   (`real_m3` | `synthetic`), 측정된 에폭별 메트릭, HyperPod 노트.
-- `users/<profile>/m9/<job-name>/output/model.tar.gz` — 체크포인트 +
+- `users/<profile>/m12/<job-name>/output/model.tar.gz` — 체크포인트 +
   `training_log.json`(노트북이 플롯하는 실제 메트릭).
-- `users/<profile>/m9/input/curated_captions.json` — 학습 채널로 스테이징된
+- `users/<profile>/m12/input/curated_captions.json` — 학습 채널로 스테이징된
   M3 데이터(M3가 실행되었을 때만).
 
 ## 검증된 실행
@@ -106,8 +106,8 @@ all-reduce(gloo), 실제 M3 캡션 수집(`dataset: real_m3`), 키가 노트북�
 **`ml.m5.xlarge`×2**에서 `estimator.fit()`이 완료됨 — `Training job completed`,
 320 청구 초, **`Data source: real_m3`**(`training` 채널을 통해 M3의 큐레이션된
 캡션으로 학습됨), 모델 아티팩트는
-`users/ky-5-34x1bx/m9/.../output/model.tar.gz`에, 데모 비용 ~$0.02. 전체
-M3→M9→메트릭 파이프라인이 실제 Studio 환경에서 엔드투엔드로 확인됨.
+`users/ky-5-34x1bx/m12/.../output/model.tar.gz`에, 데모 비용 ~$0.02. 전체
+M3→M12→메트릭 파이프라인이 실제 Studio 환경에서 엔드투엔드로 확인됨.
 
 ### 참가자 Run-All이 드러낸 여섯 개의 실제 버그(로컬에서는 재현 불가)
 Studio 커널 + 관리형 학습 작업은 로컬 드라이런이 결코 마주칠 수 없는 일련의
@@ -124,7 +124,7 @@ Studio 커널 + 관리형 학습 작업은 로컬 드라이런이 결코 마주�
    {"processes_per_host": 1}}` 사용.
 4. **실행 역할 쓰기 범위가 `users/*`임** — estimator의 기본 코드 업로드가 버킷
    루트 `<job>/source/...`로 가는데 거부됨. 수정: `code_location=
-   s3://<bucket>/users/<profile>/m9/code`.
+   s3://<bucket>/users/<profile>/m12/code`.
 5. **`iam:PassRole` + `sagemaker:CreateTrainingJob` 누락** — 실행 역할이 학습
    작업 제출이 아니라 Studio 앱 관리를 위해 만들어졌음. 수정:
    `infra/av30_constructs/sagemaker.py`에 범위가 지정된 `SageMakerTrainingJobs`

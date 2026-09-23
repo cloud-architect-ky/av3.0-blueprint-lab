@@ -5,9 +5,9 @@ order you'll do it. Participants only need their dashboard link (see
 [PARTICIPANT_GUIDE.md](PARTICIPANT_GUIDE.md)); everything else is on you.
 
 > **Golden rule:** all the heavy, gated, GPU, and credential work is the admin's.
-> If you finish the pre-event checklist below, a participant can run M0–M11 from a
+> If you finish the pre-event checklist below, a participant can run M0–M12 from a
 > browser with **no AWS account, no Hugging Face token, and no license clicks**
-> (the one exception is the optional M7 self-run — see §7).
+> (the one exception is the optional M10 self-run — see §7).
 
 ---
 
@@ -20,7 +20,7 @@ order you'll do it. Participants only need their dashboard link (see
 - **Two S3 buckets** (names are derived from **your** account + region — the
   examples in this guide use account `<aws-account-id>` / `us-west-2`, the reference
   deployment; substitute your own — see §1.5):
-  - `av30lab-shared-data-<account>` — models, datasets, notebook templates, M7 reference.
+  - `av30lab-shared-data-<account>` — models, datasets, notebook templates, M10 reference.
   - `av30lab-user-workspace-<account>` — one `users/<id>/` prefix per participant.
 
 > **Note on the IDs in this guide.** Everywhere you see `<aws-account-id>` or
@@ -29,8 +29,8 @@ order you'll do it. Participants only need their dashboard link (see
 > the account is taken from your credentials and the region from `$AWS_REGION`
 > at deploy time (§5). Pick yours in §1.5, then read the examples with your own
 > values substituted.
-- **12 notebooks M0–M11**. Most are participant-self-service; a few need one-time
-  admin pre-work (models, datasets, the M7 reference run). See the matrix in §4.
+- **13 notebooks M0–M12**. Most are participant-self-service; a few need one-time
+  admin pre-work (models, datasets, the M10 reference run). See the matrix in §4.
 
 ---
 
@@ -42,7 +42,7 @@ order you'll do it. Participants only need their dashboard link (see
 | **Day −7** | Accept all gated HF licenses on your admin account (§3) | Instant, but easy to forget one |
 | **Day −3** | `cdk bootstrap` + `deploy.sh` (§5) | ~25 min; leaves time to fix issues |
 | **Day −3** | Stage nuScenes + pre-cache models + HF offline cache (§6) | 30–90 min of background transfers |
-| **Day −2** | Run the M7 AlpaSim reference eval on EC2 (§6.4), if using M7 | ~$30, tens of min–2 h on a GPU box |
+| **Day −2** | Run the M10 AlpaSim reference eval on EC2 (§6.4), if using M10 | ~$30, tens of min–2 h on a GPU box |
 | **Day −1** | Upload notebook templates, smoke-test one user end-to-end (§8) | Catches provisioning/quota gaps |
 | **Day 0** | Provision participants, hand out dashboard links (§9), monitor (§10) | — |
 | **Day +0** | Delete users, **revoke HF token, rotate NGC key** (§12) | Security hygiene |
@@ -106,7 +106,7 @@ re-staging — so lock it in now.
 ## 2. Service quotas (request Day −7)
 
 Two families of quota matter. The README's quota table covers the first; the
-**job quotas** below are easy to miss and block M9/M11 for a full room.
+**job quotas** below are easy to miss and block M12/M11 for a full room.
 
 ### 2a. Studio JupyterLab App quotas (interactive notebooks)
 Search "**Studio JupyterLab Apps running on**" in the Service Quotas console. These
@@ -118,33 +118,33 @@ differ — always verify with the command below).
 
 **GPU verified this cycle:** every GPU module ran successfully on the g6 family —
 in particular **ml.g6.24xlarge (4× L4, 96 GB)** completed M2/M3 (captioning,
-curation) and M4/M5/M6 (Cosmos Transfer/Predict, Alpamayo). g6 is the current-gen
+curation) and M5/M6/M9 (Cosmos Transfer/Predict, Alpamayo). g6 is the current-gen
 L4 family and is usually far easier to get capacity for than p4d/p5, so it is the
 recommended workhorse for a real room; p4d/p5 remain the "native-resolution / full
 720p" path if you have the quota.
 
 | Instance | Quota code | Current | Min for a 10-person room | Role in the dashboard |
 |---|---|---|---|---|
-| ml.t3.medium | L-71FAF417 | 2500 | ≥20 | **Recommended** for all CPU notebooks (M0, M1, M7, M8, M9, M11) |
+| ml.t3.medium | L-71FAF417 | 2500 | ≥20 | **Recommended** for all CPU notebooks (M0, M1, M10, M4, M12, M11) |
 | ml.t3.large | L-2733D4D5 | 30 | ≥0 | CPU alternative |
 | ml.t3.xlarge | L-61F9C762 | 30 | ≥0 | CPU alternative (M1) |
 | ml.m5.large | L-3BDCD216 | 11 | ≥0 | CPU alternative |
-| ml.m5.xlarge | L-77B8159A | 11 | ≥0 | CPU alternative (M9) |
-| ml.g5.xlarge | L-988CE6C5 | 5 | ≥5 | **Recommended** for M10 (Nerfstudio) |
-| ml.g5.2xlarge | L-F73C7DB9 | 5 | ≥0 | M10 alternative |
-| ml.g5.4xlarge | L-81940D85 | 5 | ≥0 | M10 alternative |
+| ml.m5.xlarge | L-77B8159A | 11 | ≥0 | CPU alternative (M12) |
+| ml.g5.xlarge | L-988CE6C5 | 5 | ≥5 | **Recommended** for M7 (Nerfstudio) |
+| ml.g5.2xlarge | L-F73C7DB9 | 5 | ≥0 | M7 alternative |
+| ml.g5.4xlarge | L-81940D85 | 5 | ≥0 | M7 alternative |
 | ml.g5.12xlarge | L-8D2ED7BF | 5 | ≥5 | **Recommended** for M2, M3 (4× A10G, 96 GB) |
-| ml.g5.24xlarge | L-F087CCFC | 2 | ≥1 | M2–M6 alternative |
-| ml.g5.48xlarge | L-83AB5D73 | 2 | ≥1 | M2–M6 alternative / OOM fallback |
-| ml.g6.xlarge | L-AABA5942 | 5 | ≥0 | M10 alternative (L4) |
-| ml.g6.2xlarge | L-92D1521D | 5 | ≥0 | M10 alternative (L4) |
-| ml.g6.4xlarge | L-692B8304 | 5 | ≥0 | M10 alternative (L4) |
+| ml.g5.24xlarge | L-F087CCFC | 2 | ≥1 | M2/M3/M5–M9 alternative |
+| ml.g5.48xlarge | L-83AB5D73 | 2 | ≥1 | M2/M3/M5–M9 alternative / OOM fallback |
+| ml.g6.xlarge | L-AABA5942 | 5 | ≥0 | M7 alternative (L4) |
+| ml.g6.2xlarge | L-92D1521D | 5 | ≥0 | M7 alternative (L4) |
+| ml.g6.4xlarge | L-692B8304 | 5 | ≥0 | M7 alternative (L4) |
 | ml.g6.12xlarge | L-962247BA | 2 | ≥2 | M2/M3 capacity fallback (4× L4, 96 GB) |
-| **ml.g6.24xlarge** | **L-8ACE1754** | **2** | **≥2** | **M2–M6 workhorse (4× L4, 96 GB) — verified this cycle** |
-| ml.g6.48xlarge | L-125B7142 | 2 | ≥0 | M4/M5/M6 alternative (8× L4) |
-| ml.g7e.2xlarge | L-7A3E0A2C | **0** | ≥0 | M2–M6 **cheapest native-res path** (1× RTX PRO 6000, 96 GB; **defaults to 0 — must request**) |
-| ml.g7e.24xlarge | L-E481E4F8 | **0** | ≥0 | M4/M5/M6 alternative (4× RTX PRO 6000; **defaults to 0**) |
-| ml.p4d.24xlarge | L-AD63F1D2 | 2 | ≥2 | M4, M5, M6 native-res path (8× A100; **defaults to 0 — must request**) |
+| **ml.g6.24xlarge** | **L-8ACE1754** | **2** | **≥2** | **M2/M3/M5–M9 workhorse (4× L4, 96 GB) — verified this cycle** |
+| ml.g6.48xlarge | L-125B7142 | 2 | ≥0 | M5/M6/M9 alternative (8× L4) |
+| ml.g7e.2xlarge | L-7A3E0A2C | **0** | ≥0 | M2/M3/M5–M9 **cheapest native-res path** (1× RTX PRO 6000, 96 GB; **defaults to 0 — must request**) |
+| ml.g7e.24xlarge | L-E481E4F8 | **0** | ≥0 | M5/M6/M9 alternative (4× RTX PRO 6000; **defaults to 0**) |
+| ml.p4d.24xlarge | L-AD63F1D2 | 2 | ≥2 | M5, M6, M9 native-res path (8× A100; **defaults to 0 — must request**) |
 | ml.p5.48xlarge | L-B41FBF28 | 1 | ≥1 | Heavy-model fallback (8× H100; us-west-2 / us-east-1 only) |
 
 > **g7e is optional and unverified here.** All six `ml.g7e.*` Studio quotas read
@@ -153,7 +153,7 @@ recommended workhorse for a real room; p4d/p5 remain the "native-resolution / fu
 > the *cheapest* way to the native-resolution tier — one 96 GB card at ~$4.20/hr
 > beats `ml.p4d.24xlarge` at ~$25.25/hr and even undercuts the 24 GB default
 > (~$8.34/hr) — but **no module has been run end-to-end on g7e in this lab**. If
-> you request it, smoke-test M4 on one user before pointing a room at it. Other
+> you request it, smoke-test M5 on one user before pointing a room at it. Other
 > g7e sizes (4xl/8xl/12xl/48xl) have quota codes too (L-B7228EBF, L-0407753C,
 > L-5F015F52, L-A48244DF) but are not offered in the dashboard.
 
@@ -165,18 +165,18 @@ only the ones you'll actually direct the room to use. If you standardise the GPU
 modules on **g6.24xlarge** (recommended), request that one to ≥ your headcount and
 you can leave p4d/p5 at their defaults.
 
-### 2b. SageMaker **job** quotas (M9 and M11 — the ones people forget)
-M9 submits a real **training job** and M11 runs real **processing jobs** on
+### 2b. SageMaker **job** quotas (M12 and M11 — the ones people forget)
+M12 submits a real **training job** and M11 runs real **processing jobs** on
 separate managed instances (not the notebook's instance). These have their own
 quotas:
 
 | Quota | Code | Verified value (reference deploy example: us-west-2) | Needed by |
 |---|---|---|---|
-| ml.m5.xlarge for **training** job usage | L-CCE2AFA6 | 30 | M9 (needs ≥2 — it's a 2-node job) |
+| ml.m5.xlarge for **training** job usage | L-CCE2AFA6 | 30 | M12 (needs ≥2 — it's a 2-node job) |
 | ml.m5.xlarge for **processing** job usage | L-0307F515 | 16 | M11 (needs ≥1 — sequential 3-step DAG) |
 
 Both are comfortably above the workshop's needs today, but **verify** — if either
-is 0 in your account, M9/M11 fail at job submission even though the notebook opens.
+is 0 in your account, M12/M11 fail at job submission even though the notebook opens.
 Note `ml.g5.*` **processing** job quota is 0 here; that's fine because M11 runs on
 CPU by design.
 
@@ -205,15 +205,15 @@ the only place licenses are accepted — participants never see this.
 | Repo | Needed by | License |
 |---|---|---|
 | nvidia/Cosmos-Reason1-7B | M2 | NVIDIA Open Model (not gated, but log in) |
-| nvidia/Cosmos-Guardrail1 | M4, M5 | NVIDIA Open Model |
-| nvidia/Cosmos-Transfer2.5-2B | M4 | NVIDIA Open Model |
-| nvidia/Cosmos-Predict2.5-2B | M5 | NVIDIA Open Model |
-| nvidia/Alpamayo-1.5-10B | M6, M7 | **Non-commercial** (research/eval only) |
-| nvidia/Cosmos-Reason2-8B | M6, M7 (hidden Alpamayo backbone) | NVIDIA Open Model |
-| nvidia/PhysicalAI-Autonomous-Vehicles | M6 (demo clip) | NVIDIA AV Dataset (12-month expiry) |
-| nvidia/PhysicalAI-Autonomous-Vehicles-NuRec | M7 (AlpaSim scenes) | NVIDIA AV NuRec Dataset |
+| nvidia/Cosmos-Guardrail1 | M5, M6 | NVIDIA Open Model |
+| nvidia/Cosmos-Transfer2.5-2B | M5 | NVIDIA Open Model |
+| nvidia/Cosmos-Predict2.5-2B | M6 | NVIDIA Open Model |
+| nvidia/Alpamayo-1.5-10B | M9, M10 | **Non-commercial** (research/eval only) |
+| nvidia/Cosmos-Reason2-8B | M9, M10 (hidden Alpamayo backbone) | NVIDIA Open Model |
+| nvidia/PhysicalAI-Autonomous-Vehicles | M9 (demo clip) | NVIDIA AV Dataset (12-month expiry) |
+| nvidia/PhysicalAI-Autonomous-Vehicles-NuRec | M10 (AlpaSim scenes) | NVIDIA AV NuRec Dataset |
 
-**M7 also needs NGC** (separate from HF): the NuRec renderer image
+**M10 also needs NGC** (separate from HF): the NuRec renderer image
 `nvcr.io/nvidia/nre/nre-ga:26.04`. Get a key at
 `https://org.ngc.nvidia.com/setup/api-key`. (In testing this image was
 anonymously pullable, but have a key ready in case that changes.)
@@ -232,18 +232,19 @@ This is the heart of the guide — **which modules need admin work vs. run thems
 | M1 Data Exploration | CPU t3.medium | Stage nuScenes-mini (§6.1) | — |
 | M2 Cosmos Reason | GPU g5.12xlarge (or g6.24xlarge) | Pre-cache model to `model-cache/` (§6.2) | — |
 | M3 Cosmos Curator | GPU g5.12xlarge (or g6.24xlarge) | (uses M2 output; no extra cache) | — |
-| M4 Cosmos Transfer | GPU g6.24xlarge (or p4d.24xlarge for 720p) | HF **offline cache** to `hf-cache/hub/` (§6.3) | [COSMOS_M4_M5.md](COSMOS_M4_M5.md) |
-| M5 Cosmos Predict | GPU g6.24xlarge (or p4d.24xlarge for native) | HF offline cache (§6.3) | [COSMOS_M4_M5.md](COSMOS_M4_M5.md) |
-| M6 Alpamayo VLA | GPU g6.24xlarge (or p4d.24xlarge) | HF offline cache **+ demo clip** (§6.3) | [ALPAMAYO_M6.md](ALPAMAYO_M6.md) |
-| M7 AlpaSim | CPU t3.medium (visualizer) | **Run reference eval on EC2 once** (§6.4) | [ALPASIM_M7.md](ALPASIM_M7.md) |
-| M8 OpenSearch | CPU t3.medium | (uses M2 output; no extra cache) | — |
-| M9 HyperPod | CPU t3.medium (submits real DDP job) | none (job quota §2b) | [HYPERPOD_M9.md](HYPERPOD_M9.md) |
-| M10 Nerfstudio | GPU g5.xlarge (or g6.xlarge) | gsplat CUDA build runs per-session via `scripts/setup_gsplat_env.sh` (§11) | See §11 below |
+| M4 OpenSearch | CPU t3.medium | (uses M2 output; no extra cache) | — |
+| M5 Cosmos Transfer | GPU g6.24xlarge (or p4d.24xlarge for 720p) | HF **offline cache** to `hf-cache/hub/` (§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M6 Cosmos Predict | GPU g6.24xlarge (or p4d.24xlarge for native) | HF offline cache (§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M7 Nerfstudio | GPU g5.xlarge (or g6.xlarge) | gsplat CUDA build runs per-session via `scripts/setup_gsplat_env.sh` (§11) | See §11 below |
+| M8 Cosmos Reason SFT | GPU g6.24xlarge (or g7e.2xlarge) | (reuses M2's `model-cache/cosmos-reason1/`; no extra cache) | — |
+| M9 Alpamayo VLA | GPU g6.24xlarge (or p4d.24xlarge) | HF offline cache **+ demo clip** (§6.3) | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
+| M10 AlpaSim | CPU t3.medium (visualizer) | **Run reference eval on EC2 once** (§6.4) | [ALPASIM_M10.md](ALPASIM_M10.md) |
 | M11 Pipeline | CPU t3.medium (runs real SageMaker Pipeline) | none (job quota §2b) | [PIPELINE_M11.md](PIPELINE_M11.md) |
+| M12 HyperPod | CPU t3.medium (submits real DDP job) | none (job quota §2b) | [HYPERPOD_M12.md](HYPERPOD_M12.md) |
 
 **Bottom line:** the required one-time admin caches are **nuScenes (M1) + model-cache
-(M2) + hf-cache (M4/M5/M6) + M6 demo clip**, plus the **M7 reference run** if you're
-running M7. M9 and M11 need **no cache** — just the job quotas in §2b.
+(M2) + hf-cache (M5/M6/M9) + M9 demo clip**, plus the **M10 reference run** if you're
+running M10. M12 and M11 need **no cache** — just the job quotas in §2b.
 
 ---
 
@@ -289,7 +290,7 @@ Log in to the admin dashboard; you'll be forced to set a new password.
 All of these write to the **shared** bucket. Steps 6.3/6.4 must run on a machine
 that can reach the gated repos with your token.
 
-### 6.1 nuScenes-mini (M1/M2/M10)
+### 6.1 nuScenes-mini (M1/M2/M7)
 ```bash
 ./scripts/stage_nuscenes.sh    # pulls the public AWS Open Data mirror → datasets/nuscenes-mini/
 ```
@@ -300,16 +301,16 @@ pip install huggingface_hub && hf auth login --token "$HF_TOKEN"
 ./scripts/cache_models.sh      # → s3://<shared>/model-cache/ (Cosmos-Reason1-7B, Transfer2.5, Predict2.5)
 ```
 
-### 6.3 HF offline cache (M4/M5/M6) — the "no participant token" trick
-M4/M5/M6 load gated checkpoints through HF's **own cache layout** at runtime
-(M6 also pulls a hidden Cosmos-Reason2-8B backbone). The robust way to populate it:
-**run M4, M5, and M6 once each on a GPU JupyterLab app** with your admin token,
+### 6.3 HF offline cache (M5/M6/M9) — the "no participant token" trick
+M5/M6/M9 load gated checkpoints through HF's **own cache layout** at runtime
+(M9 also pulls a hidden Cosmos-Reason2-8B backbone). The robust way to populate it:
+**run M5, M6, and M9 once each on a GPU JupyterLab app** with your admin token,
 then sync the cache tree:
 ```bash
 aws s3 sync /mnt/sagemaker-nvme/hf/hub s3://<shared>/hf-cache/hub/ --only-show-errors
 ```
 `setup_cosmos_env.sh` restores this into `HF_HOME` and sets `HF_HUB_OFFLINE=1`, so
-participants run offline with no token. **M6 also needs a demo clip** (its dataset
+participants run offline with no token. **M9 also needs a demo clip** (its dataset
 can't be read offline):
 ```bash
 source /mnt/sagemaker-nvme/cosmos-work/alpamayo_env.sh
@@ -318,9 +319,9 @@ python scripts/alpamayo_save_clip.py --clip 030c760c-ae38-49aa-9ad8-f5650a545d26
   --t0-us 5100000 --out /mnt/sagemaker-nvme/m6_work/clips
 aws s3 cp /mnt/sagemaker-nvme/m6_work/clips/030c760c-*.pt s3://<shared>/hf-cache/alpamayo-demo/
 ```
-Full sequence: [COSMOS_M4_M5.md](COSMOS_M4_M5.md), [ALPAMAYO_M6.md](ALPAMAYO_M6.md).
+Full sequence: [COSMOS_M5_M6.md](COSMOS_M5_M6.md), [ALPAMAYO_M9.md](ALPAMAYO_M9.md).
 
-### 6.4 M7 AlpaSim reference eval (only if running M7)
+### 6.4 M10 AlpaSim reference eval (only if running M10)
 AlpaSim is a Docker-Compose microservice system needing a ≥40 GB GPU — it
 **cannot run in a Studio notebook**. Run it once on a Docker-capable GPU EC2 host:
 ```bash
@@ -328,12 +329,12 @@ AlpaSim is a Docker-Compose microservice system needing a ≥40 GB GPU — it
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 export HF_TOKEN=hf_... NGC_API_KEY=nvapi-... \
   SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
-bash scripts/alpasim_ec2_setup.sh    # → uploads s3://<shared>/m7-reference/
+bash scripts/alpasim_ec2_setup.sh    # → uploads s3://<shared>/m10-reference/
 # then TERMINATE the instance.
 ```
-The M7 notebook (CPU) downloads and visualizes these results for every participant.
+The M10 notebook (CPU) downloads and visualizes these results for every participant.
 ~$30 one-time; participant cost $0. Full details + the optional participant
-self-run path: [ALPASIM_M7.md](ALPASIM_M7.md), [M7_MANUAL_TEST_RUNBOOK.md](M7_MANUAL_TEST_RUNBOOK.md).
+self-run path: [ALPASIM_M10.md](ALPASIM_M10.md), [M10_MANUAL_TEST_RUNBOOK.md](M10_MANUAL_TEST_RUNBOOK.md).
 
 ### 6.5 Upload notebook templates + scripts (do this LAST, after any notebook edits)
 ```bash
@@ -341,6 +342,23 @@ self-run path: [ALPASIM_M7.md](ALPASIM_M7.md), [M7_MANUAL_TEST_RUNBOOK.md](M7_MA
 aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
 aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
 ```
+
+> **Re-syncing into a bucket that already holds the pre-renumbering notebooks?**
+> `aws s3 sync` does not delete, so the old names (`M4_Cosmos_Transfer_…`,
+> `M8_OpenSearch_…`, `M9_HyperPod_…`, `M10_Nerfstudio_…`) would sit alongside the new
+> ones and participants would see both. Do **not** add `--delete` — that would also
+> wipe the `notebook-templates/scripts/` folder, which this sync does not repopulate.
+> Remove the stale objects explicitly instead:
+> ```bash
+> for f in M4_Cosmos_Transfer_Augmentation M5_Cosmos_Predict_Synthesis \
+>          M6_Alpamayo_VLA_Inference M7_AlpaSim_ClosedLoop \
+>          M8_OpenSearch_Semantic_Search M9_HyperPod_Distributed_Training \
+>          M10_Nerfstudio_3D_Reconstruction; do
+>   aws s3 rm "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/$f.ipynb" \
+>     --region "$AWS_REGION" 2>/dev/null
+> done
+> ```
+> A fresh deployment after `teardown.sh` needs none of this.
 These are copied into each user's workspace at provisioning time (and the notebooks
 fall back to downloading scripts from this path). **Re-run this whenever you change
 a notebook or script** — otherwise participants get the old version. Participants
@@ -358,9 +376,9 @@ already provisioned can re-sync from a JupyterLab terminal:
 
 ---
 
-## 7. Optional: M7 participant self-run (advanced)
+## 7. Optional: M10 participant self-run (advanced)
 
-By default every participant shares your one M7 reference eval (§6.4) and needs no
+By default every participant shares your one M10 reference eval (§6.4) and needs no
 token. If you instead want **each participant to run AlpaSim themselves** on their
 own admin-provisioned GPU host over SSM:
 - You pre-provision a GPU EC2 host per participant and grant least-privilege SSM
@@ -370,8 +388,8 @@ own admin-provisioned GPU host over SSM:
   in the shared cache).
 - Cost ~$10.5/hr/host, ≤16 concurrent by the G-vCPU quota.
 
-Full runbooks: [M7_MANUAL_TEST_RUNBOOK.md](M7_MANUAL_TEST_RUNBOOK.md) Part C (admin
-provisioning + IAM) and [M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md)
+Full runbooks: [M10_MANUAL_TEST_RUNBOOK.md](M10_MANUAL_TEST_RUNBOOK.md) Part C (admin
+provisioning + IAM) and [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md)
 (participant steps). This is opt-in; skip it for a standard workshop.
 
 ---
@@ -386,7 +404,7 @@ provisioning + IAM) and [M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBO
    **Apply & Restart** → **Open Workspace** → JupyterLab opens.
 5. Run **M1** (CPU) end-to-end, then **M2** (GPU) — confirms the GPU image is
    auto-selected and the model cache resolves.
-6. If you're running M9/M11, run one of each once as the test user to confirm the
+6. If you're running M12/M11, run one of each once as the test user to confirm the
    job quotas (§2b) and IAM are in place — they submit real managed jobs.
 7. **Delete** the test user (Users tab → Delete) — removes app/space/profile + S3.
 
@@ -428,12 +446,12 @@ seeded with the notebook templates, and a personal dashboard link.
 
 ---
 
-## 11. M10 Nerfstudio — gsplat build (per-session)
+## 11. M7 Nerfstudio — gsplat build (per-session)
 
-**M10 now trains** — the `splatfacto` cell works after a one-time gsplat CUDA
+**M7 now trains** — the `splatfacto` cell works after a one-time gsplat CUDA
 build. `gsplat` ships a pure-Python wheel and compiles its CUDA kernels from
 source on first use, but the SageMaker Distribution image's conda CUDA dev
-packages are incomplete. **`scripts/setup_gsplat_env.sh`** (M10 cell 3 invokes it)
+packages are incomplete. **`scripts/setup_gsplat_env.sh`** (M7 cell 3 invokes it)
 fixes the whole chain: installs the missing dev headers, symlinks `nvvm` so `nvcc`
 finds `cicc`, mirrors the CUDA headers/libs into the standard `$CUDA_HOME` paths
 (so the build works with zero env vars, even inside `ns-train`'s subprocess), and
@@ -444,8 +462,8 @@ source-builds `gsplat==1.4.0`.
 - The demo uses **synthetic sin-wave camera poses**, so training runs end-to-end
   (a genuine Gaussian-Splatting pipeline) but the reconstruction is a smoke test,
   not a metrically correct scene. Wiring real nuScenes calibration is the next step.
-- **M10 caveat:** the gsplat CUDA build runs per-session via
-  `scripts/setup_gsplat_env.sh`; treat M10 as an optional/demo module and expect the
+- **M7 caveat:** the gsplat CUDA build runs per-session via
+  `scripts/setup_gsplat_env.sh`; treat M7 as an optional/demo module and expect the
   final training cell to be sensitive to the GPU image's CUDA toolchain.
 
 ---
@@ -467,7 +485,7 @@ source-builds `gsplat==1.4.0`.
   is RETAIN — it and its cached models survive a destroy and must be emptied by hand.
 - **Revoke the admin HF token** `hf_...` — the S3 caches are all participants ever
   touch, so the token isn't needed after staging.
-- **Rotate the NGC API key** if you used M7.
+- **Rotate the NGC API key** if you used M10.
 - The idle stack still costs ~$80/mo (NAT, VPC endpoints, DynamoDB, CloudFront) —
   destroy it if you're done.
 
@@ -478,12 +496,12 @@ source-builds `gsplat==1.4.0`.
 | Symptom | Cause / Fix |
 |---|---|
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU app quota not raised — §2a. |
-| M9 job fails at submission / M11 processing step never starts | m5.xlarge **job** quota (§2b) or exec-role IAM — both verified present in this account; re-check if you redeployed. |
+| M12 job fails at submission / M11 processing step never starts | m5.xlarge **job** quota (§2b) or exec-role IAM — both verified present in this account; re-check if you redeployed. |
 | Participant "No GPU detected" on a GPU instance | CPU image selected — re-Apply via Instance Options. |
-| M4/M5/M6 ask for an HF token | `hf-cache/hub/` not staged (§6.3) — participants fall back to online download. |
-| M6 fails to load its clip | demo `.pt` not uploaded to `hf-cache/alpamayo-demo/` (§6.3). |
-| M7 notebook shows nothing | `m7-reference/` reference eval not run (§6.4). |
-| M10 training cell fails on gsplat | Re-run M10 cell 3 (`scripts/setup_gsplat_env.sh`) — the CUDA build is per-session and resets on app restart. §11. |
+| M5/M6/M9 ask for an HF token | `hf-cache/hub/` not staged (§6.3) — participants fall back to online download. |
+| M7 training cell fails on gsplat | Re-run M7 cell 3 (`scripts/setup_gsplat_env.sh`) — the CUDA build is per-session and resets on app restart. §11. |
+| M9 fails to load its clip | demo `.pt` not uploaded to `hf-cache/alpamayo-demo/` (§6.3). |
+| M10 notebook shows nothing | `m10-reference/` reference eval not run (§6.4). |
 | SNS budget alert went to placeholder@example.com | Deployed without `--context admin_email` — redeploy via `deploy.sh`. |
 | Participant link shows "Demo Mode" | They opened the bare URL; resend the full `?userId=&token=` link. |
 | Bulk provision partial failure | Retry failed rows individually; check `bulk_provision` CloudWatch logs. |
@@ -494,7 +512,7 @@ source-builds `gsplat==1.4.0`.
 - [PRE_LEARNING_GUIDE.md](PRE_LEARNING_GUIDE.md) — send to participants before the event.
 - [PARTICIPANT_GUIDE.md](PARTICIPANT_GUIDE.md) — hand this to participants on the day.
 - [PREREQUISITES.md](PREREQUISITES.md) — the token/license detail behind §3/§6.
-- Module deep-dives: [COSMOS_M4_M5.md](COSMOS_M4_M5.md), [ALPAMAYO_M6.md](ALPAMAYO_M6.md),
-  [ALPASIM_M7.md](ALPASIM_M7.md), [HYPERPOD_M9.md](HYPERPOD_M9.md),
+- Module deep-dives: [COSMOS_M5_M6.md](COSMOS_M5_M6.md), [ALPAMAYO_M9.md](ALPAMAYO_M9.md),
+  [ALPASIM_M10.md](ALPASIM_M10.md), [HYPERPOD_M12.md](HYPERPOD_M12.md),
   [PIPELINE_M11.md](PIPELINE_M11.md).
 - [README.md](../../README.md) — full deployment + architecture reference.

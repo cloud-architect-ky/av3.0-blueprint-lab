@@ -8,14 +8,14 @@ step scripts are pure Python over M1's scene metadata, so the steps run on **CPU
 
 ## What M11 was, and what it is now
 
-Like M9, M11 was **not a hallucinated-API failure** — every import and class
+Like M12, M11 was **not a hallucinated-API failure** — every import and class
 (`Pipeline`, `ProcessingStep`, `PipelineSession`, `ScriptProcessor`) is real
-SageMaker Python SDK **v2**. Its problems were the same family M9 hit, plus a few
+SageMaker Python SDK **v2**. Its problems were the same family M12 hit, plus a few
 of its own:
 
 | Shipped M11 | Fixed M11 |
 |---|---|
-| `from sagemaker import Session` (v2 top-level) → fails on the SDK-v3 kernel | cell-1 pins v2 (`>=2.257.2,<3`) + auto kernel restart (from M9) |
+| `from sagemaker import Session` (v2 top-level) → fails on the SDK-v3 kernel | cell-1 pins v2 (`>=2.257.2,<3`) + auto kernel restart (from M12) |
 | Step1 globbed `INPUT_DIR/*.jpg`, but M1 writes only JSON to `m1/` → 0 captions | Step1 reads M1's `selected_scenes.json` (real scene names + descriptions) → grounded captions |
 | 3 steps requested `ml.g5.12xlarge`/`g5.xlarge` (GPU) — processing quota is 0 here | CPU `ml.m5.xlarge` (processing quota available); scripts are pure Python so GPU adds nothing |
 | GPU `pytorch-training` image | CPU sklearn container via `image_uris.retrieve("sklearn", …)` — **no `image_scope`** (sklearn has no `processing` scope; passing it raises `ValueError: Unsupported image scope`) |
@@ -55,18 +55,18 @@ In `infra/av30_constructs/sagemaker.py`, added to the SageMaker execution role:
   `StopProcessingJob`/`AddTags` on `processing-job/*` (SDK auto-names processing
   jobs, so the resource can't be prefix-scoped).
 - `iam:PassRole` — reused the self-only, `PassedToService=sagemaker.amazonaws.com`
-  statement added for M9; the ProcessingSteps pass this role to their containers.
+  statement added for M12; the ProcessingSteps pass this role to their containers.
 
-## Bugs surfaced (mirrors M9 + Pipeline-specific)
+## Bugs surfaced (mirrors M12 + Pipeline-specific)
 
-Same v2/v3 SDK chain as M9 (#1 v3 kernel, #2 in-memory mix / kernel restart), plus:
-- **Pipeline/Processing IAM** — M9 only added training-job perms; M11 needs the
+Same v2/v3 SDK chain as M12 (#1 v3 kernel, #2 in-memory mix / kernel restart), plus:
+- **Pipeline/Processing IAM** — M12 only added training-job perms; M11 needs the
   Pipeline + Processing set above (deployed & verified on the live exec role
   `av30lab-sagemaker-execution-role`).
 - **Upload scope** — `default_bucket_prefix` so all SDK uploads land under
   `users/<profile>/m11/` (the only path the exec role can write). Verified present
   on both `Session` and `PipelineSession` in the pinned SDK 2.257.3.
-- **GPU quota 0** — steps moved to CPU (same reason M9 uses CPU).
+- **GPU quota 0** — steps moved to CPU (same reason M12 uses CPU).
 - **Empty input** — consume M1's `selected_scenes.json`, not absent `*.jpg`.
 - **`image_scope="processing"` blocker (found in pre-run audit)** — cell-3 built the
   step image with `image_uris.retrieve(framework="sklearn", …, image_scope="processing")`,
@@ -82,9 +82,9 @@ Same v2/v3 SDK chain as M9 (#1 v3 kernel, #2 in-memory mix / kernel restart), pl
   `…/m3/curated_captions.json` — the *exact keys and filenames* the real M2/M3
   modules produce, but with an incompatible demo schema (no per-caption `filename`,
   no top-level `model`). Running M11 would silently overwrite a participant's genuine
-  M2/M3 output, and a later re-run of **M8** (`m2_output["model"]`, `cap["filename"]`)
+  M2/M3 output, and a later re-run of **M4** (`m2_output["model"]`, `cap["filename"]`)
   or **M3** (`captions[0]["filename"]`) would then crash with `KeyError`. Verified
-  against the M2/M3/M8 notebook source. Fix: route all three step outputs into an
+  against the M2/M3/M4 notebook source. Fix: route all three step outputs into an
   **M11-private namespace** `users/<profile>/m11/pipeline/stepN_*/` (Step 1 still
   reads real `m1/` read-only). The DAG/dependencies/lineage are unchanged; M11 is now
   self-contained and cannot pollute other modules' data. (Confirmed by re-running the

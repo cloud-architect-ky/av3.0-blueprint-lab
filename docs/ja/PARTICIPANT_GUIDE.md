@@ -1,6 +1,6 @@
 # AV 3.0 Blueprint Lab — 参加者ガイド
 
-ようこそ！ このガイドでは、AV 3.0 パイプラインのノートブック（M0〜M11）を
+ようこそ！ このガイドでは、AV 3.0 パイプラインのノートブック（M0〜M12）を
 最初から最後まで実行する手順を説明します。AWS アカウントやコンソールへのアクセスは**不要**です。
 ワークショップ管理者が個人用のダッシュボードリンクを配布し、すべての操作はブラウザから行います。
 
@@ -25,8 +25,8 @@ VLA 推論 → クローズドループシミュレーション。
 必要なのは、管理者が送付する**参加者用ダッシュボードリンク**だけです。
 （管理者向けの詳細は [PREREQUISITES.md](PREREQUISITES.md) を参照。）
 
-> M6/M7 は Alpamayo-1.5-10B を使用します。これは**非商用**（研究・評価のみ）です。
-> ダウンロードはしませんが、M6/M7 を実行することでそのライセンスに同意したことになります。
+> M9/M10 は Alpamayo-1.5-10B を使用します。これは**非商用**（研究・評価のみ）です。
+> ダウンロードはしませんが、M9/M10 を実行することでそのライセンスに同意したことになります。
 
 ---
 
@@ -52,20 +52,20 @@ https://<user-dashboard>.cloudfront.net/?userId=<your-id>&token=<your-token>
 
 ## 2. モジュールに適したインスタンスを選ぶ
 
-モジュールによって必要な計算リソースは異なります。**CPU モジュール**（M0、M1、M7、M8、M9、M11）
-は小さなデフォルトインスタンスで動作し、変更は不要です。**GPU モジュール**（M2〜M6、M10）
+モジュールによって必要な計算リソースは異なります。**CPU モジュール**（M0、M1、M4、M10、M11、M12）
+は小さなデフォルトインスタンスで動作し、変更は不要です。**GPU モジュール**（M2、M3、M5〜M9）
 には GPU インスタンスが必要で、ダッシュボードから自分で選択します。
-（M9 のノートブックは **CPU** です。実際の 2 ノード分散トレーニングジョブを送信し、それが
+（M12 のノートブックは **CPU** です。実際の 2 ノード分散トレーニングジョブを送信し、それが
 別の `ml.m5.xlarge` インスタンス上で実行されたのち、測定されたメトリクスを可視化します。
-[HYPERPOD_M9.md](HYPERPOD_M9.md) を参照。）
-（M7 の SageMaker ノートブックは **CPU** です。本物の AlpaSim の結果をダウンロードして可視化します。
+[HYPERPOD_M12.md](HYPERPOD_M12.md) を参照。）
+（M10 の SageMaker ノートブックは **CPU** です。本物の AlpaSim の結果をダウンロードして可視化します。
 実際のクローズドループシミュレーションは別の **GPU EC2 ホスト**上で実行されます。
 管理者による共有リファレンス実行を使うか、あるいは — オプションの上級パスとして — SSM 経由で
 自分で実行します（**約 $10.5/時**、数十分〜約2〜3時間。そのホストを終了させることはできず、
 管理者が行います）。この自己実行にはさらに、ゲート付きの NuRec シーン用に**自分自身の Hugging
 Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参照）。ノートブックのみのパスに
-トークンは不要です。[ALPASIM_M7.md](ALPASIM_M7.md) を、自己実行については
-[M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md) を参照。）
+トークンは不要です。[ALPASIM_M10.md](ALPASIM_M10.md) を、自己実行については
+[M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md) を参照。）
 
 ワークスペースは小さな CPU インスタンス（`ml.t3.medium`）で開始します。**M2（Cosmos Reason
 キャプション生成）**のような GPU モジュールを実行する前に、切り替えてください：
@@ -88,26 +88,27 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 | M1 Data Exploration | `ml.t3.medium` | CPU |
 | **M2 Cosmos Reason Captioning** | **`ml.g5.12xlarge`** | GPU（4× A10G、96 GB） |
 | M3 Cosmos Curator | `ml.g5.12xlarge` | GPU |
-| M4 Cosmos Transfer (Weather Aug) | **`ml.g6.24xlarge`** | GPU（4× L4、GPU あたり 24 GB） — 480p で実行; 下のティア表を参照 |
-| M5 Cosmos Predict (Scenario Gen) | **`ml.g6.24xlarge`** | GPU（4× L4） — 480×832 で実行; 下のティア表を参照 |
-| M6 Alpamayo VLA Inference | **`ml.g6.24xlarge`** | GPU（4× L4） — シャーディング "balanced-expert" 経路、検証済み |
-| M7 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU（本物の AlpaSim の結果を可視化。実際のシミュレーションは GPU EC2 ホスト上で実行 — 管理者リファレンス、または SSM 経由の自己実行） |
-| M8 OpenSearch Semantic Search | `ml.t3.medium` | CPU |
-| M9 HyperPod Distributed Training | `ml.t3.medium` | CPU（`ml.m5.xlarge`×2 上で実際の 2 ノード DDP トレーニングジョブを送信。HyperPod 自体は概念的なもの — HYPERPOD_M9.md を参照） |
-| M10 Nerfstudio 3D Reconstruction | `ml.g5.xlarge` | GPU（1× A10G）— ⚠️ **既知の制限あり**：GPU チェックとデータ準備のセルは実行されますが、最終的な 3D トレーニングのセル（splatfacto）は現在のイメージでは実行されません。M10 はオプション／デモモジュールとして扱ってください（下記の注記を参照）。 |
+| M4 OpenSearch Semantic Search | `ml.t3.medium` | CPU |
+| M5 Cosmos Transfer (Weather Aug) | **`ml.g6.24xlarge`** | GPU（4× L4、GPU あたり 24 GB） — 480p で実行; 下のティア表を参照 |
+| M6 Cosmos Predict (Scenario Gen) | **`ml.g6.24xlarge`** | GPU（4× L4） — 480×832 で実行; 下のティア表を参照 |
+| M7 Nerfstudio 3D Reconstruction | `ml.g5.xlarge` | GPU（1× A10G）— ⚠️ **既知の制限あり**：GPU チェックとデータ準備のセルは実行されますが、最終的な 3D トレーニングのセル（splatfacto）は現在のイメージでは実行されません。M7 はオプション／デモモジュールとして扱ってください（下記の注記を参照）。 |
+| M8 Cosmos Reason LoRA SFT | **`ml.g6.24xlarge`** | GPU（4× L4）— ネイティブ 1600×900 で実測: 最悪 GPU ピーク 11.28 GiB、余裕 10.76 GiB。GPU 2 枚以上（または 40 GB 以上 1 枚）が必要。 |
+| M9 Alpamayo VLA Inference | **`ml.g6.24xlarge`** | GPU（4× L4） — シャーディング "balanced-expert" 経路、検証済み |
+| M10 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU（本物の AlpaSim の結果を可視化。実際のシミュレーションは GPU EC2 ホスト上で実行 — 管理者リファレンス、または SSM 経由の自己実行） |
 | M11 Pipeline Automation | `ml.t3.medium` | CPU |
+| M12 HyperPod Distributed Training | `ml.t3.medium` | CPU（`ml.m5.xlarge`×2 上で実際の 2 ノード DDP トレーニングジョブを送信。HyperPod 自体は概念的なもの — HYPERPOD_M12.md を参照） |
 
 同じ **Instance Options** パネルで、モジュールのディスクが不足した場合に EBS ストレージ
 （+50 GB / +200 GB）を追加することもできます。
 
-### 出力品質とコスト — GPU あたりの VRAM ティア（M4 / M5 / M6）
+### 出力品質とコスト — GPU あたりの VRAM ティア（M5 / M6 / M9）
 
 **推奨インスタンスですべてのモジュールが完走します。** ラボを終えるために大きな
 インスタンスは必要ありません。大きなインスタンスが与えるのは *出力品質* であり、
 それは **GPU あたりの VRAM** で決まります — 合計 VRAM でも、インスタンスのサイズ
 番号でもありません:
 
-| インスタンス | GPU あたり | M4 / M5 の出力 | M6 の経路 | 約 $/時 |
+| インスタンス | GPU あたり | M5 / M6 の出力 | M9 の経路 | 約 $/時 |
 |---|---|---|---|---|
 | **`ml.g6.24xlarge`**（デフォルト、**検証済み**） | 約 22.5 GB | 480p、ガードレール **OFF** | シャーディング `balanced-expert` | **8.34** |
 | `ml.g7e.2xlarge`（RTX PRO 6000 1 枚） | **96 GB** | **720p / ネイティブ、ガードレール ON** | **単一 GPU** | **4.20** — 下の注意点を参照 |
@@ -122,10 +123,10 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
   あたりの VRAM は変わりません。** A10G も L4 もすべて 24 GB です。したがって
   g5/g6 では 38〜40 GB のティアに到達できません。到達できるのは g7e（カードあたり
   96 GB）、p4d（A100 40 GB）、p5（H100 80 GB）です。
-- **24 GB のカードは検証済みの経路であり、性能の劣る代替ではありません。** M6 は
+- **24 GB のカードは検証済みの経路であり、性能の劣る代替ではありません。** M9 は
   24 GB のカードで最初から最後まで実行し、**minADE 0.3779 m、`Status: PASS`** を
   記録しました — H100 のリファレンス実行との差は 0.003 m です
-  （[ALPAMAYO_M6.md](ALPAMAYO_M6.md) の "Verified runs" を参照）。
+  （[ALPAMAYO_M9.md](ALPAMAYO_M9.md) の "Verified runs" を参照）。
 - **`ml.g7e.2xlarge` は「高性能ほど高価」という常識を覆します。** RTX PRO 6000
   Blackwell 1 枚で 96 GB のため、**単一** GPU で最上位ティアを満たし、価格は
   デフォルトの約 **半分** です。ただし実際の注意点が 2 つあります: このラボには
@@ -199,7 +200,7 @@ M3 に渡されます。
 |------|:---:|-----|
 | **S3 内のモジュール結果**（M1 の `m1/` 出力、M2 の `captions.json` など） | ✅ **保持** | 各ノートブックは結果を自分の S3 ワークスペースにアップロードし、次のモジュールがそれを S3 からダウンロードします。これがデータが M1 → M2 → M3 … と流れる仕組みです。|
 | **ホームディレクトリ**（`/home/sagemaker-user`：ノートブック、保存したファイル、ダウンロード） | ✅ **保持** | インスタンスの変更は計算リソースとソフトウェアイメージのみを入れ替えます。ストレージボリューム（EBS）は再起動をまたいでアタッチされたままです。 |
-| **ノートブックファイル自体**（M0〜M11） | ✅ **保持** | 起動のたびに自動で再同期されます。 |
+| **ノートブックファイル自体**（M0〜M12） | ✅ **保持** | 起動のたびに自動で再同期されます。 |
 | **前のカーネルのメモリ内状態**（Python 変数、読み込んだモデル、`df = ...`） | ❌ **クリア** | カーネルは新しいインスタンス上の新規プロセスです。これは*どんな* Jupyter の再起動でも通常の動作です。 |
 
 ### 実際にはどういう意味か
@@ -215,7 +216,7 @@ M3 に渡されます。
   最初のほうのセルは、必要な入力を S3 から**再ダウンロード**します（例：M2 は M1 の `m1/` 出力と
   Cosmos Reason モデルをキャッシュから取得します）。そのため、M1 のメモリを持たない新規カーネル
   でもまったく問題ありません。
-- **自由に行き来できます。** GPU → CPU（例：M8 のために `ml.t3.medium` に戻る）や、その後
+- **自由に行き来できます。** GPU → CPU（例：M4 のために `ml.t3.medium` に戻る）や、その後
   再び CPU → GPU に切り替えても、S3 やホームディレクトリの内容が失われることはありません。
 
 ### やり直す必要がある唯一のもの
@@ -252,7 +253,7 @@ EC2InsufficientCapacityError: Instance type 'ml.g5.12xlarge' is temporarily unav
 GPU インスタンスは時間単位で課金され、**無料ではありません**（`ml.g5.12xlarge` ≈
 $7.09/時、`ml.g6.24xlarge` ≈ $8.34/時、`ml.p4d.24xlarge` ≈ $25.25/時）。以下にご協力ください：
 
-- GPU モジュールから CPU モジュール（M8、M11）に移るときは、**`ml.t3.medium` に戻して**
+- GPU モジュールから CPU モジュール（M4、M11）に移るときは、**`ml.t3.medium` に戻して**
   ください（Instance Options 経由）— GPU ボックスをアイドル状態のままにしないでください。
 - ワークスペースは**約 3 時間の非アクティブ状態の後に自動シャットダウン**しますが、それに
   頼らないでください — 離席するときは終了するか一時停止してください。
@@ -264,27 +265,27 @@ $7.09/時、`ml.g6.24xlarge` ≈ $8.34/時、`ml.p4d.24xlarge` ≈ $25.25/時）
 
 ```
 M1 (explore, CPU)
-   └─▶ M2 (caption, GPU) ─▶ M3 (curate, GPU) ─┬─▶ M4 (weather aug, GPU)
-                                              ├─▶ M5 (scenario gen, GPU)
-                                              ├─▶ M6 (VLA, GPU) ─▶ M7 (sim eval, CPU*)
-                                              └─▶ M9 (distributed train, CPU† → m5.xlarge×2 job)
-   M2 ─▶ M8 (search, CPU)
-   nuScenes ─▶ M10 (3D recon, GPU‡)     M1 ─▶ M11 (orchestration, CPU)
+   └─▶ M2 (caption, GPU) ─▶ M3 (curate, GPU) ─┬─▶ M5 (weather aug, GPU)
+                                              ├─▶ M6 (scenario gen, GPU)
+                                              ├─▶ M9 (VLA, GPU) ─▶ M10 (sim eval, CPU*)
+                                              └─▶ M12 (distributed train, CPU† → m5.xlarge×2 job)
+   M2 ─▶ M4 (search, CPU)
+   nuScenes ─▶ M7 (3D recon, GPU‡)     M1 ─▶ M11 (orchestration, CPU)
 ```
 
-\* M7 の実際の AlpaSim クローズドループシミュレーションは GPU EC2 ホスト上で実行されます
+\* M10 の実際の AlpaSim クローズドループシミュレーションは GPU EC2 ホスト上で実行されます
 （管理者が一度だけ）。参加者のノートブックは CPU であり、その本物の結果を可視化します。
 
-‡ M10 は**既知の制限あり／オプション**のモジュールです：GPU チェックとデータ準備のセルは
+‡ M7 は**既知の制限あり／オプション**のモジュールです：GPU チェックとデータ準備のセルは
 実行されますが、最終的な splatfacto（3D Gaussian Splatting）トレーニングのセルは現在の
 SageMaker イメージでは実行されません — カスタムの CUDA ツールキットイメージが必要です。
 その最後のセルが失敗しても驚かないでください。モジュールの残りの部分は依然として
 3D 再構成のステージを示しています。
 
-† M9 のノートブックは CPU であり、実際の 2 ノードの `torch.distributed` DDP トレーニング
+† M12 のノートブックは CPU であり、実際の 2 ノードの `torch.distributed` DDP トレーニング
 ジョブを送信します。これは別の `ml.m5.xlarge` インスタンス（gloo）上で実行され、その後
 測定されたメトリクスを可視化します。完全な SageMaker HyperPod は別のインフラです — 
-[HYPERPOD_M9.md](HYPERPOD_M9.md) を参照。
+[HYPERPOD_M12.md](HYPERPOD_M12.md) を参照。
 
 まず **M0**（概要、GPU なし）から始め、次にコアパスの **M1 → M2 → M3** をたどってから
 枝分かれしてください。完全なアーキテクチャと、ブログのステージ → モジュールの対応関係は

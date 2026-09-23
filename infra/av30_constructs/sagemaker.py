@@ -181,7 +181,7 @@ class SageMakerConstruct(Construct):
         )
 
         # S3 WRITE access on the shared-data bucket, scoped to the hf-cache/
-        # prefix ONLY. The admin populates the M4/M5 offline HuggingFace cache
+        # prefix ONLY. The admin populates the M5/M6 offline HuggingFace cache
         # (hf-cache/hub/) by syncing the checkpoints cosmos actually downloaded
         # on a GPU app — but the SageMaker execution role is otherwise read-only
         # on this bucket. Scoping the write to hf-cache/* lets that one-time
@@ -271,7 +271,7 @@ class SageMakerConstruct(Construct):
             )
         )
 
-        # SageMaker Training Jobs — needed by M9, which submits a real 2-node
+        # SageMaker Training Jobs — needed by M12, which submits a real 2-node
         # torch.distributed DDP job from the notebook via the PyTorch estimator.
         # Scoped to the av30-m9-* job-name prefix so this does not grant blanket
         # training control. Describe/Stop are needed for estimator.fit(wait=True)
@@ -334,11 +334,11 @@ class SageMakerConstruct(Construct):
             )
         )
 
-        # PassRole — CreateTrainingJob (M9) and the pipeline's ProcessingSteps
+        # PassRole — CreateTrainingJob (M12) and the pipeline's ProcessingSteps
         # (M11) must hand the containers an execution role; the notebook passes
         # THIS role to itself. Scope the PassRole to this role's own ARN, and only
         # when SageMaker is the consuming service, so it cannot be used to pass any
-        # other role. Reused by both M9 training and M11 processing.
+        # other role. Reused by both M12 training and M11 processing.
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="PassSelfToSageMakerTraining",
@@ -347,7 +347,7 @@ class SageMakerConstruct(Construct):
                 # Use the role's own ARN attribute — NEVER re-spell the name here.
                 # This used to be a hand-built literal, which would silently point
                 # at a non-existent role the moment role_name gained its required
-                # region suffix: the deploy stays green and M9 training / M11
+                # region suffix: the deploy stays green and M12 training / M11
                 # processing fail at submit time with AccessDenied on PassRole.
                 resources=[self._execution_role.role_arn],
                 conditions={
@@ -402,7 +402,7 @@ class SageMakerConstruct(Construct):
             )
         )
 
-        # OpenSearch Serverless (aoss) access for M8 (semantic search).
+        # OpenSearch Serverless (aoss) access for M4 (semantic search).
         # Two-layer model:
         #   control-plane: create/read the security + data-access policies and the
         #     VECTORSEARCH collection (policy-management actions do NOT support

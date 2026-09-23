@@ -8,14 +8,14 @@
 
 ## M11 が何だったか、そして今何であるか
 
-M9 と同様に、M11 は **ハルシネーション API の失敗ではありませんでした** — すべてのインポートと
+M12 と同様に、M11 は **ハルシネーション API の失敗ではありませんでした** — すべてのインポートと
 クラス (`Pipeline`、`ProcessingStep`、`PipelineSession`、`ScriptProcessor`) は実在の
-SageMaker Python SDK **v2** です。その問題は M9 が当たったのと同じ系統に加えて、いくつか
+SageMaker Python SDK **v2** です。その問題は M12 が当たったのと同じ系統に加えて、いくつか
 独自のものがありました:
 
 | 出荷された M11 | 修正された M11 |
 |---|---|
-| `from sagemaker import Session` (v2 トップレベル) → SDK-v3 カーネルで失敗 | cell-1 で v2 をピン留め (`>=2.257.2,<3`) + カーネル自動再起動 (M9 から) |
+| `from sagemaker import Session` (v2 トップレベル) → SDK-v3 カーネルで失敗 | cell-1 で v2 をピン留め (`>=2.257.2,<3`) + カーネル自動再起動 (M12 から) |
 | Step1 は `INPUT_DIR/*.jpg` を glob したが、M1 は JSON のみを `m1/` に書く → 0 キャプション | Step1 は M1 の `selected_scenes.json` (実際のシーン名 + 説明) を読む → 根拠のあるキャプション |
 | 3 ステップが `ml.g5.12xlarge`/`g5.xlarge` (GPU) を要求 — 処理クォータはここで 0 | CPU `ml.m5.xlarge` (処理クォータが利用可能); スクリプトは純粋な Python なので GPU は何も追加しない |
 | GPU `pytorch-training` イメージ | `image_uris.retrieve("sklearn", …)` 経由の CPU sklearn コンテナ — **`image_scope` なし** (sklearn には `processing` スコープがなく、渡すと `ValueError: Unsupported image scope` を出す) |
@@ -53,19 +53,19 @@ following...") を持ちます。キャプションはそれらの実際の説�
 - `SageMakerProcessingJobs` — `processing-job/*` 上の `CreateProcessingJob`/`DescribeProcessingJob`/
   `StopProcessingJob`/`AddTags` (SDK は処理ジョブを自動命名するため、リソースをプレフィックスで
   スコープできない)。
-- `iam:PassRole` — M9 のために追加された、自分自身のみの `PassedToService=sagemaker.amazonaws.com`
+- `iam:PassRole` — M12 のために追加された、自分自身のみの `PassedToService=sagemaker.amazonaws.com`
   ステートメントを再利用; ProcessingSteps がこのロールをコンテナに渡す。
 
-## 浮上したバグ (M9 の反映 + パイプライン固有)
+## 浮上したバグ (M12 の反映 + パイプライン固有)
 
-M9 と同じ v2/v3 SDK チェーン (#1 v3 カーネル、#2 メモリ内混在 / カーネル再起動)、に加えて:
-- **パイプライン/処理 IAM** — M9 はトレーニングジョブの権限のみを追加した; M11 には上記の
+M12 と同じ v2/v3 SDK チェーン (#1 v3 カーネル、#2 メモリ内混在 / カーネル再起動)、に加えて:
+- **パイプライン/処理 IAM** — M12 はトレーニングジョブの権限のみを追加した; M11 には上記の
   Pipeline + Processing セットが必要 (ライブ exec ロール `av30lab-sagemaker-execution-role`
   でデプロイ & 検証済み)。
 - **アップロードスコープ** — `default_bucket_prefix` により、すべての SDK アップロードが
   `users/<profile>/m11/` (exec ロールが書き込める唯一のパス) の下に着地する。ピン留めされた
   SDK 2.257.3 で `Session` と `PipelineSession` の両方に存在することを検証済み。
-- **GPU クォータ 0** — ステップを CPU に移動 (M9 が CPU を使うのと同じ理由)。
+- **GPU クォータ 0** — ステップを CPU に移動 (M12 が CPU を使うのと同じ理由)。
 - **空の入力** — 存在しない `*.jpg` ではなく、M1 の `selected_scenes.json` を消費する。
 - **`image_scope="processing"` ブロッカー (事前実行監査で発見)** — cell-3 は
   `image_uris.retrieve(framework="sklearn", …, image_scope="processing")` でステップイメージを
@@ -80,9 +80,9 @@ M9 と同じ v2/v3 SDK チェーン (#1 v3 カーネル、#2 メモリ内混在 
   `users/<profile>/m2/captions.json` と `…/m3/curated_captions.json` に書いていた — 実際の
   M2/M3 モジュールが生成する *まさにそのキーとファイル名* だが、互換性のないデモスキーマ
   (キャプションごとの `filename` なし、トップレベルの `model` なし) だった。M11 を実行すると
-  参加者の本物の M2/M3 出力を静かに上書きし、その後の **M8** (`m2_output["model"]`、
+  参加者の本物の M2/M3 出力を静かに上書きし、その後の **M4** (`m2_output["model"]`、
   `cap["filename"]`) または **M3** (`captions[0]["filename"]`) の再実行が `KeyError` で
-  クラッシュしていただろう。M2/M3/M8 のノートブックソースに対して検証済み。修正: 3 つの
+  クラッシュしていただろう。M2/M3/M4 のノートブックソースに対して検証済み。修正: 3 つの
   ステップ出力すべてを **M11 専用の名前空間** `users/<profile>/m11/pipeline/stepN_*/` に
   ルーティングする (Step 1 は依然として実際の `m1/` を読み取り専用で読む)。DAG/依存関係/
   リネージは変更なし; M11 は今や自己完結し、他のモジュールのデータを汚染できない。(実際の M1

@@ -1,4 +1,4 @@
-# M7 참가자 실행 가이드 — 내 GPU 호스트에서 진짜 AlpaSim 돌리기 (SSM)
+# M10 참가자 실행 가이드 — 내 GPU 호스트에서 진짜 AlpaSim 돌리기 (SSM)
 
 > ## ⚠️ 먼저 읽어주세요 — 비용과 시간
 > - 이 실행은 **admin이 당신 몫으로 띄워둔 GPU 서버(g6e.12xlarge)** 위에서 돌아갑니다.
@@ -7,10 +7,10 @@
 >   다운로드 + NuRec 씬 다운로드). 노트북처럼 5분에 끝나지 않습니다.
 > - **당신은 서버를 끌 수 없습니다.** 끝나면 **반드시 admin에게 "완료"를 알려** admin이
 >   서버를 종료(terminate)하게 하세요. 안 알리면 요금이 계속 쌓입니다.
-> - 이건 M7의 **선택적 고급 경로**입니다. 그냥 결과만 보고 싶다면 admin의 공유 참조
->   결과를 노트북에서 시각화하면 됩니다(이 문서 없이, CPU, $0) — [ALPASIM_M7.md](ALPASIM_M7.md).
+> - 이건 M10의 **선택적 고급 경로**입니다. 그냥 결과만 보고 싶다면 admin의 공유 참조
+>   결과를 노트북에서 시각화하면 됩니다(이 문서 없이, CPU, $0) — [ALPASIM_M10.md](ALPASIM_M10.md).
 
-M7은 두 겹입니다. **(1) 진짜 AlpaSim 실행**은 GPU 서버에서(이 문서), **(2) 결과 시각화**는
+M10은 두 겹입니다. **(1) 진짜 AlpaSim 실행**은 GPU 서버에서(이 문서), **(2) 결과 시각화**는
 SageMaker CPU 노트북에서 합니다. AlpaSim은 Docker-Compose로 뜨는 gRPC 마이크로서비스 fleet이고
 드라이버가 ≥40GB GPU를 쓰기 때문에, Docker 데몬이 없는 SageMaker Studio 노트북에서는 실행이
 불가능합니다. 그래서 실행은 별도 GPU EC2 호스트에서 하고, 노트북은 그 결과를 내려받아 봅니다.
@@ -64,20 +64,20 @@ aws ssm start-session --target <your-instance-id> --region $AWS_DEFAULT_REGION
 ```bash
 sudo su -
 export PARTICIPANT_ID=<your-id>
-export M7_OUTPUT_PREFIX=users/<your-id>/m7
+export M10_OUTPUT_PREFIX=users/<your-id>/m7
 export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT
 export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
 export HF_TOKEN=hf_xxx          # 필수 — 게이트 NuRec 씬 다운로드용 (준비물 3번)
 
 # 전달 확인 (스크립트 돌리기 전 반드시): 5개가 다 보이고 tok_len이 0이 아니어야 함
-env | grep -E 'PARTICIPANT_ID|M7_OUTPUT_PREFIX|OUTPUT_BUCKET|SHARED_BUCKET'; echo "tok_len=${#HF_TOKEN}"
+env | grep -E 'PARTICIPANT_ID|M10_OUTPUT_PREFIX|OUTPUT_BUCKET|SHARED_BUCKET'; echo "tok_len=${#HF_TOKEN}"
 
 # 스크립트 받아서 백그라운드(detached)로 실행 + 로그 실시간 보기
 aws s3 cp s3://$SHARED_BUCKET/notebook-templates/scripts/alpasim_ec2_setup.sh /root/
 setsid bash /root/alpasim_ec2_setup.sh > /var/log/m7.log 2>&1 &
 tail -f /var/log/m7.log
 ```
-- 로그 초반에 `[s3] participant self-run: id=<your-id> output=s3://…/users/<your-id>/m7/`가
+- 로그 초반에 `[s3] participant self-run: id=<your-id> output=s3://…/users/<your-id>/m10/`가
   보여야 per-user 경로로 가는 것입니다. `admin reference run`이 보이면 위 env가 전달 안 된 것 —
   Ctrl-C 후 export를 다시 하고 재실행하세요.
 - `setsid ... &` 로 띄우면 SSM 세션이 끊겨도 계속 돕니다. `tail -f`는 Ctrl-C로 빠져나와도
@@ -92,7 +92,7 @@ tail -f /var/log/m7.log
 ```
 runtime-0-1 exited with code 0
 [verify] core outputs present.
-=== DONE — genuine AlpaSim results uploaded to s3://av30lab-user-workspace-.../users/<id>/m7/ ===
+=== DONE — genuine AlpaSim results uploaded to s3://av30lab-user-workspace-.../users/<id>/m10/ ===
 >>> Participant <id>: results are in ...
 ```
 - 성공 시 `tail -f`가 멈추는 건 **정상**(스크립트가 끝난 것 — 죽은 게 아니다).
@@ -114,7 +114,7 @@ grep -q "=== DONE" /var/log/m7.log && echo "성공 (S3 업로드 완료)" \
 ```bash
 # 새 로컬 셸이면 ACCOUNT 다시 도출 (§3 세션 안이면 이미 export돼 있음)
 ACCOUNT=${ACCOUNT:-$(aws sts get-caller-identity --query Account --output text)}
-aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m7/ --recursive
+aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m10/ --recursive
 # aggregate/results-summary.json, rollouts/**/metrics.parquet, eval/eval.mp4, run.json 이 보이면 OK
 ```
 
@@ -123,9 +123,9 @@ aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m7/ --recursive
 admin이 확인 후 `terminate-instances`로 종료하고 과금을 멈춥니다.
 
 ## 6. SageMaker 노트북에서 내 결과 시각화 (CPU)
-1. 참가자 대시보드 → **M7 노드**(인스턴스는 `ml.t3.medium` CPU 그대로) → **Open Workspace**
-2. `M7_AlpaSim_ClosedLoop.ipynb` 열고 **Run All**
-3. 노트북이 `users/<your-id>/m7/`를 자동 감지해 **당신의** 결과를 시각화합니다
+1. 참가자 대시보드 → **M10 노드**(인스턴스는 `ml.t3.medium` CPU 그대로) → **Open Workspace**
+2. `M10_AlpaSim_ClosedLoop.ipynb` 열고 **Run All**
+3. 노트북이 `users/<your-id>/m10/`를 자동 감지해 **당신의** 결과를 시각화합니다
    (cell-2가 `Result source: your own EC2 run` 출력). 없으면 admin 공유 참조로 폴백.
 
 **통과 기준**: cell-5에 driving score(collision_at_fault 등), cell-9에 **PASS** + headline.
@@ -145,4 +145,4 @@ admin이 확인 후 `terminate-instances`로 종료하고 과금을 멈춥니다
 | 노트북 cell-4 `not found` | 3~4단계가 아직 성공 안 함 → 로그 확인 후 재실행 |
 | 다 됐는데 서버가 안 꺼짐 | admin만 종료 가능 → admin에게 통보 |
 
-관리자용 프로비저닝·IAM·정리 절차: [M7_MANUAL_TEST_RUNBOOK.md](M7_MANUAL_TEST_RUNBOOK.md).
+관리자용 프로비저닝·IAM·정리 절차: [M10_MANUAL_TEST_RUNBOOK.md](M10_MANUAL_TEST_RUNBOOK.md).

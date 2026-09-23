@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""M6 Alpamayo 1.5 VLA inference — runs INSIDE the a1_5 venv (alpamayo_env.sh).
+"""M9 Alpamayo 1.5 VLA inference — runs INSIDE the a1_5 venv (alpamayo_env.sh).
 
 Why this script exists
 ----------------------
-The shipped M6 notebook imported a hallucinated `alpamayo` package
+The shipped M9 notebook imported a hallucinated `alpamayo` package
 (`AlpamayoForConditionalGeneration`, `AlpamayoInferencePipeline`, ...) that does
 not exist. The REAL workflow is the NVlabs/alpamayo1.5 repo (package
 `alpamayo1_5`). The bespoke inference is ~40 lines with no repo CLI equivalent
 to Cosmos's `examples/inference.py`, so we commit it here and the notebook calls
 it via `bash -lc 'source alpamayo_env.sh && python scripts/alpamayo_infer.py ...'`
-(same shape as M4/M5). The model is loaded ONCE and looped over every demo clip.
+(same shape as M5/M6). The model is loaded ONCE and looped over every demo clip.
 
 Offline / no-token design
 --------------------------
 `load_physical_aiavdataset` (physical_ai_av) CANNOT run offline — it calls
 `list_repo_refs()` unconditionally, needing a network + gated HF token. So the
 admin pre-saves each demo clip's `data` dict with `torch.save` (see
-scripts/README or docs/ALPAMAYO_M6.md); this script only `torch.load`s those
+scripts/README or docs/ALPAMAYO_M9.md); this script only `torch.load`s those
 `.pt` files and NEVER imports physical_ai_av. The model + its hidden
 Cosmos-Reason2-8B VLM backbone load from the S3-restored HF cache with
 `HF_HUB_OFFLINE=1` (set by alpamayo_env.sh when the cache is present).
@@ -183,7 +183,7 @@ def _first_input_device(model):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="M6 Alpamayo 1.5 VLA inference")
+    ap = argparse.ArgumentParser(description="M9 Alpamayo 1.5 VLA inference")
     ap.add_argument("--clips", nargs="+", required=True,
                     help="Local .pt paths (from load_physical_aiavdataset + torch.save)")
     ap.add_argument("--out", required=True, help="Output directory")
@@ -206,7 +206,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
 
     if not torch.cuda.is_available():
-        raise SystemExit("ERROR: no CUDA device visible — M6 needs a GPU instance.")
+        raise SystemExit("ERROR: no CUDA device visible — M9 needs a GPU instance.")
 
     device_map = a.device_map.strip() or None
     print(f"Loading {a.model} (sdpa, bf16, device_map={device_map or 'single-cuda'}) ...",

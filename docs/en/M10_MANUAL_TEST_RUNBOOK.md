@@ -1,11 +1,11 @@
-# M7 Manual Test Runbook (Part A: admin GPU run → Part B: participant notebook)
+# M10 Manual Test Runbook (Part A: admin GPU run → Part B: participant notebook)
 
-M7 has two layers. **Part A** = admin runs the real AlpaSim on a GPU EC2 instance to produce
-`m7-reference/` (heavy, one-time). **Part B** = participants visualize that result in a CPU notebook (light and
+M10 has two layers. **Part A** = admin runs the real AlpaSim on a GPU EC2 instance to produce
+`m10-reference/` (heavy, one-time). **Part B** = participants visualize that result in a CPU notebook (light and
 repeatable). "Both, in order" means using A to freshly produce the reference result → then B to view it in the notebook.
 
 > In the reference deployment this has already run successfully, and genuine results were uploaded to
-> `s3://av30lab-shared-data-<aws-account-id>/m7-reference/`.
+> `s3://av30lab-shared-data-<aws-account-id>/m10-reference/`.
 > If such a reference result already exists, **running Part B alone is a complete
 > verification**. Part A is only needed when you want to "reproduce from scratch" (~$30, 2-3 hours).
 
@@ -37,7 +37,7 @@ UN aws sts get-caller-identity --query '[Account,Arn]' --output text
 # The account/region this lab is deployed to → the variables every later block uses (defined once here instead of hardcoding)
 export REGION=<region>                                    # your deployed region (e.g. us-west-2)
 export ACCOUNT=$(UN aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # model/data/notebook templates + m7-reference
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # model/data/notebook templates + m10-reference
 export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}      # per-participant users/<id>/ (used in Part C)
 echo "ACCOUNT=$ACCOUNT REGION=$REGION"
 echo "SHARED_BUCKET=$SHARED_BUCKET"
@@ -62,7 +62,7 @@ echo "SHARED_BUCKET=$SHARED_BUCKET"
 > `g6e.16xlarge` reasoning "16 > 12 so it must be bigger", it has 1 GPU and dies right before running with
 > `Service renderer requested GPUs [1] but only 0 .. 0 are available`.
 >
-> | g6e size | GPUs | vCPU | M7(2gpu) |
+> | g6e size | GPUs | vCPU | M10(2gpu) |
 > |---|---|---|---|
 > | xlarge / 2xlarge / 4xlarge / 8xlarge | **1** | 4–32 | ❌ |
 > | **g6e.12xlarge** | **4** | 48 | ✅ **recommended** |
@@ -104,11 +104,11 @@ echo "VPC=$VPC SUBNET=$SUBNET"
 
 # (c) Security group (only egress needed; no inbound since we connect over SSM)
 SG=$(UN aws ec2 create-security-group --region $REGION \
-  --group-name av30-alpasim-m7 --description "M7 AlpaSim egress" \
+  --group-name av30-alpasim-m7 --description "M10 AlpaSim egress" \
   --vpc-id $VPC --query GroupId --output text)
 # (no inbound rules added — we connect via SSM Session Manager)
 
-# (d) IAM instance-profile (not present in the lab account → create it on the spot). hf-cache read + m7-reference write + KMS + SSM.
+# (d) IAM instance-profile (not present in the lab account → create it on the spot). hf-cache read + m10-reference write + KMS + SSM.
 UN aws iam create-role --role-name av30-alpasim-m7 \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
 UN aws iam attach-role-policy --role-name av30-alpasim-m7 \
@@ -118,7 +118,7 @@ UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
-  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${SHARED_BUCKET}/m7-reference/*"},
+  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${SHARED_BUCKET}/m10-reference/*"},
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
@@ -176,7 +176,7 @@ tail -f /var/log/alpasim_m7.log   # even if you exit with Ctrl-C, the background
 What the script does: preflight (nvidia-smi/docker/uv/cargo) → restore hf-cache → alpasim clone
 (tag alpasim-base-v0.96.0) → NGC login (optional) + verify image access → `source setup_local_env.sh`
 → create mount directories → write `deploy/local_m7.yaml` (driver HF-offline) + `topology/m7_4gpu.yaml`
-(driver alone on GPU0) → run `uv run alpasim_wizard ...` → verify results → upload to `s3://.../m7-reference/`.
+(driver alone on GPU0) → run `uv run alpasim_wizard ...` → verify results → upload to `s3://.../m10-reference/`.
 **The first build takes a long time (protos compilation + image pull + NuRec scene download).**
 On a re-run, the clone/build/hf-cache/NuRec scenes remain, so it starts from the wizard step and is much faster.
 
@@ -188,8 +188,8 @@ looking at the **end** of the log (`tail -n 40 /var/log/alpasim_m7.log`).
   ```
   runtime-0-1 exited with code 0            # the eval container exited normally with 0
   [verify] core outputs present.
-  [upload] -> s3://.../m7-reference/ ...
-  === DONE — genuine AlpaSim results uploaded to s3://.../m7-reference/ ===
+  [upload] -> s3://.../m10-reference/ ...
+  === DONE — genuine AlpaSim results uploaded to s3://.../m10-reference/ ===
   ```
   On success, `tail -f` stopping is **normal** (the script finished so the background process exited —
   it did not die). Final confirmation is the S3 check in A4 (today's date).
@@ -207,15 +207,15 @@ looking at the **end** of the log (`tail -n 40 /var/log/alpasim_m7.log`).
 
 To quickly check only whether it succeeded:
 ```bash
-grep -q "=== DONE" /var/log/alpasim_m7.log && echo "M7 success (S3 upload complete)" \
-  || echo "M7 incomplete — check the end of the log (tail -n 40) for ERROR/RuntimeError/the interruption point"
+grep -q "=== DONE" /var/log/alpasim_m7.log && echo "M10 success (S3 upload complete)" \
+  || echo "M10 incomplete — check the end of the log (tail -n 40) for ERROR/RuntimeError/the interruption point"
 ```
 
 ## A4. Confirm success → **terminate immediately** (stop billing)
 ```bash
 # ⟸ You must first have defined the §0 UN() wrapper + the SHARED_BUCKET/REGION variables.
 # From the local (credentialed) side:
-UN aws s3 ls s3://$SHARED_BUCKET/m7-reference/ --recursive --region $REGION
+UN aws s3 ls s3://$SHARED_BUCKET/m10-reference/ --recursive --region $REGION
 # Success if you see aggregate/results-summary.json + metrics_results.{txt,png,parquet} + rollouts/**/metrics.parquet
 # + eval/eval.mp4 + run.json.
 
@@ -238,24 +238,24 @@ UN aws ec2 delete-security-group --region $REGION --group-id $SG
 
 # Part C — admin: per-participant self-run provisioning (when participants run AlpaSim themselves)
 
-Part A is the admin producing **one shared reference result** (`m7-reference/`). Part C below is the
+Part A is the admin producing **one shared reference result** (`m10-reference/`). Part C below is the
 pre-wiring the admin does when you want **each participant to run AlpaSim on their own GPU host** (participant run guide =
-[M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md)).
+[M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md)).
 
 > **Cost/limit warning**: g6e.12xlarge = **48 vCPU/instance**, ~**$10.5/hr/instance**. G-vCPU quota 768 →
 > **max 16 concurrent (=16 people)**. Always check the quota before launch:
 > `UN aws service-quotas get-service-quota --region $REGION --service-code ec2 --quota-code L-DB2E81BA`
 
 ## C1. Extend the instance-profile policy (participants write to user-workspace)
-Part A's `av30-alpasim-m7` instance role only writes to `m7-reference/`. Participant self-runs need to write to
-`users/<id>/m7/`, so extend the policy (a prefix restriction lets multiple participants share it):
+Part A's `av30-alpasim-m7` instance role only writes to `m10-reference/`. Participant self-runs need to write to
+`users/<id>/m10/`, so extend the policy (a prefix restriction lets multiple participants share it):
 ```bash
 # ⟸ You must first have defined the §0 UN() wrapper + the SHARED_BUCKET/USER_BUCKET variables.
 UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-participant-m7 \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
-  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${USER_BUCKET}/users/*/m7/*"},
+  {"Effect":"Allow","Action":["s3:PutObject"],"Resource":"arn:aws:s3:::${USER_BUCKET}/users/*/m10/*"},
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
@@ -265,7 +265,7 @@ JSON
 Add a participant tag to Part A2's (e) `run-instances` (reusing the shared SG/instance-profile):
 ```bash
 # ⟸ You must first have defined the §0 UN() wrapper + refreshed credentials (otherwise 'command not found: UN').
-PID=m7-test01     # participant id
+PID=m10-test01     # participant id
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
@@ -286,7 +286,7 @@ Create one IAM user per participant and **bake that instance ID directly into th
 # ⟸ You must first have defined the §0 UN() wrapper + refreshed credentials (otherwise 'command not found: UN').
 UN aws iam create-user --user-name $PID
 # With the heredoc, $REGION/$ACCOUNT/$IID expand, but the IAM policy variable ${aws:...} is preserved with \$.
-UN aws iam put-user-policy --user-name $PID --policy-name m7-ssm --policy-document "$(cat <<JSON
+UN aws iam put-user-policy --user-name $PID --policy-name m10-ssm --policy-document "$(cat <<JSON
 {
   "Version":"2012-10-17","Statement":[
    {"Sid":"StartOwnInstance","Effect":"Allow","Action":["ssm:StartSession"],
@@ -308,7 +308,7 @@ so only the user side is left:
 # ⟸ You must first have defined the §0 UN() wrapper + refreshed credentials (otherwise 'command not found: UN').
 UN aws iam create-user --user-name $PID --tags Key=Participant,Value=$PID
 # With the heredoc, $REGION/$ACCOUNT expand, but the IAM policy variable ${aws:...} is preserved with \$.
-UN aws iam put-user-policy --user-name $PID --policy-name m7-ssm-abac --policy-document "$(cat <<JSON
+UN aws iam put-user-policy --user-name $PID --policy-name m10-ssm-abac --policy-document "$(cat <<JSON
 {
   "Version":"2012-10-17","Statement":[
    {"Sid":"StartTaggedInstance","Effect":"Allow","Action":["ssm:StartSession"],
@@ -336,8 +336,8 @@ aws ec2 terminate-instances --instance-ids $IID --region $REGION # ✗ should be
 ```
 
 ## C5. Participant run → completion notice → admin cleanup
-- The participant follows [M7_PARTICIPANT_SSM_RUNBOOK.md](M7_PARTICIPANT_SSM_RUNBOOK.md) to run,
-  uploads the result to `users/<id>/m7/`, then **notifies of completion**.
+- The participant follows [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md) to run,
+  uploads the result to `users/<id>/m10/`, then **notifies of completion**.
 - As soon as the admin is notified, clean up (can be queried in bulk by tag):
 ```bash
 # ⟸ You must first have defined the §0 UN() wrapper + refreshed credentials (otherwise 'command not found: UN').
@@ -350,8 +350,8 @@ UN aws ec2 describe-instances --region $REGION \
 # Clean up the IAM user (delete keys first)
 UN aws iam list-access-keys --user-name $PID --query 'AccessKeyMetadata[].AccessKeyId' --output text \
   | tr '\t' '\n' | while read k; do UN aws iam delete-access-key --user-name $PID --access-key-id "$k"; done
-UN aws iam delete-user-policy --user-name $PID --policy-name m7-ssm 2>/dev/null || \
-  UN aws iam delete-user-policy --user-name $PID --policy-name m7-ssm-abac 2>/dev/null
+UN aws iam delete-user-policy --user-name $PID --policy-name m10-ssm 2>/dev/null || \
+  UN aws iam delete-user-policy --user-name $PID --policy-name m10-ssm-abac 2>/dev/null
 UN aws iam delete-user --user-name $PID
 ```
 
@@ -360,7 +360,7 @@ shared SG/instance-profile should be cleaned up last, after all participant inst
 
 ---
 
-# Part B — participant: visualize M7 in a Studio CPU notebook (~$0, 5 min)
+# Part B — participant: visualize M10 in a Studio CPU notebook (~$0, 5 min)
 
 This is what participants actually experience, and it fills the "real Studio environment" gap from gate 3.
 
@@ -370,22 +370,22 @@ This is what participants actually experience, and it fills the "real Studio env
    If there isn't one, admin dashboard → Users → Provision to create a new user, and the link appears.
 2. Open that link in a browser → the Pipeline Map is shown.
 
-## B2. Confirm the instance = CPU (M7 needs no GPU)
-- The M7 notebook runs on **`ml.t3.medium` (CPU)**. The workspace default is t3.medium, so
-  **no instance change is needed**. (If you bumped to GPU in M6, it's cost-wise preferable to revert to t3.medium via
-  Instance Options before M7 — it does run on GPU too, but that's wasteful.)
+## B2. Confirm the instance = CPU (M10 needs no GPU)
+- The M10 notebook runs on **`ml.t3.medium` (CPU)**. The workspace default is t3.medium, so
+  **no instance change is needed**. (If you bumped to GPU in M9, it's cost-wise preferable to revert to t3.medium via
+  Instance Options before M10 — it does run on GPU too, but that's wasteful.)
 
 ## B3. Open the workspace and run the notebook
 1. Top-right of the dashboard, **Open Workspace** → the JupyterLab tab.
-2. In the file browser, open **`M7_AlpaSim_ClosedLoop.ipynb`**.
+2. In the file browser, open **`M10_AlpaSim_ClosedLoop.ipynb`**.
 3. **Run ▸ Run All Cells** (or Shift+Enter top→bottom).
 
 ## B4. Pass criteria (each cell should produce this)
 | Cell | Expected output |
 |---|---|
-| cell-2 config | prints Profile/Reference eval/M6 provenance paths |
-| cell-3 provenance | if the M6 manifest exists, shows open-loop minADE; if not, "stand alone" (both are normal) |
-| cell-4 download | `aws s3 sync m7-reference/` → the artifact list (aggregate/, rollouts/, eval/, run.json) |
+| cell-2 config | prints Profile/Reference eval/M9 provenance paths |
+| cell-3 provenance | if the M9 manifest exists, shows open-loop minADE; if not, "stand alone" (both are normal) |
+| cell-4 download | `aws s3 sync m10-reference/` → the artifact list (aggregate/, rollouts/, eval/, run.json) |
 | cell-5 parse | AlpaSim aggregate table verbatim + 11 driving scores (collision 0.00, dist_to_gt 4.37m, progress 0.92) + "Per-rollout time-series: N rows" |
 | cell-6 viz | metrics_results.png inline + safety-rate bars + dist_to_gt_trajectory time-series |
 | cell-7 video | eval.mp4 (~4.7MB) plays inline |
@@ -395,7 +395,7 @@ This is what participants actually experience, and it fills the "real Studio env
 ## B5. Common failures → causes
 | Symptom | Cause/fix |
 |---|---|
-| cell-4 `M7 reference eval not found in S3` | m7-reference/ not uploaded → do Part A first (or check for an existing bundle) |
+| cell-4 `M10 reference eval not found in S3` | m10-reference/ not uploaded → do Part A first (or check for an existing bundle) |
 | cell-4 download failed / AccessDenied | the execution role lacks read on the shared bucket → already present (normal). If missing, check IAM |
 | cell-7 video not shown | eval.mp4 missing (non-essential) — PASS on metrics alone |
 | STS/import error | the CPU kernel includes pandas/matplotlib by default — if not, `%pip install pandas matplotlib` in the first cell |

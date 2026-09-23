@@ -38,7 +38,7 @@ REPLACEMENTS = {
     "M1_Data_Exploration.ipynb": [],  # neutered — repo .ipynb is the source of truth (see chore/hygiene)
     "M2_Cosmos_Reason_Captioning.ipynb": [],  # neutered — repo .ipynb is the source of truth (see chore/hygiene)
     "M3_Cosmos_Curator.ipynb": [],  # neutered — M3 rewritten in-repo (real NeMo Curator); old patterns gone
-    "M8_OpenSearch_Semantic_Search.ipynb": [
+    "M4_OpenSearch_Semantic_Search.ipynb": [
         ('USER_BUCKET = f"av30-blueprint-lab-{ACCOUNT_ID}"', USER_LINE),
         # BUG: `from sentence_transformers import SentenceTransformer` pulls in
         # `transformers`, which auto-probes the TensorFlow backend and imports
@@ -136,16 +136,16 @@ REPLACEMENTS = {
             '        raise',
         ),
     ],
-    # M9 is NOT string-patched. It was rewritten in-repo (via NotebookEdit) to a
+    # M12 is NOT string-patched. It was rewritten in-repo (via NotebookEdit) to a
     # real 2-node torch.distributed DDP job: cell-1 already uses the
     # av30lab-user-workspace-{ACCOUNT_ID} convention, cell-5 fits on M3's curated
     # captions (real input), and cell-6 plots the job's measured training_log.json
     # (no np.random simulation). It trains on CPU (ml.m5.xlarge x2, gloo); the same
     # script runs GPU/nccl if that quota is raised. The old bucket string this
     # patch targeted no longer exists, so there is nothing for the string-patcher.
-    # See docs/HYPERPOD_M9.md.
-    "M9_HyperPod_Distributed_Training.ipynb": [],
-    # M11 is NOT string-patched. Like M9, it was rewritten in-repo (via
+    # See docs/HYPERPOD_M12.md.
+    "M12_HyperPod_Distributed_Training.ipynb": [],
+    # M11 is NOT string-patched. Like M12, it was rewritten in-repo (via
     # NotebookEdit) into a real SageMaker Pipeline that upserts + starts a 3-step
     # DAG on CPU (ml.m5.xlarge). cell-1 already uses the
     # av30lab-user-workspace-{ACCOUNT_ID} / av30lab-shared-data-{ACCOUNT_ID}
@@ -155,7 +155,7 @@ REPLACEMENTS = {
     # patch targeted no longer exist, so there is nothing for the string-patcher.
     # See docs/PIPELINE_M11.md.
     "M11_Pipeline_Automation.ipynb": [],
-    "M10_Nerfstudio_3D_Reconstruction.ipynb": [
+    "M7_Nerfstudio_3D_Reconstruction.ipynb": [
         ('USER_BUCKET = f"av30-blueprint-lab-{ACCOUNT_ID}"', USER_LINE),
         ('SHARED_BUCKET = "av30-blueprint-lab-shared"', SHARED_LINE),
         ('INPUT_PREFIX = "nuscenes-mini/"',
@@ -248,29 +248,29 @@ REPLACEMENTS = {
             ')'
         ),
     ],
-    # M4-M7 use a different scheme: BLUEPRINT_* env vars and a single S3_BUCKET
+    # M5/M6/M9/M10 use a different scheme: BLUEPRINT_* env vars and a single S3_BUCKET
     # used for BOTH model reads and user I/O. Split it: SHARED_BUCKET for the
     # model cache, S3_BUCKET repointed to the user-workspace bucket for m*/ I/O
     # (body cells build f"s3://{S3_BUCKET}{INPUT_PREFIX}", so keeping the name
     # S3_BUCKET but pointing it at the user bucket needs no body edits). These
     # cells lack ACCOUNT_ID/boto3, so we inject them.
-    # M4 is NOT patched here. Its shipped cells used a hallucinated `cosmos1`
+    # M5 is NOT patched here. Its shipped cells used a hallucinated `cosmos1`
     # API that does not exist; the notebook was rewritten directly (via
     # NotebookEdit) to the REAL cosmos-transfer2.5 workflow — clone the official
     # repo via scripts/setup_cosmos_env.sh, assemble M1's nuScenes CAM_FRONT
     # frames into an mp4, and call examples/inference.py with edge control. The
     # rewritten cells already carry the correct config + `total_memory`, so
     # there is nothing left for the string-patcher to fix. See
-    # docs/COSMOS_M4_M5.md and scripts/setup_cosmos_env.sh.
-    "M4_Cosmos_Transfer_Augmentation.ipynb": [],
-    # M5 is NOT patched here. Its shipped cells used a hallucinated `cosmos1`
+    # docs/COSMOS_M5_M6.md and scripts/setup_cosmos_env.sh.
+    "M5_Cosmos_Transfer_Augmentation.ipynb": [],
+    # M6 is NOT patched here. Its shipped cells used a hallucinated `cosmos1`
     # API; the notebook was rewritten directly (via NotebookEdit) to the REAL
     # cosmos-predict2.5 Video2World workflow — setup_cosmos_env.sh (predict) +
-    # reuse M4's nuScenes clip + examples/inference.py --inference-type=video2world.
+    # reuse M5's nuScenes clip + examples/inference.py --inference-type=video2world.
     # The rewritten cells carry the correct config + `total_memory`, so there is
-    # nothing left for the string-patcher. See docs/COSMOS_M4_M5.md.
-    "M5_Cosmos_Predict_Synthesis.ipynb": [],
-    # M6 is NOT patched here. Its shipped cells imported a hallucinated `alpamayo`
+    # nothing left for the string-patcher. See docs/COSMOS_M5_M6.md.
+    "M6_Cosmos_Predict_Synthesis.ipynb": [],
+    # M9 is NOT patched here. Its shipped cells imported a hallucinated `alpamayo`
     # package (alpamayo.model.AlpamayoForConditionalGeneration,
     # alpamayo.inference.AlpamayoInferencePipeline, alpamayo.utils.*) that does
     # NOT exist. The notebook was rewritten directly (via NotebookEdit) to the
@@ -280,26 +280,30 @@ REPLACEMENTS = {
     # (sample_trajectories_from_data_with_vlm_rollout → Chain-of-Causation
     # reasoning + trajectory + minADE). The rewritten cells carry the correct
     # config + per-device `total_memory` check, so there is nothing left for the
-    # string-patcher. See docs/ALPAMAYO_M6.md.
-    "M6_Alpamayo_VLA_Inference.ipynb": [],
-    # M7 is NOT patched here. Its shipped cells imported a hallucinated `alpasim`
+    # string-patcher. See docs/ALPAMAYO_M9.md.
+    "M9_Alpamayo_VLA_Inference.ipynb": [],
+    # M10 is NOT patched here. Its shipped cells imported a hallucinated `alpasim`
     # package (import alpasim, alpasim.env.NuRecEnvironment,
     # alpasim.policy.PolicyWrapper.from_alpamayo, alpasim.metrics.*) and a
     # fabricated gym-style env.reset()/env.step() loop with invented metrics
     # (route_completion / comfort_score). AlpaSim is real (NVlabs/alpasim) but is
     # a Docker-Compose gRPC microservice system that a SageMaker Studio notebook
-    # (no Docker daemon) cannot host, and its driver needs a >=40 GB GPU. So M7
+    # (no Docker daemon) cannot host, and its driver needs a >=40 GB GPU. So M10
     # was rewritten directly (via NotebookEdit) to a CPU download-and-visualize
     # notebook. The real AlpaSim closed-loop eval runs on a GPU EC2 host
     # (scripts/alpasim_ec2_setup.sh) and uploads genuine results; the notebook
     # auto-detects the source (real metrics: collision_at_fault / collision_rear /
     # dist_to_gt_trajectory / offroad):
-    #   - participant self-run  -> s3://<user-workspace>/users/<id>/m7/ (preferred)
-    #   - admin reference run   -> s3://<shared>/m7-reference/          (fallback)
+    #   - participant self-run  -> s3://<user-workspace>/users/<id>/m10/ (preferred)
+    #   - admin reference run   -> s3://<shared>/m10-reference/          (fallback)
     # Because the notebook is rewritten in-repo and shipped as-is via `aws s3 sync
-    # notebooks/`, there is nothing for the string-patcher. See docs/ALPASIM_M7.md
-    # and docs/M7_PARTICIPANT_SSM_RUNBOOK.md.
-    "M7_AlpaSim_ClosedLoop.ipynb": [],
+    # notebooks/`, there is nothing for the string-patcher. See docs/ALPASIM_M10.md
+    # and docs/M10_PARTICIPANT_SSM_RUNBOOK.md.
+    "M10_AlpaSim_ClosedLoop.ipynb": [],
+    # M8 is NOT patched here. It was authored in-repo against the real nuScenes
+    # tables and the S3 model cache, so its shipped cells already carry the right
+    # buckets/prefixes and there is nothing for the string-patcher to fix.
+    "M8_Cosmos_Reason_SFT.ipynb": [],
 }
 
 

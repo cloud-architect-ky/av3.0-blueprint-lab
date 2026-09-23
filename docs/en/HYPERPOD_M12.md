@@ -1,19 +1,19 @@
-# HyperPod (M9) — real distributed training demo, CPU by design
+# HyperPod (M12) — real distributed training demo, CPU by design
 
-**Status:** M9 runs a **real, distributed PyTorch DDP training job** (SageMaker
+**Status:** M12 runs a **real, distributed PyTorch DDP training job** (SageMaker
 Training Job, `instance_count=2`) on **M3's curated captions**, and visualizes the
 **measured** per-epoch loss and throughput from the job's own artifacts. Nothing is
 simulated. It is **not** a HyperPod cluster — that is separate infrastructure a
-notebook cannot provision (see below). M9 demonstrates the *distributed-training
+notebook cannot provision (see below). M12 demonstrates the *distributed-training
 pattern* HyperPod scales, on affordable CPU instances.
 
-## What M9 was, and what it is now
+## What M12 was, and what it is now
 
-The shipped M9 was **not a hallucinated-API failure** like M4/M5/M6/M7 — every
+The shipped M12 was **not a hallucinated-API failure** like M5/M6/M9/M10 — every
 import and AWS call was real (`sagemaker.pytorch.PyTorch`, `torch.distributed`,
 `describe_training_job`). Its problems were different:
 
-| Shipped M9 | Fixed M9 |
+| Shipped M12 | Fixed M12 |
 |---|---|
 | Title said "HyperPod" but used a plain SageMaker Training Job | Honestly framed: distributed *pattern*, HyperPod = concept (stated up front) |
 | Declared M3 input but never read it (`estimator.fit()` had no `inputs=`) | `fit(inputs={"training": …})` mounts M3's `curated_captions.json`; the script engineers features from real captions |
@@ -36,7 +36,7 @@ throughput — a tiny model can't show GPU's advantage. So:
 ## The CPU-vs-GPU trade-off (for a future GPU run)
 
 The **same training script** runs GPU/`nccl` unchanged — it detects
-`torch.cuda.is_available()` and picks the backend + device. To run M9 on GPU:
+`torch.cuda.is_available()` and picks the backend + device. To run M12 on GPU:
 
 1. **Raise the GPU training quota.** As of the 2026-07 pretest, in the reference lab account (`us-west-2`; your region may differ — check your own quotas):
    - `ml.g5.xlarge for training job usage` = **1** (quota code `L-B6D80D9C`,
@@ -64,20 +64,20 @@ SageMaker HyperPod is a **persistent cluster**, created with `aws sagemaker
 create-cluster` (Slurm or EKS orchestration), plus VPC/subnets/security groups, FSx
 for Lustre shared storage, and EFA networking. Cluster creation alone takes ~20 min
 and the cluster then bills continuously — this is long-running, large-scale training
-infrastructure, not a notebook cell. (Conceptually the same reason M7's AlpaSim runs
+infrastructure, not a notebook cell. (Conceptually the same reason M10's AlpaSim runs
 on a GPU EC2 host outside the notebook.) Additionally, `ml.p4d.24xlarge for cluster
 usage` and `... for training job usage` are both **0** in this lab account, so a real
-HyperPod p4d cluster can't be created here regardless. M9 therefore teaches the
+HyperPod p4d cluster can't be created here regardless. M12 therefore teaches the
 pattern HyperPod scales and explains HyperPod's added value (auto node replacement,
 FSx, Slurm/EKS scheduling, EFA/NCCL) rather than provisioning one.
 
 ## Output artifacts
 
-- `users/<profile>/m9/training_metadata.json` — job summary, data source
+- `users/<profile>/m12/training_metadata.json` — job summary, data source
   (`real_m3` | `synthetic`), measured per-epoch metrics, HyperPod notes.
-- `users/<profile>/m9/<job-name>/output/model.tar.gz` — checkpoint +
+- `users/<profile>/m12/<job-name>/output/model.tar.gz` — checkpoint +
   `training_log.json` (the real metrics the notebook plots).
-- `users/<profile>/m9/input/curated_captions.json` — the M3 data staged as the
+- `users/<profile>/m12/input/curated_captions.json` — the M3 data staged as the
   training channel (only when M3 has run).
 
 ## Verified run
@@ -104,7 +104,7 @@ checkpoint (`model_state_dict` + `optimizer_state_dict` + `final_loss`). Loss fa
 `estimator.fit()` on **`ml.m5.xlarge`×2** completed — `Training job completed`,
 320 billable seconds, **`Data source: real_m3`** (trained on M3's curated captions
 via the `training` channel), model artifact at
-`users/ky-5-34x1bx/m9/.../output/model.tar.gz`, demo cost ~$0.02. Full M3→M9→
+`users/ky-5-34x1bx/m12/.../output/model.tar.gz`, demo cost ~$0.02. Full M3→M12→
 metrics pipeline confirmed end-to-end in the real Studio environment.
 
 ### Six real bugs the participant Run-All surfaced (none reproducible locally)
@@ -121,7 +121,7 @@ could never hit:
    {"processes_per_host": 1}}`.
 4. **exec role write scope is `users/*`** — the estimator's default code upload to
    the bucket root `<job>/source/...` is denied. Fix: `code_location=
-   s3://<bucket>/users/<profile>/m9/code`.
+   s3://<bucket>/users/<profile>/m12/code`.
 5. **`iam:PassRole` + `sagemaker:CreateTrainingJob` missing** — the exec role was
    built for Studio app management, not training-job submission. Fix: added a
    scoped `SageMakerTrainingJobs` (av30-m9-* ARN) + self-only `PassRole`

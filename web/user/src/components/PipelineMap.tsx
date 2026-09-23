@@ -182,7 +182,7 @@ export function PipelineMap({ modules, onModuleSelect, selectedModuleId }: Pipel
 
     // Count fan-out per source and fan-in per target so we can spread the
     // connection points along each node's edge instead of stacking them at the
-    // center (which made M2->M3/M8 and M3->M4/5/6/9 overlap into one blob).
+    // center (which made M2->M3/M4 and M3->M5/5/6/9 overlap into one blob).
     const inCount = new Map<string, number>();
     const inIndex = new Map<string, number>();
     for (const layout of layouts) {
@@ -217,7 +217,7 @@ export function PipelineMap({ modules, onModuleSelect, selectedModuleId }: Pipel
 
         let d: string;
         if (sameColumn) {
-          // Same-column feed (e.g. M2 -> M3 / M8): route out to the right, curve
+          // Same-column feed (e.g. M2 -> M3 / M4): route out to the right, curve
           // down/up, and come back into the target's LEFT edge — avoids the
           // near-vertical overlap of edge-to-edge lines.
           const y1 = spread(oi, nOut, layout.y, NODE_HEIGHT);

@@ -1,4 +1,4 @@
-# M7 Participant Run Guide — run the real AlpaSim on your own GPU host (SSM)
+# M10 Participant Run Guide — run the real AlpaSim on your own GPU host (SSM)
 
 > ## ⚠️ Read this first — cost and time
 > - This run happens on a **GPU server (g6e.12xlarge) that the admin launched for you**.
@@ -7,10 +7,10 @@
 >   download + NuRec scene download). It does not finish in 5 minutes like a notebook.
 > - **You cannot turn off the server.** When you're done, **be sure to notify the admin of "completion"** so the admin
 >   terminates the server. If you don't tell them, charges keep piling up.
-> - This is the **optional advanced path** for M7. If you just want to see the results, visualize the admin's shared reference
->   result in the notebook (without this document, CPU, $0) — [ALPASIM_M7.md](ALPASIM_M7.md).
+> - This is the **optional advanced path** for M10. If you just want to see the results, visualize the admin's shared reference
+>   result in the notebook (without this document, CPU, $0) — [ALPASIM_M10.md](ALPASIM_M10.md).
 
-M7 has two layers. **(1) The real AlpaSim run** happens on the GPU server (this document), and **(2) result visualization**
+M10 has two layers. **(1) The real AlpaSim run** happens on the GPU server (this document), and **(2) result visualization**
 happens in a SageMaker CPU notebook. AlpaSim is a fleet of gRPC microservices brought up with Docker-Compose, and
 the driver uses a ≥40GB GPU, so it cannot run in a SageMaker Studio notebook, which has no Docker daemon.
 That's why the run happens on a separate GPU EC2 host, and the notebook downloads and views that result.
@@ -64,20 +64,20 @@ aws ssm start-session --target <your-instance-id> --region $AWS_DEFAULT_REGION
 ```bash
 sudo su -
 export PARTICIPANT_ID=<your-id>
-export M7_OUTPUT_PREFIX=users/<your-id>/m7
+export M10_OUTPUT_PREFIX=users/<your-id>/m7
 export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT
 export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
 export HF_TOKEN=hf_xxx          # required — for downloading the gated NuRec scene (prerequisite 3)
 
 # Verify passthrough (always, before running the script): all 5 must be visible and tok_len must be non-zero
-env | grep -E 'PARTICIPANT_ID|M7_OUTPUT_PREFIX|OUTPUT_BUCKET|SHARED_BUCKET'; echo "tok_len=${#HF_TOKEN}"
+env | grep -E 'PARTICIPANT_ID|M10_OUTPUT_PREFIX|OUTPUT_BUCKET|SHARED_BUCKET'; echo "tok_len=${#HF_TOKEN}"
 
 # Fetch the script and run it detached in the background + watch the log in real time
 aws s3 cp s3://$SHARED_BUCKET/notebook-templates/scripts/alpasim_ec2_setup.sh /root/
 setsid bash /root/alpasim_ec2_setup.sh > /var/log/m7.log 2>&1 &
 tail -f /var/log/m7.log
 ```
-- Early in the log you should see `[s3] participant self-run: id=<your-id> output=s3://…/users/<your-id>/m7/`,
+- Early in the log you should see `[s3] participant self-run: id=<your-id> output=s3://…/users/<your-id>/m10/`,
   which means it's going to the per-user path. If you see `admin reference run`, the env above wasn't passed —
   Ctrl-C, re-do the export, and re-run.
 - Launched with `setsid ... &`, it keeps running even if the SSM session drops. Exiting `tail -f` with Ctrl-C
@@ -92,7 +92,7 @@ or failure (interrupted) by the **end** of the log (`tail -n 40 /var/log/m7.log`
 ```
 runtime-0-1 exited with code 0
 [verify] core outputs present.
-=== DONE — genuine AlpaSim results uploaded to s3://av30lab-user-workspace-.../users/<id>/m7/ ===
+=== DONE — genuine AlpaSim results uploaded to s3://av30lab-user-workspace-.../users/<id>/m10/ ===
 >>> Participant <id>: results are in ...
 ```
 - On success, `tail -f` stopping is **normal** (the script finished — it did not die).
@@ -114,7 +114,7 @@ Check directly (inside the session or locally):
 ```bash
 # In a new local shell, re-derive ACCOUNT (if inside the §3 session it's already exported)
 ACCOUNT=${ACCOUNT:-$(aws sts get-caller-identity --query Account --output text)}
-aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m7/ --recursive
+aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m10/ --recursive
 # OK if you see aggregate/results-summary.json, rollouts/**/metrics.parquet, eval/eval.mp4, run.json
 ```
 
@@ -123,9 +123,9 @@ You don't have permission to turn off the instance (prevents cost accidents). No
 After confirming, the admin terminates it with `terminate-instances` and stops the billing.
 
 ## 6. Visualize your result in the SageMaker notebook (CPU)
-1. Participant dashboard → **M7 node** (leave the instance as `ml.t3.medium` CPU) → **Open Workspace**
-2. Open `M7_AlpaSim_ClosedLoop.ipynb` and **Run All**
-3. The notebook auto-detects `users/<your-id>/m7/` and visualizes **your** result
+1. Participant dashboard → **M10 node** (leave the instance as `ml.t3.medium` CPU) → **Open Workspace**
+2. Open `M10_AlpaSim_ClosedLoop.ipynb` and **Run All**
+3. The notebook auto-detects `users/<your-id>/m10/` and visualizes **your** result
    (cell-2 prints `Result source: your own EC2 run`). If there is none, it falls back to the admin's shared reference.
 
 **Pass criteria**: driving scores (collision_at_fault, etc.) in cell-5, **PASS** + headline in cell-9.
@@ -145,4 +145,4 @@ After confirming, the admin terminates it with `terminate-instances` and stops t
 | notebook cell-4 `not found` | steps 3-4 haven't succeeded yet → check the log and re-run |
 | everything's done but the server won't turn off | only the admin can terminate → notify the admin |
 
-Admin provisioning/IAM/cleanup procedures: [M7_MANUAL_TEST_RUNBOOK.md](M7_MANUAL_TEST_RUNBOOK.md).
+Admin provisioning/IAM/cleanup procedures: [M10_MANUAL_TEST_RUNBOOK.md](M10_MANUAL_TEST_RUNBOOK.md).

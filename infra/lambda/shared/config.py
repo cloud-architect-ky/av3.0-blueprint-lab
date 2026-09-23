@@ -38,19 +38,29 @@ AWS_REGION = os.environ.get("AWS_REGION", "us-west-2")
 # --- SageMaker Distribution image selection ---------------------------------
 # JupyterLab apps must pin a Distribution image; without it SageMaker uses the
 # domain/account default (a CPU build), so torch.cuda.is_available() is False on
-# GPU instances and the GPU pre-flight checks in the GPU modules (M2, M3, M5-M9) fail. NOTE: this is NOT
-# the jupyter-server-3 image used for the JupyterServer default in the CDK stack
-# — the JupyterLab Distribution images are different and live in the SageMaker
-# Distribution account (542918446943), published per-region.
-_SMD_ACCOUNT = "542918446943"
-SMD_CPU_IMAGE_ARN = os.environ.get(
-    "SMD_CPU_IMAGE_ARN",
-    f"arn:aws:sagemaker:{AWS_REGION}:{_SMD_ACCOUNT}:image/sagemaker-distribution-cpu",
-)
-SMD_GPU_IMAGE_ARN = os.environ.get(
-    "SMD_GPU_IMAGE_ARN",
-    f"arn:aws:sagemaker:{AWS_REGION}:{_SMD_ACCOUNT}:image/sagemaker-distribution-gpu",
-)
+# GPU instances and the GPU pre-flight checks in the GPU modules (M2, M3, M5-M9) fail.
+# NOTE: this is NOT the jupyter-server-3 image used for the JupyterServer default in
+# the CDK stack — the JupyterLab Distribution images are different.
+#
+# The owning account is region-specific (it is NOT one account published per-region),
+# so the ARN is built from the table in smd_images.py rather than a hardcoded literal.
+# See that module for why getting this wrong fails silently and per-participant.
+from smd_images import smd_image_arn  # noqa: E402  (shared layer, same directory)
+
+
+def _smd_arn(env_key: str, variant: str) -> str:
+    """Env var if the stack supplied one, else derive it from the region table.
+
+    Written as a function rather than os.environ.get(key, smd_image_arn(...)) because
+    that form evaluates the default EAGERLY: a region missing from the table would
+    raise at import time even when the env var already held the correct ARN, turning a
+    working deploy into a cold-start crash.
+    """
+    return os.environ.get(env_key) or smd_image_arn(AWS_REGION, variant)
+
+
+SMD_CPU_IMAGE_ARN = _smd_arn("SMD_CPU_IMAGE_ARN", "cpu")
+SMD_GPU_IMAGE_ARN = _smd_arn("SMD_GPU_IMAGE_ARN", "gpu")
 # "4.2.1" is the version verified working. Overridable via env; avoid "latest"
 # so the image can't silently drift across workshop runs.
 SMD_IMAGE_VERSION_ALIAS = os.environ.get("SMD_IMAGE_VERSION_ALIAS", "4.2.1")

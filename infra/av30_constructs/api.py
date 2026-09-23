@@ -4,6 +4,7 @@ API Gateway REST API with Cognito and Token authorizers,
 wiring all Lambda handlers to their routes.
 """
 
+import importlib.util
 from pathlib import Path
 
 from constructs import Construct
@@ -22,6 +23,27 @@ from aws_cdk import (
 
 # Path to Lambda source code (relative to the infra/ directory at synth time)
 _LAMBDA_DIR = Path(__file__).resolve().parent.parent / "lambda"
+
+
+def _load_smd_images():
+    """Load the region -> SageMaker Distribution account table from the Lambda layer.
+
+    Loaded BY PATH rather than imported, because infra/lambda/shared is not on the
+    CDK app's import path and `import config` would drag the Lambda runtime's boto3
+    dependency into synth. smd_images.py is deliberately dependency-free for exactly
+    this use, so the stack and the Lambdas read ONE table and cannot drift apart.
+    """
+    path = _LAMBDA_DIR / "shared" / "smd_images.py"
+    spec = importlib.util.spec_from_file_location("av30_smd_images", path)
+    if spec is None or spec.loader is None:  # pragma: no cover
+        raise RuntimeError(f"cannot load {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_smd_images = _load_smd_images()
+smd_image_arn = _smd_images.smd_image_arn
 
 
 class ApiConstruct(Construct):
@@ -128,17 +150,26 @@ class ApiConstruct(Construct):
         )
 
         # --- Shared environment variables for business Lambdas ---
-        # SageMaker Distribution images live in account 542918446943, published
-        # per-region. Lambdas pick CPU vs GPU by instance family (see config.py).
-        _smd_account = "542918446943"
+        # SageMaker Distribution image ARNs. Lambdas pick CPU vs GPU by instance
+        # family (see config.py); the ARN itself is resolved HERE, at synth, so an
+        # unsupported region fails the deploy instead of failing later inside
+        # SageMaker when a participant opens their workspace.
+        #
+        # The owning account is DIFFERENT PER REGION — it is not one account
+        # published everywhere. This used to be a hardcoded us-west-2 literal, which
+        # silently produced ARNs for nonexistent images in every other region. The
+        # table now lives in infra/lambda/shared/smd_images.py and is read by both
+        # this stack and the Lambda runtime, so the two cannot drift.
+        _smd_cpu_image_arn = smd_image_arn(stack.region, "cpu")
+        _smd_gpu_image_arn = smd_image_arn(stack.region, "gpu")
         shared_env = {
             "SAGEMAKER_DOMAIN_ID": sagemaker_domain_id,
             "SESSIONS_TABLE_NAME": sessions_table.table_name,
             "SHARED_BUCKET_NAME": shared_data_bucket.bucket_name,
             "USER_BUCKET_NAME": user_workspace_bucket.bucket_name,
             "NOTEBOOK_TEMPLATES_PREFIX": "notebook-templates/",
-            "SMD_CPU_IMAGE_ARN": f"arn:aws:sagemaker:{stack.region}:{_smd_account}:image/sagemaker-distribution-cpu",
-            "SMD_GPU_IMAGE_ARN": f"arn:aws:sagemaker:{stack.region}:{_smd_account}:image/sagemaker-distribution-gpu",
+            "SMD_CPU_IMAGE_ARN": _smd_cpu_image_arn,
+            "SMD_GPU_IMAGE_ARN": _smd_gpu_image_arn,
             "SMD_IMAGE_VERSION_ALIAS": "4.2.1",
             "NOTEBOOK_LIFECYCLE_CONFIG_ARN": notebook_lifecycle_config_arn,
             # B2 progress tracking: create_user writes this + the participant

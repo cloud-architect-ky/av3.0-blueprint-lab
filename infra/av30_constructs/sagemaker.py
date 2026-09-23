@@ -5,6 +5,8 @@ SageMaker Studio Domain in PublicInternetOnly mode with execution role and lifec
 
 import base64
 import hashlib
+import importlib.util
+from pathlib import Path
 
 from constructs import Construct
 
@@ -15,6 +17,24 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_sagemaker as sagemaker,
 )
+
+
+def _load_smd_images():
+    """region -> SageMaker Distribution owner account, from the Lambda shared layer.
+
+    Same loader as api.py: the table is read by path so the stack and the Lambda
+    runtime share ONE copy. See infra/lambda/shared/smd_images.py.
+    """
+    path = Path(__file__).resolve().parent.parent / "lambda" / "shared" / "smd_images.py"
+    spec = importlib.util.spec_from_file_location("av30_smd_images", path)
+    if spec is None or spec.loader is None:  # pragma: no cover
+        raise RuntimeError(f"cannot load {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+smd_image_arn = _load_smd_images().smd_image_arn
 
 
 _IDLE_SHUTDOWN_SCRIPT = """\
@@ -534,13 +554,14 @@ class SageMakerConstruct(Construct):
             # JupyterServer LCC above never runs on these apps. Pin the CPU
             # SageMaker Distribution image as the default (initial spaces are
             # t3.medium); the Lambdas swap to the GPU image when a participant
-            # picks a GPU instance. Distribution images live in account
-            # 542918446943, published per-region.
+            # picks a GPU instance. The Distribution images' OWNING ACCOUNT differs
+            # per region, so the ARN comes from the shared table rather than a
+            # hardcoded literal (a us-west-2 literal here silently gave every other
+            # region an ARN for an image that does not exist).
             jupyter_lab_app_settings=sagemaker.CfnDomain.JupyterLabAppSettingsProperty(
                 default_resource_spec=sagemaker.CfnDomain.ResourceSpecProperty(
-                    sage_maker_image_arn=(
-                        f"arn:aws:sagemaker:{cdk.Stack.of(self).region}"
-                        ":542918446943:image/sagemaker-distribution-cpu"
+                    sage_maker_image_arn=smd_image_arn(
+                        cdk.Stack.of(self).region, "cpu"
                     ),
                     lifecycle_config_arn=self._notebook_lcc.attr_studio_lifecycle_config_arn,
                 ),

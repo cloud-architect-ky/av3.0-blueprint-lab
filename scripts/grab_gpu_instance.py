@@ -48,8 +48,10 @@ also cleaned up here before the next attempt).
 """
 
 import argparse
+import importlib.util
 import json
 import os
+import pathlib
 import sys
 import time
 from datetime import datetime, timezone
@@ -57,19 +59,28 @@ from datetime import datetime, timezone
 import boto3
 from botocore.exceptions import ClientError
 
-# --- SageMaker Distribution images (match infra/lambda/shared/config.py) ------
-# The JupyterLab Distribution images live in the SageMaker Distribution account
-# (542918446943), published per-region. Pin the version verified for the lab.
-_SMD_ACCOUNT = "542918446943"
+# --- SageMaker Distribution images -------------------------------------------
+# The owning account differs PER REGION, so the ARN cannot be built by dropping the
+# region into a template. The table is shared with the CDK stack and the Lambdas —
+# loaded by path because this script runs standalone, outside the Lambda bundle and
+# outside the CDK app. See infra/lambda/shared/smd_images.py for why a hardcoded
+# us-west-2 account was a real bug here.
+_SMD_TABLE = pathlib.Path(__file__).resolve().parent.parent / "infra" / "lambda" / "shared" / "smd_images.py"
+_spec = importlib.util.spec_from_file_location("av30_smd_images", _SMD_TABLE)
+if _spec is None or _spec.loader is None:  # pragma: no cover
+    raise SystemExit(f"cannot load the SageMaker Distribution image table at {_SMD_TABLE}")
+_smd_images = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_smd_images)
+
 SMD_IMAGE_VERSION_ALIAS = "4.2.1"
 
 
 def _cpu_image_arn(region: str) -> str:
-    return f"arn:aws:sagemaker:{region}:{_SMD_ACCOUNT}:image/sagemaker-distribution-cpu"
+    return _smd_images.smd_image_arn(region, "cpu")
 
 
 def _gpu_image_arn(region: str) -> str:
-    return f"arn:aws:sagemaker:{region}:{_SMD_ACCOUNT}:image/sagemaker-distribution-gpu"
+    return _smd_images.smd_image_arn(region, "gpu")
 
 
 # GPU-accelerated SageMaker instance-family prefixes (match config.py).

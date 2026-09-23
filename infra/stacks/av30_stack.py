@@ -29,8 +29,20 @@ class Av30BlueprintLabStack(cdk.Stack):
         cdk.Tags.of(self).add("Project", "av30-blueprint-lab")
         cdk.Tags.of(self).add("Owner", "av30-blueprint-lab")
 
-        # Network layer: VPC with private subnets and VPC endpoints
-        network = NetworkConstruct(self, "Network")
+        # Network layer: NAT-free VPC with the free S3 gateway endpoint.
+        # The 6 paid interface endpoints (~$87.60/month per region) are OFF by
+        # default because nothing in this VPC consumes them: the Lambdas are not
+        # VPC-attached and the domain is PublicInternetOnly. Turn them on with
+        #   npx cdk deploy -c vpc_interface_endpoints=true
+        # if you switch the domain to VpcOnly. See NetworkConstruct's docstring.
+        network = NetworkConstruct(
+            self,
+            "Network",
+            vpc_interface_endpoints=str(
+                self.node.try_get_context("vpc_interface_endpoints") or ""
+            ).lower()
+            in ("1", "true", "yes"),
+        )
 
         # Storage layer: KMS key and S3 buckets
         storage = StorageConstruct(self, "Storage")
@@ -79,16 +91,23 @@ class Av30BlueprintLabStack(cdk.Stack):
             )
 
         # Dashboard layer: Admin and User dashboards (WAF is on API Gateway, not CloudFront)
+        # Region-suffixed like the data buckets: S3 names are globally unique, so an
+        # account-only name collides the moment this stack is deployed to a second
+        # region. These are control-plane resources and will move to the control-plane
+        # stack, where only one copy exists — the suffix is harmless there and
+        # prevents a collision during the transition. scripts/deploy.sh reads both
+        # names from the AdminBucketName / UserBucketName stack outputs, so nothing
+        # hardcodes them.
         admin_dashboard = DashboardConstruct(
             self,
             "AdminDashboard",
-            bucket_name=f"av30lab-admin-dashboard-{cdk.Aws.ACCOUNT_ID}",
+            bucket_name=f"av30lab-admin-dashboard-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}",
         )
 
         user_dashboard = DashboardConstruct(
             self,
             "UserDashboard",
-            bucket_name=f"av30lab-user-dashboard-{cdk.Aws.ACCOUNT_ID}",
+            bucket_name=f"av30lab-user-dashboard-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}",
         )
 
         # Stack outputs for cross-stack references and operational visibility

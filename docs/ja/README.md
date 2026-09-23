@@ -167,7 +167,12 @@ aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/scr
                                          notebook-templates / m7-reference)
 ```
 
-- **ネットワーク:** プライベートサブネット、NAT Gateway、S3/SageMaker 用の VPC エンドポイントを備えた VPC。
+- **ネットワーク:** NAT なしの VPC — 分離プライベートサブネット ＋ 無料の S3 *ゲートウェイ* エンドポイント。
+  **NAT Gateway はありません。** Studio ドメインは `PublicInternetOnly` なので、ノートブックの
+  トラフィックは SageMaker マネージド VPC を経由し、この VPC は EFS/ホームディレクトリの
+  トラフィックのみを扱います。有料の *インターフェース* エンドポイント 6 種はデフォルトで無効です
+  （VPC 内に利用者がいません — Lambda は VPC に接続されていません）。ドメインを `VpcOnly` に
+  切り替える場合は `-c vpc_interface_endpoints=true` で有効化してください。
 - **ストレージ:** KMS 暗号化 S3（共有データ + ユーザーごとのワークスペース）、事前キャッシュされたモデル。
 - **コンピュート:** 自動セットアップ用のライフサイクル設定を持つ SageMaker Studio ドメイン。
 - **認証:** 管理プレーン用のオプションの **WAF IP 許可リスト**を備えた Cognito ユーザープール。
@@ -204,7 +209,7 @@ av3.0-blueprint-lab/
 
 | シナリオ | コスト | 備考 |
 |---|---|---|
-| アイドル状態（インフラのみ） | 約 $80/月 | NAT Gateway、VPC エンドポイント、DynamoDB、CloudFront |
+| アイドル状態（インフラのみ） | **リージョンあたり約 $1/月** | KMS キー。S3 ゲートウェイエンドポイントは無料で、NAT Gateway はありません。DynamoDB（オンデマンド）・CloudFront・Cognito はアイドル時ほぼ $0。VPC インターフェースエンドポイント 6 種を有効にした場合のみ **リージョンあたり約 $87.60/月** が加算されます（ENI 12 個 × $0.01/AZ・時間）。モデルキャッシュの S3 保管料は別途（リージョンあたり約 $2/月）。 |
 | GPU モジュール | 時間課金 | `ml.g5.xlarge` 約 $1.41/時（M10）、`ml.g5.12xlarge` 約 $7.09/時（M2/M3）、`ml.g6.24xlarge` 約 $8.34/時（M4/M5/M6 のデフォルト） — フル解像度の出力が必要な場合のみ `ml.p4d.24xlarge` 約 $25.25/時 へ |
 | M7 AlpaSim（EC2 上） | 約 $30 の一度きり（管理者） | `g6e.12xlarge` でのリファレンス評価。任意で参加者が自身で実行する場合は約 $10.5/時/ホスト |
 | 1 週間フル（混在） | 約 $400〜600+ | p4d モジュールとユーザー数が支配的 |

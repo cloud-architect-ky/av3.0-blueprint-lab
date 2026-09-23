@@ -4,6 +4,7 @@ SageMaker Studio Domain in PublicInternetOnly mode with execution role and lifec
 """
 
 import base64
+import hashlib
 
 from constructs import Construct
 
@@ -54,6 +55,12 @@ restart-jupyter-server
 #
 # Non-fatal throughout: neither a sync failure nor an env-write failure may
 # block the app from starting.
+# Bump ONLY for changes the template-text hash cannot see — i.e. changes to the
+# *substituted values* rather than the script body (the bucket rename that added
+# the -{region} suffix is exactly such a change). Ordinary edits to
+# _NOTEBOOK_SYNC_SCRIPT_TEMPLATE below rotate the LCC name on their own.
+_LCC_CONTENT_REV = "r2-region-suffixed-buckets"
+
 _NOTEBOOK_SYNC_SCRIPT_TEMPLATE = """\
 #!/bin/bash
 set -eux
@@ -144,11 +151,14 @@ class SageMakerConstruct(Construct):
     ) -> None:
         super().__init__(scope, construct_id)
 
-        # Execution role for SageMaker Studio users
+        # Execution role for SageMaker Studio users.
+        # REGION SUFFIX IS REQUIRED: IAM is a global, account-scoped namespace, so
+        # an unsuffixed physical name makes the SECOND region's stack fail at
+        # CREATE with EntityAlreadyExists. Aws.REGION resolves at deploy time.
         self._execution_role = iam.Role(
             self,
             "ExecutionRole",
-            role_name="av30lab-sagemaker-execution-role",
+            role_name=f"av30lab-sagemaker-execution-role-{cdk.Aws.REGION}",
             assumed_by=iam.ServicePrincipal("sagemaker.amazonaws.com"),
             description="Execution role for AV 3.0 Blueprint Lab SageMaker Studio users",
         )
@@ -334,10 +344,12 @@ class SageMakerConstruct(Construct):
                 sid="PassSelfToSageMakerTraining",
                 effect=iam.Effect.ALLOW,
                 actions=["iam:PassRole"],
-                resources=[
-                    f"arn:aws:iam::{cdk.Stack.of(self).account}:role/"
-                    "av30lab-sagemaker-execution-role",
-                ],
+                # Use the role's own ARN attribute — NEVER re-spell the name here.
+                # This used to be a hand-built literal, which would silently point
+                # at a non-existent role the moment role_name gained its required
+                # region suffix: the deploy stays green and M9 training / M11
+                # processing fail at submit time with AccessDenied on PassRole.
+                resources=[self._execution_role.role_arn],
                 conditions={
                     "StringEquals": {"iam:PassedToService": "sagemaker.amazonaws.com"}
                 },
@@ -459,16 +471,30 @@ class SageMakerConstruct(Construct):
         # ${Token[...]} placeholders and break the shell script.
         encoded_notebook_sync = cdk.Fn.base64(notebook_sync_script)
 
-        # Name is versioned (-v3): a custom-named StudioLifecycleConfig cannot be
-        # updated in place when its content changes (CloudFormation requires
-        # replacement, which collides on the fixed name). Bump the suffix to
-        # force a clean create/replace when the script content changes.
+        # A custom-named StudioLifecycleConfig cannot be updated in place when its
+        # content changes: CloudFormation requires replacement and then collides on
+        # the fixed name. CloudFormation also REQUIRES the name (it is not
+        # optional), so auto-naming is not available — the name has to change
+        # whenever the content does.
+        #
+        # Instead of a hand-bumped "-vN" that someone must remember, derive the
+        # suffix from a hash of the script TEMPLATE, so ordinary script edits
+        # rotate the name automatically. Token-level changes (e.g. renaming the
+        # buckets, which only alters the substituted values, not the template
+        # text) do NOT move that hash, so bump _LCC_CONTENT_REV for those.
+        #
+        # Nothing resolves this LCC by name — every consumer uses the ARN
+        # (stacks/av30_stack.py -> api.py NOTEBOOK_LIFECYCLE_CONFIG_ARN ->
+        # shared/config.py jupyterlab_resource_spec) — so the name is free to move.
+        _lcc_rev = hashlib.sha256(
+            (_LCC_CONTENT_REV + _NOTEBOOK_SYNC_SCRIPT_TEMPLATE).encode()
+        ).hexdigest()[:8]
         self._notebook_lcc = sagemaker.CfnStudioLifecycleConfig(
             self,
-            "NotebookSyncLifecycleConfigV4",
+            "NotebookSyncLifecycleConfig",
             studio_lifecycle_config_app_type="JupyterLab",
             studio_lifecycle_config_content=encoded_notebook_sync,
-            studio_lifecycle_config_name="av30lab-notebook-sync-v4",
+            studio_lifecycle_config_name=f"av30lab-notebook-sync-{_lcc_rev}",
         )
 
         # Security group for SageMaker Studio Domain

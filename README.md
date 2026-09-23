@@ -201,7 +201,12 @@ runbook — smoke test, bulk provisioning, monitoring, teardown — is in
                                          notebook-templates / m7-reference)
 ```
 
-- **Network:** VPC with private subnets, NAT Gateway, VPC endpoints for S3/SageMaker.
+- **Network:** NAT-free VPC with isolated private subnets and a free S3 *gateway* endpoint.
+  There is **no NAT Gateway** — the Studio domain runs `PublicInternetOnly`, so notebook
+  traffic egresses via a SageMaker-managed VPC and this VPC carries only EFS/home-dir
+  traffic. The 6 paid *interface* endpoints are off by default (nothing in the VPC uses
+  them: the Lambdas are not VPC-attached); enable with `-c vpc_interface_endpoints=true`
+  if you switch the domain to `VpcOnly`.
 - **Storage:** KMS-encrypted S3 (shared data + per-user workspaces); pre-cached models.
 - **Compute:** SageMaker Studio Domain with a lifecycle config for auto-setup.
 - **Auth:** Cognito user pool with an optional **WAF IP allowlist** for the admin plane.
@@ -238,7 +243,7 @@ av3.0-blueprint-lab/
 
 | Scenario | Cost | Notes |
 |---|---|---|
-| Idle (infra only) | ~$80/mo | NAT Gateway, VPC endpoints, DynamoDB, CloudFront |
+| Idle (infra only) | **~$1/mo per region** | KMS key. The S3 gateway endpoint is free and there is no NAT Gateway; DynamoDB (on-demand), CloudFront and Cognito are ~$0 at idle. Add **~$87.60/mo per region** only if you enable the 6 VPC interface endpoints (12 ENIs x $0.01/AZ-hour). S3 storage for the model cache is extra (~$2/mo per region). |
 | GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 default) — step up to `ml.p4d.24xlarge` ~$25.25/hr only for full-resolution output |
 | M7 AlpaSim on EC2 | ~$30 one-time (admin) | reference eval on `g6e.12xlarge`; optional participant self-run ~$10.5/hr/host |
 | Full week (mixed) | ~$400–600+ | dominated by the p4d modules and user count |

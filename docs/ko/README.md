@@ -200,7 +200,11 @@ Dashboard Link**를 열어 파이프라인 맵을 확인하세요. 스모크 테
                                          notebook-templates / m7-reference)
 ```
 
-- **네트워크:** 프라이빗 서브넷, NAT Gateway, S3/SageMaker용 VPC 엔드포인트를 갖춘 VPC.
+- **네트워크:** NAT 없는 VPC — 격리 프라이빗 서브넷 + 무료 S3 *게이트웨이* 엔드포인트.
+  **NAT Gateway는 없습니다.** Studio 도메인이 `PublicInternetOnly`이므로 노트북 트래픽은
+  SageMaker 관리형 VPC로 나가고, 이 VPC는 EFS/홈 디렉터리 트래픽만 담당합니다. 유료 *인터페이스*
+  엔드포인트 6종은 기본 꺼짐입니다(VPC 안에 사용 주체가 없음 — Lambda는 VPC에 붙어 있지 않음).
+  도메인을 `VpcOnly`로 바꿀 때 `-c vpc_interface_endpoints=true`로 켜세요.
 - **스토리지:** KMS 암호화 S3(공유 데이터 + 사용자별 워크스페이스); 사전 캐싱된 모델.
 - **컴퓨트:** 자동 설정을 위한 라이프사이클 구성이 있는 SageMaker Studio Domain.
 - **인증:** 관리자 플레인용 선택적 **WAF IP 허용 목록**이 있는 Cognito 사용자 풀.
@@ -237,7 +241,7 @@ av3.0-blueprint-lab/
 
 | 시나리오 | 비용 | 비고 |
 |---|---|---|
-| 유휴(인프라만) | ~$80/월 | NAT Gateway, VPC 엔드포인트, DynamoDB, CloudFront |
+| 유휴(인프라만) | **리전당 ~$1/월** | KMS 키. S3 게이트웨이 엔드포인트는 무료이고 NAT Gateway는 없습니다. DynamoDB(온디맨드)·CloudFront·Cognito는 유휴 시 ~$0. VPC 인터페이스 엔드포인트 6종을 켤 때만 **리전당 ~$87.60/월**이 추가됩니다(ENI 12개 × $0.01/AZ·시간). 모델 캐시 S3 저장료는 별도(리전당 ~$2/월). |
 | GPU 모듈 | 시간당 | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 기본값) — 최대 해상도 출력이 필요할 때만 `ml.p4d.24xlarge` ~$25.25/hr로 상향 |
 | EC2의 M7 AlpaSim | ~$30 일회성(관리자) | `g6e.12xlarge`에서 레퍼런스 평가; 선택적 참가자 자체 실행 시 ~$10.5/hr/호스트 |
 | 전체 1주(혼합) | ~$400–600+ | p4d 모듈과 사용자 수가 비용의 대부분을 차지 |

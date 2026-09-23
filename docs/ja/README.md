@@ -19,7 +19,7 @@
 | **M0** | パイプライン概要 — エンドツーエンドのパイプラインを各モジュールにマッピング（コンピュートなし） | `ml.t3.medium`（CPU） |
 | **M1** | データ探索 — 実際の **nuScenes-mini** センサーデータの取り込みと探索、シーンの選択 | `ml.t3.medium`（CPU） |
 | **M2** | Cosmos Reason キャプション生成 — サンプリングしたクリップの VLM キャプション | `ml.g5.12xlarge`（GPU） |
-| **M3** | Cosmos Curator — **NeMo Curator** による動画キュレーション（分割、トランスコード、フィルタ、重複排除） | `ml.g5.12xlarge`（GPU） |
+| **M3** | Cosmos Curator — **NeMo Curator** による動画キュレーション（分割、トランスコード、モーションフィルタ） | `ml.g5.12xlarge`（GPU） |
 | **M4** | OpenSearch セマンティック検索 — キャプション埋め込みに対する k-NN 検索 | `ml.t3.medium`（CPU） |
 | **M5** | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g6.24xlarge` で検証済み） |
 | **M6** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g6.24xlarge` で検証済み） |

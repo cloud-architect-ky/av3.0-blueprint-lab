@@ -30,7 +30,7 @@
 | **M0** | 파이프라인 개요 — 엔드투엔드 파이프라인을 각 모듈에 매핑(컴퓨트 없음) | `ml.t3.medium` (CPU) |
 | **M1** | 데이터 탐색 — 실제 **nuScenes-mini** 센서 데이터 수집 및 탐색, 씬 선택 | `ml.t3.medium` (CPU) |
 | **M2** | Cosmos Reason 캡셔닝 — 샘플링된 클립의 VLM 캡션 생성 | `ml.g5.12xlarge` (GPU) |
-| **M3** | Cosmos Curator — **NeMo Curator** 비디오 큐레이션(분할, 트랜스코딩, 필터링, 중복 제거) | `ml.g5.12xlarge` (GPU) |
+| **M3** | Cosmos Curator — **NeMo Curator** 비디오 큐레이션(분할, 트랜스코딩, 모션 필터링) | `ml.g5.12xlarge` (GPU) |
 | **M4** | OpenSearch 시맨틱 검색 — 캡션 임베딩에 대한 k-NN 검색 | `ml.t3.medium` (CPU) |
 | **M5** | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g6.24xlarge` 검증됨) |
 | **M6** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g6.24xlarge` 검증됨) |

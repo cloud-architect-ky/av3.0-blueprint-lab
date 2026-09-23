@@ -37,7 +37,10 @@ driver). The AV 3.0 answer is a **data pipeline** that:
 
 This lab is a hands-on, end-to-end walk through exactly that pipeline, on AWS, using
 NVIDIA's open models. **You will run the real pipeline** (not a toy) on a small
-dataset.
+dataset — with real weights and real outputs, at workshop scale. Several stages use a
+documented stand-in for the blog's tooling or hardware; they are all listed in
+[Where this lab substitutes for the blog](#where-this-lab-substitutes-for-the-blog)
+in §2, so you can see the swap before you hit it.
 
 **Start here:** the one blog post this entire lab implements —
 [Building an end-to-end Physical AI data pipeline for AV 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/).
@@ -71,7 +74,7 @@ writes its own).
 |---|---|---|
 | 1–2 Data collection & exploration | **M1** | Load and browse the raw driving dataset (nuScenes-mini). |
 | 3 Captioning | **M2** | A vision-language model writes a text description of each clip. |
-| 3 Curation | **M3** | Filter/dedup/quality-score the captions to build a clean training set. |
+| 3 Curation | **M3** | Split and transcode the clips, then drop the low-motion ones (e.g. stopped at a light). M2's captions ride along, keeping those whose scene survived. *No dedup and no caption quality score — see the substitutions table below.* |
 | 4 Search | **M4** | Turn clips into embeddings so you can *semantically* search them ("find left turns in rain"). |
 | 5 Augmentation | **M5** | A "world model" restyles real clips into new **weather/lighting** without re-driving. |
 | 5 (ext) Scenario generation | **M6** | A world model **generates new synthetic driving video** from a prompt/seed. |
@@ -84,6 +87,31 @@ writes its own).
 
 > **Mental model to hold onto:** *real data → label it → search & clean it →
 > multiply it with synthetic generation → train a policy → prove it in sim.*
+
+### Where this lab substitutes for the blog
+
+The pipeline is real end to end — real NVIDIA weights, real nuScenes data, real AWS
+services — but it runs at **workshop scale**, and several stages use a stand-in for
+what the blog specifies. They are listed here rather than left for you to discover
+mid-module.
+
+| Stage | The blog | This lab | Why |
+|---|---|---|---|
+| **1–2** Ingest + quality gate | Physical media via **AWS Data Transfer Terminal** into S3; **AWS Batch** validates channels / sync / corruption; sensor data extracted from ROS bag, MCAP or ASAM MDF4 containers | **M1** reads an already-extracted nuScenes-mini tree from S3 and browses it | There is no physical media and no container file to extract — nuScenes-mini ships as jpg + json. Nothing here is ingested or quality-gated. |
+| **3** Curation | **NVIDIA Cosmos Curator** on **SageMaker HyperPod + SLURM**: one integrated pipeline over four sub-stages — split → transcode → **caption** → **embed** | **M3** runs **NeMo Curator** (a separate NVIDIA project, despite the name) for split + transcode + a motion filter, with captioning and embedding switched off. Captioning is **M2**; embedding is **M4** | Cosmos Curator is Docker + SLURM on a persistent GPU cluster, so it cannot run inside a Studio notebook. Splitting matches the blog (fixed stride) and so does transcoding (H.264); the other two sub-stages move to their own modules. |
+| **3** Captioning | **Cosmos Reason** as a Curator sub-stage (the blog links `cosmos-reason2`) | **M2** runs **Cosmos-Reason1-7B** standalone | Reason 1 is ungated, so participants need no licence click and no Hugging Face token. |
+| **3** Embedding | **Cosmos Embed** — *joint video-text* vectors per clip | **M4** embeds the caption **text only**, with `all-MiniLM-L6-v2` (384-dim) | Text-only embeddings run on CPU in seconds. The cost is real: search matches what the caption *says*, not what the video *shows*. |
+| **4** Search | Path A **OpenSearch Service** + NVIDIA cuVS with **hybrid** text+vector queries · Path B **Cosmos Dataset Search** on **EKS** | **M4** takes Path A — but on OpenSearch **Serverless**, vector-only k-NN | Serverless needs no cluster to size or patch for a one-day workshop. Path B (EKS, its UI and dataset-assembly workflow) is out of scope. |
+| **5** Augmentation | **EC2 + Amazon DCV**. Cosmos Transfer *"requires approximately 65 GB of GPU memory"*, so the blog names **G7e** (RTX PRO 6000 Blackwell, 96 GB) | **M5** runs in a Studio notebook; the verified default `ml.g6.24xlarge` has **24 GB per card**, so it shards and drops to 480p with guardrails off | 24 GB cards are what a workshop can reliably get quota for. `ml.g7e.2xlarge` — the blog's own hardware, one 96 GB card — is selectable if your account has the quota, and costs *less* than the default. |
+| **6** Reconstruction | **NuRec** | **M7** Nerfstudio / gsplat | Already disclosed in M7's header; its final training cell is known-limited. |
+| **7** Training | **Alpamayo** | **M8** LoRA-SFTs Cosmos Reason on nuScenes human labels; **M9** runs Alpamayo *inference* on NVIDIA's released checkpoint | Alpamayo ships no LoRA path and a full fine-tune needs ~123 GiB of weight + gradient + optimizer state. M8's header spells this out. |
+| **8** SiL testing | **AlpaSim** | **M10** visualizes a genuine AlpaSim run executed on a separate GPU EC2 host | AlpaSim is Docker Compose + gRPC; a Studio notebook cannot host it. |
+| *everywhere* | HyperPod, AWS Batch, EKS, EC2 + DCV | single SageMaker Studio instances | One instance per participant per module is what a workshop can provision, bill and tear down. |
+
+**What is *not* a substitution:** the model weights are NVIDIA's real ones, the data is
+real nuScenes, and every output you see was actually computed. Where a result is
+*degraded* rather than absent — M5/M6 resolution, M7's training cell — the module says
+so in its own header.
 
 ---
 

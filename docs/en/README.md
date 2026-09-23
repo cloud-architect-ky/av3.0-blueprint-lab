@@ -30,7 +30,7 @@ Anyone can deploy it into **their own AWS account**.
 | **M0** | Pipeline overview — maps the end-to-end pipeline to the modules (no compute) | `ml.t3.medium` (CPU) |
 | **M1** | Data Exploration — ingest & explore real **nuScenes-mini** sensor data; select scenes | `ml.t3.medium` (CPU) |
 | **M2** | Cosmos Reason Captioning — VLM captions of sampled clips | `ml.g5.12xlarge` (GPU) |
-| **M3** | Cosmos Curator — **NeMo Curator** video curation (split, transcode, filter, dedup) | `ml.g5.12xlarge` (GPU) |
+| **M3** | Cosmos Curator — **NeMo Curator** video curation (split, transcode, motion-filter) | `ml.g5.12xlarge` (GPU) |
 | **M4** | OpenSearch Semantic Search — k-NN retrieval over caption embeddings | `ml.t3.medium` (CPU) |
 | **M5** | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g6.24xlarge` verified) |
 | **M6** | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g6.24xlarge` verified) |

@@ -73,10 +73,12 @@ def _gpu_image_arn(region: str) -> str:
 
 
 # GPU-accelerated SageMaker instance-family prefixes (match config.py).
+# Trailing dots are load-bearing: "ml.g7e.2xlarge" does not start with "ml.g7.".
 _GPU_INSTANCE_PREFIXES = (
     "ml.g4dn.",
     "ml.g5.",
     "ml.g6.",
+    "ml.g7e.",
     "ml.p3.",
     "ml.p4d.",
     "ml.p5.",
@@ -85,6 +87,11 @@ _GPU_INSTANCE_PREFIXES = (
 # Default candidate tier: the 24xlarge+ GPU boxes, cheapest-first. g6 (L4) before
 # g5 (A10G) of the same size — L4 capacity is usually easier and the workshop's
 # GPU modules are verified on g6.24xlarge.
+#
+# g7e is deliberately NOT in this list. It is recognised (prefix + rate above) so
+# `--instances ml.g7e.2xlarge` works and prices correctly, but it stays opt-in:
+# the lab has no g7e quota by default and no verified run on it, so it must not
+# silently become what an unattended grab loop lands on.
 DEFAULT_CANDIDATES = [
     "ml.g6.24xlarge",
     "ml.g5.24xlarge",
@@ -106,6 +113,14 @@ INSTANCE_RATES = {
     "ml.g6.12xlarge": 5.752,
     "ml.g6.24xlarge": 8.344,
     "ml.g6.48xlarge": 16.688,
+    # g7e (RTX PRO 6000 Blackwell, 96 GB/card). 2xl/4xl/8xl = 1 GPU, 12xl = 2,
+    # 24xl = 4, 48xl = 8 — the size is not the GPU count.
+    "ml.g7e.2xlarge": 4.2039,
+    "ml.g7e.4xlarge": 4.9977,
+    "ml.g7e.8xlarge": 6.5853,
+    "ml.g7e.12xlarge": 10.3576,
+    "ml.g7e.24xlarge": 20.7152,
+    "ml.g7e.48xlarge": 41.4304,
     "ml.p4d.24xlarge": 25.251286,
     "ml.p5.48xlarge": 63.296,
 }

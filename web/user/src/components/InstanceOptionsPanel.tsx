@@ -173,7 +173,10 @@ export function InstanceOptionsPanel({
     }
   }
 
-  const isGpuInstance = /^ml\.(g4dn|g5|g6|p3|p4d|p5)\./.test(selectedInstance);
+  // Keep in sync with _GPU_INSTANCE_PREFIXES in infra/lambda/shared/config.py.
+  // g7e must be listed separately from g6/g5 — it is its own family, and an
+  // unmatched GPU instance here shows the CPU-instance copy to the participant.
+  const isGpuInstance = /^ml\.(g4dn|g5|g6|g7e|p3|p4d|p5)\./.test(selectedInstance);
   const canRevert =
     selectedInstance !== module.recommendedInstance || storageAdded !== 0;
 
@@ -435,6 +438,16 @@ function getInstanceDescription(instanceType: string): string {
     "ml.g6.12xlarge": "48 vCPU, 192 GiB, 4× L4 (96 GB) — g5.12xl fallback",
     "ml.g6.24xlarge": "96 vCPU, 384 GiB, 4× L4 (96 GB) — multi-GPU",
     "ml.g6.48xlarge": "192 vCPU, 768 GiB, 8× L4 (192 GB) — multi-GPU",
+    // g7e = RTX PRO 6000 Blackwell, 96 GB PER CARD (verified via
+    // ec2 describe-instance-types). The per-card figure is what M4/M5/M6 branch
+    // on, so it is stated explicitly here: "4× L4 (96 GB)" and
+    // "1× RTX PRO 6000 (96 GB)" are the same total but NOT the same capability.
+    "ml.g7e.2xlarge": "8 vCPU, 64 GiB, 1× RTX PRO 6000 (96 GB/card) — full-res tier",
+    "ml.g7e.4xlarge": "16 vCPU, 128 GiB, 1× RTX PRO 6000 (96 GB/card) — full-res tier",
+    "ml.g7e.8xlarge": "32 vCPU, 256 GiB, 1× RTX PRO 6000 (96 GB/card) — full-res tier",
+    "ml.g7e.12xlarge": "48 vCPU, 512 GiB, 2× RTX PRO 6000 (96 GB/card) — full-res tier",
+    "ml.g7e.24xlarge": "96 vCPU, 1024 GiB, 4× RTX PRO 6000 (96 GB/card) — full-res tier",
+    "ml.g7e.48xlarge": "192 vCPU, 2048 GiB, 8× RTX PRO 6000 (96 GB/card) — full-res tier",
     "ml.p3.2xlarge": "8 vCPU, 61 GiB, 1× V100 (16 GB) — ML training",
     "ml.p4d.24xlarge": "96 vCPU, 1152 GiB, 8× A100 (320 GB) — large-scale ML",
     "ml.p5.48xlarge": "192 vCPU, 2 TiB, 8× H100 (640 GB) — frontier training",

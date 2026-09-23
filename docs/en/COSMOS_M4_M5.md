@@ -144,22 +144,31 @@ offline:
 
 ## Instance / cost notes
 
-- **Not any GPU instance** — both models need ~65 GB to load on ONE GPU, so on
-  24 GB cards the notebook shards with `torchrun` and **requires ≥2 GPUs**. A
-  single-GPU box (e.g. `ml.g6.4xlarge`) hard-fails in the pre-flight cell:
-  `RuntimeError: ... cannot be sharded to fit. Pick a multi-GPU instance`.
+- **Not any GPU instance** — both models need ~65 GB to load on ONE GPU. On
+  24 GB cards the notebook shards with `torchrun` and **requires ≥2 GPUs**, so a
+  *small* single-GPU box (e.g. `ml.g6.4xlarge`) hard-fails in the pre-flight cell:
+  `RuntimeError: ... cannot be sharded to fit. Pick a multi-GPU instance`. Note the
+  guard is `RUN_MODE == "shard" and GPU_COUNT < 2`, so it is about the **card being
+  too small**, not about being single-GPU: one card ≥70 GB takes the `single` path
+  and passes.
 - Cell 2 picks the run strategy from **per-GPU VRAM** (never the sum), so the
   instance you choose changes the *output*, not just the speed:
 
   | per-GPU | Strategy | M4 output | M5 output | Guardrails | Example (~$/hr) |
   |---|---|---|---|---|---|
-  | ≥70 GB | single GPU | 720p | native | ON | `ml.p5.48xlarge` (63.30) |
+  | ≥70 GB | single GPU | 720p | native | ON | `ml.g7e.2xlarge` (**4.20**), `ml.p5.48xlarge` (63.30) |
   | ≥38 GB | N-GPU shard | 720p | native | ON | `ml.p4d.24xlarge` (25.25) |
   | <38 GB | N-GPU shard | 480p, 16/57 frames | 480×832, 45 frames | **OFF** | `ml.g6.24xlarge` (8.34) ← default |
 
   Because every A10G and L4 is 24 GB, **no g5/g6 size reaches the ≥38 GB tier** —
-  a bigger g5/g6 adds GPUs, not per-GPU VRAM. Only p4d (A100 40 GB) and p5
-  (H100 80 GB) do.
+  a bigger g5/g6 adds GPUs, not per-GPU VRAM. The families that do are g7e
+  (RTX PRO 6000 Blackwell, 96 GB/card), p4d (A100 40 GB) and p5 (H100 80 GB).
+
+  **`ml.g7e.2xlarge` is the cheapest top-tier box** — 96 GB on ONE card at
+  ~$4.20/hr, i.e. the `≥70 GB` single-GPU path at *half* the 24 GB default's
+  price. Two caveats: it needs **its own Studio-JupyterLab quota**, and this lab
+  has **no verified g7e run** (the verified runs below are g6.24xlarge and
+  p5.48xlarge). Treat it as a promising opt-in, not the tested path.
 - The 24 GB path also halts if another process already holds GPU memory (the
   "foreign occupancy" check) — close other notebooks' kernels before running.
 - Verified on `ml.g6.24xlarge` (the workshop default, 480p) and on p5.48xlarge

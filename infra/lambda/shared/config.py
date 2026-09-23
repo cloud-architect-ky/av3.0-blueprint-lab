@@ -61,10 +61,19 @@ SMD_IMAGE_VERSION_ALIAS = os.environ.get("SMD_IMAGE_VERSION_ALIAS", "4.2.1")
 NOTEBOOK_LIFECYCLE_CONFIG_ARN = os.environ.get("NOTEBOOK_LIFECYCLE_CONFIG_ARN", "")
 
 # GPU-accelerated SageMaker instance-family prefixes.
+# NOTE the trailing dots: they are load-bearing. "ml.g6e.24xlarge" does NOT start
+# with "ml.g6." (the char after g6 is "e", not "."), so every family needs its own
+# entry. Getting this wrong fails SILENTLY — is_gpu_instance() returns False, the
+# space gets the CPU image, and the notebook dies on
+# `assert torch.cuda.is_available()` on a box with 4 idle GPUs.
+# Only families that also have INSTANCE_RATES entries belong here. A prefix
+# without a rate is harmless (change_instance rejects on the rate table) but
+# implies support that does not exist — so g6e and g7 are deliberately absent.
 _GPU_INSTANCE_PREFIXES = (
     "ml.g4dn.",
     "ml.g5.",
     "ml.g6.",
+    "ml.g7e.",
     "ml.p3.",
     "ml.p4d.",
     "ml.p5.",
@@ -285,7 +294,26 @@ INSTANCE_RATES = {
     "ml.g6.12xlarge": 5.752,
     "ml.g6.24xlarge": 8.344,
     "ml.g6.48xlarge": 16.688,
-    # --- p4d/p5 — the only families clearing M4/M5's 38 GB and M6's 40 GB tiers ---
+    # --- g7e (RTX PRO 6000 Blackwell, 96 GB/card) — the instance the AWS blog
+    #     names for Stage 5, and the CHEAPEST route to M4/M5's top tier. 96 GB
+    #     per card clears their ">= 70 GB per GPU" branch, so Cosmos Transfer /
+    #     Predict load on ONE GPU at full 720p with guardrails ON, and M6 takes
+    #     its verified single-GPU path. ml.g7e.2xlarge ($4.20) therefore beats
+    #     ml.g6.24xlarge ($8.34) on BOTH price and output quality.
+    #     GPU COUNT IS NOT THE SIZE (same trap as g6e) — verified against the
+    #     karpenter instance-type reference:
+    #       2xl / 4xl / 8xl = 1 GPU ;  12xl = 2 ;  24xl = 4 ;  48xl = 8
+    #     Note g6e differs: its 12xlarge has 4 GPUs, g7e's has 2.
+    #     AWS DLAMI release notes flag multi-node errors on g7e.8xlarge and
+    #     suggest g7e.12xlarge instead; irrelevant for single-node notebooks.
+    "ml.g7e.2xlarge": 4.2039,
+    "ml.g7e.4xlarge": 4.9977,
+    "ml.g7e.8xlarge": 6.5853,
+    "ml.g7e.12xlarge": 10.3576,
+    "ml.g7e.24xlarge": 20.7152,
+    "ml.g7e.48xlarge": 41.4304,
+    # --- p4d/p5 — clear M4/M5's 38 GB and M6's 40 GB tiers, but cost far more
+    #     per unit of quality than g7e now does ---
     # NOTE: ml.p3.2xlarge is NOT in the us-west-2 SageMaker price list (V100 is
     # being retired), so this rate is unverifiable and the type is effectively
     # unorderable there. Kept only so is_gpu_instance()/validation stay stable.

@@ -244,7 +244,7 @@ av3.0-blueprint-lab/
 | Scenario | Cost | Notes |
 |---|---|---|
 | Idle (infra only) | **~$1/mo per region** | KMS key. The S3 gateway endpoint is free and there is no NAT Gateway; DynamoDB (on-demand), CloudFront and Cognito are ~$0 at idle. Add **~$87.60/mo per region** only if you enable the 6 VPC interface endpoints (12 ENIs x $0.01/AZ-hour). S3 storage for the model cache is extra (~$2/mo per region). |
-| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 default) — step up to `ml.p4d.24xlarge` ~$25.25/hr only for full-resolution output |
+| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 default). Full-resolution output needs ≥38 GB/GPU: `ml.g7e.2xlarge` ~$4.20/hr is the cheapest route (1× 96 GB — cheaper than the default, but quota defaults to 0 and it is unverified here), `ml.p4d.24xlarge` ~$25.25/hr otherwise |
 | M7 AlpaSim on EC2 | ~$30 one-time (admin) | reference eval on `g6e.12xlarge`; optional participant self-run ~$10.5/hr/host |
 | Full week (mixed) | ~$400–600+ | dominated by the p4d modules and user count |
 

@@ -109,23 +109,31 @@ per GPU** — not total VRAM, and not the instance size number:
 
 | Instance | per-GPU | M4 / M5 output | M6 path | ~$/hr |
 |---|---|---|---|---|
-| **`ml.g6.24xlarge`** (default) | ~22.5 GB | 480p, guardrails **OFF** | sharded `balanced-expert` | **8.34** |
+| **`ml.g6.24xlarge`** (default, **verified**) | ~22.5 GB | 480p, guardrails **OFF** | sharded `balanced-expert` | **8.34** |
+| `ml.g7e.2xlarge` (1× RTX PRO 6000) | **96 GB** | **720p / native, guardrails ON** | **single-GPU** | **4.20** — see caveat below |
 | `ml.g5.24xlarge` | ~22.5 GB | identical to the default | sharded | 10.18 — **no benefit, +22% cost** |
 | `ml.g5.48xlarge` / `ml.g6.48xlarge` | ~22.5 GB | identical to the default | sharded | 20.36 / 16.69 — more GPUs, same tier |
-| **`ml.p4d.24xlarge`** | 40 GB | **720p / native, guardrails ON** | **single-GPU** | **25.25** |
+| `ml.p4d.24xlarge` | 40 GB | 720p / native, guardrails ON | single-GPU | 25.25 |
 | `ml.p5.48xlarge` | 80 GB | 720p / native, guardrails ON | single-GPU | 63.30 |
 
-Two things worth knowing:
+Three things worth knowing:
 
 - **Within the g5 and g6 families, a bigger size adds GPUs — never VRAM per GPU.**
-  Every A10G and every L4 is 24 GB. So no g5/g6 size can reach the 38–40 GB tier;
-  only p4d (A100 40 GB) and p5 (H100 80 GB) can.
+  Every A10G and every L4 is 24 GB. So no g5/g6 size can reach the 38–40 GB tier.
+  The families that can are g7e (96 GB/card), p4d (A100 40 GB) and p5 (H100 80 GB).
 - **24 GB cards are a verified path, not a degraded fallback.** M6 on 24 GB cards was
   run end-to-end with **minADE 0.3779 m, `Status: PASS`** — 0.003 m from the H100
   reference run (see [ALPAMAYO_M6.md](ALPAMAYO_M6.md) "Verified runs").
+- **`ml.g7e.2xlarge` breaks the usual "better costs more" rule.** One RTX PRO 6000
+  Blackwell card holds 96 GB, so it clears the top tier on a *single* GPU at roughly
+  **half the default's price**. Two caveats, both real: this lab has **no verified run
+  on g7e**, and the instance needs **its own Studio-JupyterLab quota** (not granted by
+  default) — ask your workshop admin before selecting it. The default remains the
+  recommended, tested choice.
 
-Pick `ml.p4d.24xlarge` only if you specifically want full-resolution output with the
-guardrail models enabled, and stop it promptly — it is ~3× the default's rate.
+If you want full-resolution output with the guardrail models enabled, try
+`ml.g7e.2xlarge` first (cheapest) and `ml.p4d.24xlarge` otherwise — and stop it
+promptly either way.
 
 ---
 

@@ -112,7 +112,20 @@ def _http_handler(event, context):
     previous_type = item.get("instanceType", "ml.t3.medium")
     space_name = item.get("spaceName", f"{user_id}-space")
 
-    # Validate against module config if user has an active module
+    # Validate against module config if user has an active module.
+    #
+    # NOTE this is dormant in the real workshop: update_progress writes
+    # currentModule as "m0".."m11", and MODULE_CONFIG is keyed
+    # "module-1".."module-5", so the membership test is False and the guard is
+    # skipped. It only fires for the legacy module-N ids.
+    #
+    # It also uses PRICE as a proxy for CAPABILITY, which is no longer sound now
+    # that ml.g7e.* exists: ml.g7e.2xlarge is 96 GB on one card ($4.20/hr) yet
+    # CHEAPER than ml.g6.24xlarge (4× 24 GB, $8.34/hr) while clearing every
+    # per-GPU tier the g6 box fails. If MODULE_CONFIG is ever populated with the
+    # real m0..m11 modules and their GPU defaults, this comparison must become a
+    # capability check (per-GPU VRAM / total VRAM), or it will reject the
+    # strictly better instance as "below minimum requirement".
     if current_module and current_module in MODULE_CONFIG:
         module_default = MODULE_CONFIG[current_module].get("instance_type")
         # Allow the module default and any instance that is equal or higher cost

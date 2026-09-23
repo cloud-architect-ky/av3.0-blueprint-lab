@@ -142,8 +142,20 @@ recommended workhorse for a real room; p4d/p5 remain the "native-resolution / fu
 | ml.g6.12xlarge | L-962247BA | 2 | ≥2 | M2/M3 capacity fallback (4× L4, 96 GB) |
 | **ml.g6.24xlarge** | **L-8ACE1754** | **2** | **≥2** | **M2–M6 workhorse (4× L4, 96 GB) — verified this cycle** |
 | ml.g6.48xlarge | L-125B7142 | 2 | ≥0 | M4/M5/M6 alternative (8× L4) |
+| ml.g7e.2xlarge | L-7A3E0A2C | **0** | ≥0 | M2–M6 **cheapest native-res path** (1× RTX PRO 6000, 96 GB; **defaults to 0 — must request**) |
+| ml.g7e.24xlarge | L-E481E4F8 | **0** | ≥0 | M4/M5/M6 alternative (4× RTX PRO 6000; **defaults to 0**) |
 | ml.p4d.24xlarge | L-AD63F1D2 | 2 | ≥2 | M4, M5, M6 native-res path (8× A100; **defaults to 0 — must request**) |
 | ml.p5.48xlarge | L-B41FBF28 | 1 | ≥1 | Heavy-model fallback (8× H100; us-west-2 / us-east-1 only) |
+
+> **g7e is optional and unverified here.** All six `ml.g7e.*` Studio quotas read
+> **0** in `us-west-2` for this account (verified via `list-service-quotas`), so
+> nobody can select it until you request an increase. It is listed because it is
+> the *cheapest* way to the native-resolution tier — one 96 GB card at ~$4.20/hr
+> beats `ml.p4d.24xlarge` at ~$25.25/hr and even undercuts the 24 GB default
+> (~$8.34/hr) — but **no module has been run end-to-end on g7e in this lab**. If
+> you request it, smoke-test M4 on one user before pointing a room at it. Other
+> g7e sizes (4xl/8xl/12xl/48xl) have quota codes too (L-B7228EBF, L-0407753C,
+> L-5F015F52, L-A48244DF) but are not offered in the dashboard.
 
 Sizing the room: request the **recommended** instance for each module at ≥ the
 number of concurrent participants, and at least the minimum shown for the one or

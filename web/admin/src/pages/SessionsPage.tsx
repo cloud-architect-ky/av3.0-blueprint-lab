@@ -196,6 +196,12 @@ export function SessionsPage() {
             ),
           },
           {
+            id: "region",
+            header: "Region",
+            cell: (s) => s.region || "—",
+            sortingField: "region",
+          },
+          {
             id: "instanceType",
             header: "Instance Type",
             cell: (s) => s.instanceType,

@@ -1,10 +1,12 @@
 """Shared configuration for AV 3.0 Blueprint Lab Lambda functions."""
 
+import json
 import logging
 import os
 import re
 import time
 
+import boto3
 from botocore.exceptions import ClientError
 
 _logger = logging.getLogger()
@@ -69,6 +71,129 @@ SMD_IMAGE_VERSION_ALIAS = os.environ.get("SMD_IMAGE_VERSION_ALIAS", "4.2.1")
 # apps recreated by change_instance / expand_storage re-run notebook sync + env
 # injection. Empty string => omit the LifecycleConfigArn.
 NOTEBOOK_LIFECYCLE_CONFIG_ARN = os.environ.get("NOTEBOOK_LIFECYCLE_CONFIG_ARN", "")
+
+# --- Multi-region control plane ---------------------------------------------
+# One control plane governs SageMaker Studio domains in up to 3 regions, because GPU
+# capacity differs per region. A participant's region is written onto their DynamoDB
+# row at provisioning time and is IMMUTABLE: a UserProfile belongs to exactly one
+# Domain and a Domain is regional, so "move this participant" does not exist — only
+# delete and re-provision.
+#
+# AWS_REGION above is a Lambda RESERVED variable and cannot be overridden
+# (https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html). It
+# therefore only ever means "where this function runs". The TARGET region travels as
+# DATA: on the request for placement decisions, and on the row for everything else.
+#
+# EXPAND PHASE. The single-region scalars above still work and still describe the
+# control region, so a handler that has not been converted yet behaves exactly as it
+# did. REGION_CONFIG is synthesised from those scalars when the stack has not supplied
+# it, which keeps a single-region deploy working unchanged. The scalars are removed
+# only once nothing reads them.
+
+
+def _load_region_config() -> dict:
+    """region -> {domainId, sharedBucket, userBucket, lccArn, cpuImageArn, gpuImageArn}."""
+    raw = os.environ.get("REGION_CONFIG")
+    if raw:
+        cfg = json.loads(raw)
+        if not isinstance(cfg, dict) or not cfg:
+            raise ValueError("REGION_CONFIG must be a non-empty JSON object keyed by region")
+        return cfg
+    # Single-region deploy: derive the one-entry map so both code paths agree.
+    return {
+        AWS_REGION: {
+            "domainId": SAGEMAKER_DOMAIN_ID,
+            "sharedBucket": SHARED_BUCKET_NAME,
+            "userBucket": USER_BUCKET_NAME,
+            "lccArn": NOTEBOOK_LIFECYCLE_CONFIG_ARN,
+            "cpuImageArn": SMD_CPU_IMAGE_ARN,
+            "gpuImageArn": SMD_GPU_IMAGE_ARN,
+        }
+    }
+
+
+REGION_CONFIG = _load_region_config()
+TARGET_REGIONS = sorted(REGION_CONFIG)
+# Where the control plane itself runs. Not the same thing as a participant's region.
+CONTROL_REGION = os.environ.get("CONTROL_REGION") or AWS_REGION
+
+
+class UnknownRegionError(ValueError):
+    """A region that this control plane does not manage.
+
+    Raised rather than falling back to CONTROL_REGION. A fallback would act on the
+    wrong region's domain and buckets and still report success — and for S3
+    specifically that failure is invisible, because botocore silently redirects a
+    mis-regioned request to the correct endpoint for whatever bucket name it was
+    given. A wrong bucket NAME therefore succeeds against the wrong bucket.
+    """
+
+
+def region_config(region: str) -> dict:
+    """Regional identifiers for `region`, or raise. Never defaults."""
+    try:
+        return REGION_CONFIG[region]
+    except KeyError:
+        raise UnknownRegionError(
+            f"Region {region!r} is not managed by this control plane. "
+            f"Managed regions: {', '.join(TARGET_REGIONS)}"
+        ) from None
+
+
+_CLIENT_CACHE: dict = {}
+
+
+def client_for(service: str, region: str):
+    """Memoized boto3 client for (service, region), from the ONE default session.
+
+    Deliberately `boto3.client(...)` and NOT `boto3.session.Session().client(...)`.
+    Clients from DIFFERENT Session objects do not share exception classes — verified
+    on boto3/botocore 1.39.17:
+
+        same default session, two regions -> a.exceptions.ResourceNotFound
+                                             is b.exceptions.ResourceNotFound  True
+        separate Session() objects        -> ... is ...                        False
+        and issubclass(other, mine)                                           False
+
+    So a per-region Session would silently stop every
+    `except client.exceptions.ResourceNotFound` in this file and in delete_user /
+    terminate_session / app_status from catching, turning "the app is already gone"
+    into a 502. One session, explicit region_name.
+    """
+    region_config(region)  # validate before building anything
+    key = (service, region)
+    if key not in _CLIENT_CACHE:
+        _CLIENT_CACHE[key] = boto3.client(service, region_name=region)
+    return _CLIENT_CACHE[key]
+
+
+def domain_id_for(region: str) -> str:
+    """Studio domain id in `region`, or raise if the stack did not supply one."""
+    did = region_config(region).get("domainId") or ""
+    if not did:
+        raise UnknownRegionError(
+            f"No SageMaker domain id configured for region {region!r}. "
+            f"The control plane cannot address a domain it was not told about."
+        )
+    return did
+
+
+def buckets_for(region: str) -> tuple:
+    """(sharedBucket, userBucket) in `region`, or raise.
+
+    Raises rather than falling back for the botocore-redirect reason above: an empty
+    or wrong bucket name does not fail loudly, it succeeds against the wrong bucket.
+    """
+    cfg = region_config(region)
+    shared, user = cfg.get("sharedBucket") or "", cfg.get("userBucket") or ""
+    if not shared or not user:
+        raise UnknownRegionError(
+            f"Bucket names missing for region {region!r} "
+            f"(shared={shared!r}, user={user!r})."
+        )
+    return shared, user
+
+
 
 # GPU-accelerated SageMaker instance-family prefixes.
 # NOTE the trailing dots: they are load-bearing. "ml.g6e.24xlarge" does NOT start

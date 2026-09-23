@@ -75,6 +75,9 @@ def handler(event, context):
                 "status": status,
                 "instanceType": item.get("instanceType", "ml.t3.medium"),
                 "currentModule": item.get("currentModule"),
+                # See list_users: region must be visible or a mis-regioned session
+                # looks identical to a healthy one.
+                "region": item.get("region", ""),
                 "estimatedCost": estimated_cost,
                 "startTime": item.get("createdAt"),
                 "storageGB": item.get("storageGB", 5),

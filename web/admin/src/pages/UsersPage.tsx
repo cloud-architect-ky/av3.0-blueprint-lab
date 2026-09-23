@@ -209,6 +209,15 @@ export function UsersPage() {
             sortingField: "module",
           },
           {
+            // Read-only on purpose: a UserProfile belongs to one regional Domain, so
+            // the region is fixed at provisioning and only delete + re-provision can
+            // change it. Shown because a mis-regioned user otherwise looks healthy.
+            id: "region",
+            header: "Region",
+            cell: (u) => u.region || "—",
+            sortingField: "region",
+          },
+          {
             id: "dashboardLink",
             header: "Dashboard Link",
             cell: (u) =>

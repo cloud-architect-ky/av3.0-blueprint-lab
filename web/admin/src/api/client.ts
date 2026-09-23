@@ -11,6 +11,11 @@ export interface User {
   // Durable participant token used to build the user dashboard link. Optional
   // because rows provisioned before this field was added won't have it.
   participantToken?: string;
+  /**
+   * Region of this user's SageMaker Studio domain. "" for rows provisioned before the
+   * attribute existed. Read-only — see CreateUserRequest.region for why it cannot change.
+   */
+  region?: string;
 }
 
 export interface Session {
@@ -22,6 +27,8 @@ export interface Session {
   startedAt: string;
   gpuType: string | null;
   costToday: number;
+  /** Region this session's instance actually runs in. "" for pre-existing rows. */
+  region?: string;
 }
 
 export interface DailyCost {
@@ -38,6 +45,15 @@ export interface CreateUserRequest {
   name: string;
   email: string;
   module?: string;
+  /**
+   * AWS region for this participant's SageMaker Studio domain. Optional; the backend
+   * defaults to the control-plane region and rejects a region it does not manage.
+   *
+   * IMMUTABLE once provisioned: a UserProfile belongs to exactly one Domain and a
+   * Domain is regional, so there is no "move this participant" operation — only
+   * delete and re-provision. There is deliberately no PATCH route for it.
+   */
+  region?: string;
 }
 
 /** Body of DELETE /users/{id}. */
@@ -122,13 +138,17 @@ class AdminApiClient {
 
   async bulkProvision(
     idToken: string,
-    users: Array<{ name: string; email: string; module?: string }>
+    users: Array<{ name: string; email: string; module?: string; region?: string }>,
+    region?: string
   ): Promise<BulkProvisionResult> {
+    // `region` is the batch-wide default; a per-row region still wins. The backend
+    // validates both against the managed set and rejects the whole upload on a typo,
+    // rather than provisioning half a room into the wrong region.
     return this.request<BulkProvisionResult>(
       "POST",
       "/users/bulk",
       idToken,
-      { users }
+      region ? { users, region } : { users }
     );
   }
 

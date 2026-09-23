@@ -66,6 +66,12 @@ def handler(event, context):
                 "expiresAt": item.get("expiresAtIso"),
                 "createdAt": item.get("createdAt"),
                 "moduleProgress": item.get("moduleProgress", {}),
+                # Which region's Studio domain holds this profile. Surfaced because
+                # without it every region-resolution failure is invisible in the UI —
+                # you would see a normal-looking row for a user whose workspace,
+                # storage and cost all live somewhere else. "" for rows provisioned
+                # before the attribute existed.
+                "region": item.get("region", ""),
             }
         )
 

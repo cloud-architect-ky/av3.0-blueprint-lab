@@ -21,11 +21,13 @@ import boto3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
 
 from config import (
+    CONTROL_REGION,
     NOTEBOOK_TEMPLATES_PREFIX,
     PRESIGNED_URL_EXPIRY,
     SAGEMAKER_DOMAIN_ID,
     SESSIONS_TABLE_NAME,
     SHARED_BUCKET_NAME,
+    TARGET_REGIONS,
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
 )
@@ -101,6 +103,19 @@ def handler(event, context):
 
     if not name:
         raise ApiError(400, "Field 'name' is required")
+
+    # Which region does this participant's Studio domain live in? Optional, defaults
+    # to the control-plane region. Validated against the managed set rather than
+    # accepted blindly: a typo'd region must 400 here, because a UserProfile belongs
+    # to exactly one Domain and a Domain is regional — the choice is IMMUTABLE after
+    # this call, and the only correction is delete + re-provision.
+    region = (body.get("region") or CONTROL_REGION).strip()
+    if region not in TARGET_REGIONS:
+        raise ApiError(
+            400,
+            f"Unknown region '{region}'",
+            details=f"This control plane manages: {', '.join(TARGET_REGIONS)}",
+        )
 
     # Generate identifiers
     user_id = generate_user_id(name)
@@ -212,6 +227,10 @@ def handler(event, context):
         "createdAt": now.isoformat(),
         "status": "active",
         "moduleProgress": {},
+        # The ONLY record of which region's domain holds this user's profile. Every
+        # later handler resolves its SageMaker/S3 clients from this, so the row is
+        # read before teardown starts and deleted last.
+        "region": region,
     }
     table.put_item(Item=item)
     logger.info(f"Saved session to DynamoDB: {user_id}")
@@ -227,4 +246,5 @@ def handler(event, context):
         "status": "active",
         "module": "-",
         "spaceName": space_name,
+        "region": region,
     }

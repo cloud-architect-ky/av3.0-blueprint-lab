@@ -24,11 +24,13 @@ import boto3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
 
 from config import (
+    CONTROL_REGION,
     NOTEBOOK_TEMPLATES_PREFIX,
     PRESIGNED_URL_EXPIRY,
     SAGEMAKER_DOMAIN_ID,
     SESSIONS_TABLE_NAME,
     SHARED_BUCKET_NAME,
+    TARGET_REGIONS,
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
 )
@@ -85,9 +87,16 @@ def copy_notebook_templates(user_id: str) -> None:
 
 
 def provision_single_user(user_data: dict) -> dict:
-    """Provision a single user. Returns result dict with success/failure info."""
+    """Provision a single user. Returns result dict with success/failure info.
+
+    `user_data["region"]` is already validated against TARGET_REGIONS by
+    parse_csv_body. It is recorded on the DynamoDB row here; the SageMaker/S3 calls in
+    this function still target the control region until the per-handler region
+    resolution lands, so today it only ever holds CONTROL_REGION in practice.
+    """
     name = user_data.get("name", "").strip()
     email = user_data.get("email", "").strip()
+    region = (user_data.get("region") or CONTROL_REGION).strip()
 
     if not name:
         return {"name": name, "email": email, "success": False, "error": "Name is required"}
@@ -158,6 +167,9 @@ def provision_single_user(user_data: dict) -> dict:
             "createdAt": now.isoformat(),
             "status": "active",
             "moduleProgress": {},
+            # See create_user: this is the only record of which region's domain holds
+            # the profile, so every later handler resolves its clients from it.
+            "region": region,
         }
         table.put_item(Item=item)
 
@@ -183,11 +195,13 @@ def provision_single_user(user_data: dict) -> dict:
         }
 
 
-def parse_csv_body(body: str, is_base64: bool) -> list[dict]:
+def parse_csv_body(body: str, is_base64: bool, default_region: str = "") -> list[dict]:
     """Parse CSV content from request body.
 
-    Expects columns: name, email (header row required).
+    Expects columns: name, email (header row required). An optional `region` column
+    overrides `default_region` per row.
     """
+    default_region = default_region or CONTROL_REGION
     if is_base64:
         try:
             csv_content = base64.b64decode(body).decode("utf-8")
@@ -213,10 +227,21 @@ def parse_csv_body(body: str, is_base64: bool) -> list[dict]:
         normalized_row = {k.lower().strip(): v for k, v in row.items()}
         name = normalized_row.get("name", "").strip()
         if name:
+            # Optional per-row region column. Validated here so a typo fails the whole
+            # upload up front, rather than provisioning half a room into the wrong
+            # region — the choice is immutable per participant.
+            row_region = (normalized_row.get("region") or default_region).strip()
+            if row_region not in TARGET_REGIONS:
+                raise ApiError(
+                    400,
+                    f"Unknown region '{row_region}' for '{name}'",
+                    details=f"This control plane manages: {', '.join(TARGET_REGIONS)}",
+                )
             users.append(
                 {
                     "name": name,
                     "email": normalized_row.get("email", "").strip(),
+                    "region": row_region,
                 }
             )
 
@@ -232,18 +257,26 @@ def handler(event, context):
 
     is_base64 = event.get("isBase64Encoded", False)
 
-    # Try JSON wrapper first: {"csv": "<base64 data>"}
+    # Batch-wide region default. Initialised HERE, not inside the branch below: a raw
+    # CSV body never enters that branch, so assigning it only there would leave this
+    # name unbound and raise NameError on the parse call. Empty means "let
+    # parse_csv_body fall back to CONTROL_REGION".
+    batch_region = ""
+
+    # Try JSON wrapper first: {"csv": "<base64 data>", "region": "<optional>"}
     if not is_base64:
         try:
             json_body = json.loads(body)
             if isinstance(json_body, dict) and "csv" in json_body:
                 body = json_body["csv"]
                 is_base64 = True
+                # Optional batch-wide default; a per-row `region` column still wins.
+                batch_region = (json_body.get("region") or "").strip()
         except (json.JSONDecodeError, TypeError):
             pass
 
     # Parse CSV
-    users = parse_csv_body(body, is_base64)
+    users = parse_csv_body(body, is_base64, default_region=batch_region)
 
     if not users:
         raise ApiError(400, "No valid users found in CSV")

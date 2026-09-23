@@ -408,7 +408,7 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
   부족이지 쿼터 문제가 아닙니다.
 - **비용 제어** — 일일 예산 알람이 SNS를 통해 `ADMIN_EMAIL`로 이메일을 보냅니다;
   라이프사이클 설정이 유휴 앱을 ~3시간 후 자동 중지합니다; Sessions 탭에서 어떤
-  세션이든 **강제 종료**할 수 있습니다. 유휴 p4d 박스(~$37.69/시간)를 주시하세요.
+  세션이든 **강제 종료**할 수 있습니다. 유휴 p4d 박스(~$25.25/시간)를 주시하세요.
 - **GPU 이미지 알림** — 참가자가 GPU 인스턴스에서 "No GPU detected"를 보고하면,
   CPU 이미지를 실행한 것입니다; Instance Options → GPU 인스턴스 → Apply를 하면
   GPU 이미지가 다시 선택됩니다.

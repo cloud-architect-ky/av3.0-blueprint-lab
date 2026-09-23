@@ -89,9 +89,9 @@ the GPU image and the notebook-sync for you.
 | M1 Data Exploration | `ml.t3.medium` | CPU |
 | **M2 Cosmos Reason Captioning** | **`ml.g5.12xlarge`** | GPU (4× A10G, 96 GB) |
 | M3 Cosmos Curator | `ml.g5.12xlarge` | GPU |
-| M4 Cosmos Transfer (Weather Aug) | `ml.p4d.24xlarge` | GPU (8× A100) |
-| M5 Cosmos Predict (Scenario Gen) | `ml.p4d.24xlarge` | GPU |
-| M6 Alpamayo VLA Inference | `ml.p4d.24xlarge` (or `ml.g5.48xlarge` if p4d/p5 unavailable) | GPU |
+| M4 Cosmos Transfer (Weather Aug) | **`ml.g6.24xlarge`** | GPU (4× L4, 24 GB/GPU) — runs at 480p; see tier table below |
+| M5 Cosmos Predict (Scenario Gen) | **`ml.g6.24xlarge`** | GPU (4× L4) — runs at 480×832; see tier table below |
+| M6 Alpamayo VLA Inference | **`ml.g6.24xlarge`** | GPU (4× L4) — sharded "balanced-expert" path, verified |
 | M7 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU (visualizes genuine AlpaSim results; real sim runs on a GPU EC2 host — admin reference, or your own via SSM) |
 | M8 OpenSearch Semantic Search | `ml.t3.medium` | CPU |
 | M9 HyperPod Distributed Training | `ml.t3.medium` | CPU (submits a real 2-node DDP training job on `ml.m5.xlarge`×2; HyperPod itself is conceptual — see HYPERPOD_M9.md) |
@@ -100,6 +100,32 @@ the GPU image and the notebook-sync for you.
 
 You can also add EBS storage (+50 GB / +200 GB) in the same **Instance Options**
 panel if a module runs out of disk.
+
+### Output quality vs cost — the per-GPU VRAM tiers (M4 / M5 / M6)
+
+**The recommended instance completes every module.** You do not need a bigger box to
+finish the lab. What a bigger box buys is *output quality*, and it depends on **VRAM
+per GPU** — not total VRAM, and not the instance size number:
+
+| Instance | per-GPU | M4 / M5 output | M6 path | ~$/hr |
+|---|---|---|---|---|
+| **`ml.g6.24xlarge`** (default) | ~22.5 GB | 480p, guardrails **OFF** | sharded `balanced-expert` | **8.34** |
+| `ml.g5.24xlarge` | ~22.5 GB | identical to the default | sharded | 10.18 — **no benefit, +22% cost** |
+| `ml.g5.48xlarge` / `ml.g6.48xlarge` | ~22.5 GB | identical to the default | sharded | 20.36 / 16.69 — more GPUs, same tier |
+| **`ml.p4d.24xlarge`** | 40 GB | **720p / native, guardrails ON** | **single-GPU** | **25.25** |
+| `ml.p5.48xlarge` | 80 GB | 720p / native, guardrails ON | single-GPU | 63.30 |
+
+Two things worth knowing:
+
+- **Within the g5 and g6 families, a bigger size adds GPUs — never VRAM per GPU.**
+  Every A10G and every L4 is 24 GB. So no g5/g6 size can reach the 38–40 GB tier;
+  only p4d (A100 40 GB) and p5 (H100 80 GB) can.
+- **24 GB cards are a verified path, not a degraded fallback.** M6 on 24 GB cards was
+  run end-to-end with **minADE 0.3779 m, `Status: PASS`** — 0.003 m from the H100
+  reference run (see [ALPAMAYO_M6.md](ALPAMAYO_M6.md) "Verified runs").
+
+Pick `ml.p4d.24xlarge` only if you specifically want full-resolution output with the
+guardrail models enabled, and stop it promptly — it is ~3× the default's rate.
 
 ---
 
@@ -215,7 +241,7 @@ so just choose the next one down.
 ## 6. Cost & good citizenship
 
 GPU instances are billed by the hour and are **not free** (`ml.g5.12xlarge` ≈
-$6.68/hr; `ml.p4d.24xlarge` ≈ $37.69/hr). Please:
+$7.09/hr; `ml.g6.24xlarge` ≈ $8.34/hr; `ml.p4d.24xlarge` ≈ $25.25/hr). Please:
 
 - **Switch back to `ml.t3.medium`** (via Instance Options) when you move from a
   GPU module to a CPU module (M8, M11) — don't leave a GPU box idle.

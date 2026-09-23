@@ -238,7 +238,7 @@ av3.0-blueprint-lab/
 | 시나리오 | 비용 | 비고 |
 |---|---|---|
 | 유휴(인프라만) | ~$80/월 | NAT Gateway, VPC 엔드포인트, DynamoDB, CloudFront |
-| GPU 모듈 | 시간당 | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$6.68/hr (M2/M3), `ml.p4d.24xlarge` ~$37.69/hr (M4/M5/M6) |
+| GPU 모듈 | 시간당 | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 기본값) — 최대 해상도 출력이 필요할 때만 `ml.p4d.24xlarge` ~$25.25/hr로 상향 |
 | EC2의 M7 AlpaSim | ~$30 일회성(관리자) | `g6e.12xlarge`에서 레퍼런스 평가; 선택적 참가자 자체 실행 시 ~$10.5/hr/호스트 |
 | 전체 1주(혼합) | ~$400–600+ | p4d 모듈과 사용자 수가 비용의 대부분을 차지 |
 

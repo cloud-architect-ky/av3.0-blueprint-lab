@@ -239,7 +239,7 @@ av3.0-blueprint-lab/
 | Scenario | Cost | Notes |
 |---|---|---|
 | Idle (infra only) | ~$80/mo | NAT Gateway, VPC endpoints, DynamoDB, CloudFront |
-| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$6.68/hr (M2/M3), `ml.p4d.24xlarge` ~$37.69/hr (M4/M5/M6) |
+| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M10), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M4/M5/M6 default) — step up to `ml.p4d.24xlarge` ~$25.25/hr only for full-resolution output |
 | M7 AlpaSim on EC2 | ~$30 one-time (admin) | reference eval on `g6e.12xlarge`; optional participant self-run ~$10.5/hr/host |
 | Full week (mixed) | ~$400–600+ | dominated by the p4d modules and user count |
 

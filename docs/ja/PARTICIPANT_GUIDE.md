@@ -88,9 +88,9 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 | M1 Data Exploration | `ml.t3.medium` | CPU |
 | **M2 Cosmos Reason Captioning** | **`ml.g5.12xlarge`** | GPU（4× A10G、96 GB） |
 | M3 Cosmos Curator | `ml.g5.12xlarge` | GPU |
-| M4 Cosmos Transfer (Weather Aug) | `ml.p4d.24xlarge` | GPU（8× A100） |
-| M5 Cosmos Predict (Scenario Gen) | `ml.p4d.24xlarge` | GPU |
-| M6 Alpamayo VLA Inference | `ml.p4d.24xlarge`（p4d/p5 が利用できない場合は `ml.g5.48xlarge`） | GPU |
+| M4 Cosmos Transfer (Weather Aug) | **`ml.g6.24xlarge`** | GPU（4× L4、GPU あたり 24 GB） — 480p で実行; 下のティア表を参照 |
+| M5 Cosmos Predict (Scenario Gen) | **`ml.g6.24xlarge`** | GPU（4× L4） — 480×832 で実行; 下のティア表を参照 |
+| M6 Alpamayo VLA Inference | **`ml.g6.24xlarge`** | GPU（4× L4） — シャーディング "balanced-expert" 経路、検証済み |
 | M7 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU（本物の AlpaSim の結果を可視化。実際のシミュレーションは GPU EC2 ホスト上で実行 — 管理者リファレンス、または SSM 経由の自己実行） |
 | M8 OpenSearch Semantic Search | `ml.t3.medium` | CPU |
 | M9 HyperPod Distributed Training | `ml.t3.medium` | CPU（`ml.m5.xlarge`×2 上で実際の 2 ノード DDP トレーニングジョブを送信。HyperPod 自体は概念的なもの — HYPERPOD_M9.md を参照） |
@@ -99,6 +99,36 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 
 同じ **Instance Options** パネルで、モジュールのディスクが不足した場合に EBS ストレージ
 （+50 GB / +200 GB）を追加することもできます。
+
+### 出力品質とコスト — GPU あたりの VRAM ティア（M4 / M5 / M6）
+
+**推奨インスタンスですべてのモジュールが完走します。** ラボを終えるために大きな
+インスタンスは必要ありません。大きなインスタンスが与えるのは *出力品質* であり、
+それは **GPU あたりの VRAM** で決まります — 合計 VRAM でも、インスタンスのサイズ
+番号でもありません:
+
+| インスタンス | GPU あたり | M4 / M5 の出力 | M6 の経路 | 約 $/時 |
+|---|---|---|---|---|
+| **`ml.g6.24xlarge`**（デフォルト） | 約 22.5 GB | 480p、ガードレール **OFF** | シャーディング `balanced-expert` | **8.34** |
+| `ml.g5.24xlarge` | 約 22.5 GB | デフォルトと同一 | シャーディング | 10.18 — **利点なし、コスト +22%** |
+| `ml.g5.48xlarge` / `ml.g6.48xlarge` | 約 22.5 GB | デフォルトと同一 | シャーディング | 20.36 / 16.69 — GPU 数のみ増加、ティアは同じ |
+| **`ml.p4d.24xlarge`** | 40 GB | **720p / ネイティブ、ガードレール ON** | **単一 GPU** | **25.25** |
+| `ml.p5.48xlarge` | 80 GB | 720p / ネイティブ、ガードレール ON | 単一 GPU | 63.30 |
+
+押さえておきたい 2 点:
+
+- **g5 と g6 のファミリーでは、サイズを上げても増えるのは GPU の数だけで、GPU
+  あたりの VRAM は変わりません。** A10G も L4 もすべて 24 GB です。したがって
+  g5/g6 では 38〜40 GB のティアに到達できず、p4d（A100 40 GB）と p5（H100 80 GB）
+  のみが到達できます。
+- **24 GB のカードは検証済みの経路であり、性能の劣る代替ではありません。** M6 は
+  24 GB のカードで最初から最後まで実行し、**minADE 0.3779 m、`Status: PASS`** を
+  記録しました — H100 のリファレンス実行との差は 0.003 m です
+  （[ALPAMAYO_M6.md](ALPAMAYO_M6.md) の "Verified runs" を参照）。
+
+ガードレールモデルを有効にしたフル解像度の出力が特に必要な場合にのみ
+`ml.p4d.24xlarge` を選び、終わったらすぐに停止してください — デフォルトの約 3 倍の
+料金です。
 
 ---
 
@@ -212,7 +242,7 @@ EC2InsufficientCapacityError: Instance type 'ml.g5.12xlarge' is temporarily unav
 ## 6. コストと良識ある利用
 
 GPU インスタンスは時間単位で課金され、**無料ではありません**（`ml.g5.12xlarge` ≈
-$6.68/時、`ml.p4d.24xlarge` ≈ $37.69/時）。以下にご協力ください：
+$7.09/時、`ml.g6.24xlarge` ≈ $8.34/時、`ml.p4d.24xlarge` ≈ $25.25/時）。以下にご協力ください：
 
 - GPU モジュールから CPU モジュール（M8、M11）に移るときは、**`ml.t3.medium` に戻して**
   ください（Instance Options 経由）— GPU ボックスをアイドル状態のままにしないでください。

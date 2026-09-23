@@ -144,8 +144,27 @@ offline:
 
 ## Instance / cost notes
 
-- Works on any GPU instance (verified on p5.48xlarge H100×8 and p-class). The
-  blocker was never the instance — it was the environment wiring, now scripted.
+- **Not any GPU instance** — both models need ~65 GB to load on ONE GPU, so on
+  24 GB cards the notebook shards with `torchrun` and **requires ≥2 GPUs**. A
+  single-GPU box (e.g. `ml.g6.4xlarge`) hard-fails in the pre-flight cell:
+  `RuntimeError: ... cannot be sharded to fit. Pick a multi-GPU instance`.
+- Cell 2 picks the run strategy from **per-GPU VRAM** (never the sum), so the
+  instance you choose changes the *output*, not just the speed:
+
+  | per-GPU | Strategy | M4 output | M5 output | Guardrails | Example (~$/hr) |
+  |---|---|---|---|---|---|
+  | ≥70 GB | single GPU | 720p | native | ON | `ml.p5.48xlarge` (63.30) |
+  | ≥38 GB | N-GPU shard | 720p | native | ON | `ml.p4d.24xlarge` (25.25) |
+  | <38 GB | N-GPU shard | 480p, 16/57 frames | 480×832, 45 frames | **OFF** | `ml.g6.24xlarge` (8.34) ← default |
+
+  Because every A10G and L4 is 24 GB, **no g5/g6 size reaches the ≥38 GB tier** —
+  a bigger g5/g6 adds GPUs, not per-GPU VRAM. Only p4d (A100 40 GB) and p5
+  (H100 80 GB) do.
+- The 24 GB path also halts if another process already holds GPU memory (the
+  "foreign occupancy" check) — close other notebooks' kernels before running.
+- Verified on `ml.g6.24xlarge` (the workshop default, 480p) and on p5.48xlarge
+  H100×8 (720p). The original blocker was never the instance — it was the
+  environment wiring, now scripted.
 - The env + checkpoints live on the NVMe and are **reset on app restart**; the
   setup cell is idempotent, so re-running after a restart is the intended flow.
   With the offline S3 cache, a fresh app's first run restores checkpoints from S3

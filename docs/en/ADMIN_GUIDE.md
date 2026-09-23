@@ -409,7 +409,7 @@ seeded with the notebook templates, and a personal dashboard link.
   shortage, not a quota problem.
 - **Cost control** — a daily budget alarm emails `ADMIN_EMAIL` via SNS; the
   lifecycle config auto-stops idle apps after ~3 h; you can **force-terminate** any
-  session from the Sessions tab. Watch for idle p4d boxes (~$37.69/hr).
+  session from the Sessions tab. Watch for idle p4d boxes (~$25.25/hr).
 - **GPU image reminder** — if a participant reports "No GPU detected" on a GPU
   instance, they launched the CPU image; Instance Options → GPU instance → Apply
   re-selects the GPU image.

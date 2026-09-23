@@ -234,38 +234,64 @@ def create_app_when_ready(sagemaker_client, domain_id: str, space_name: str,
 # Presigned URL expiry in seconds (8 hours)
 PRESIGNED_URL_EXPIRY = 28800
 
-# SageMaker instance rates (USD per hour)
+# SageMaker instance rates (USD per hour) — THE authoritative table for this repo.
+#
+# SOURCE OF TRUTH: AWS Price List API, service AmazonSageMaker, region us-west-2,
+# platoinstancetype="Studio-JupyterLab", effective 2026-09-01. Re-verify with:
+#   aws pricing get-products --service-code AmazonSageMaker --region us-east-1 \
+#     --filters Type=TERM_MATCH,Field=instanceName,Value=ml.g6.24xlarge \
+#               Type=TERM_MATCH,Field=platoinstancetype,Value=Studio-JupyterLab
+# Do NOT hand-edit these from memory — a stale table silently mis-bills every
+# cost readout (admin Sessions column, get_costs, the daily budget alarm).
+#
+# GPU GEOMETRY (the recurring source of confusion — size is NOT GPU count, and
+# within a family a bigger size adds GPUs, never per-GPU VRAM):
+#   g4dn  = T4    16 GB   | g5  = A10G 24 GB | g6 = L4 24 GB (NOT L40S — that is g6e)
+#   p4d   = A100  40 GB   | p5  = H100 80 GB
+#   4-GPU sizes: g5/g6 .12xlarge and .24xlarge ;  8-GPU: .48xlarge
+# M4/M5 branch on PER-GPU VRAM (>=38 GB -> 720p + guardrails ON), and M6 on
+# >=40 GB (single-GPU "verified path"). So no g5/g6 size can reach the top tier;
+# only p4d (40 GB) / p5 (80 GB) can. 24 GB cards still COMPLETE the lab — see
+# docs/en/ALPAMAYO_M6.md "Verified runs" (minADE 0.3779 m, Status: PASS).
 INSTANCE_RATES = {
+    # --- CPU ---
     "ml.t3.medium": 0.05,
     "ml.t3.large": 0.10,
     "ml.t3.xlarge": 0.20,
-    "ml.t3.2xlarge": 0.40,
-    "ml.m5.large": 0.12,
+    "ml.t3.2xlarge": 0.399,
+    "ml.m5.large": 0.115,
     "ml.m5.xlarge": 0.23,
-    "ml.m5.2xlarge": 0.46,
-    "ml.m5.4xlarge": 0.92,
-    "ml.c5.large": 0.10,
-    "ml.c5.xlarge": 0.20,
-    "ml.c5.2xlarge": 0.41,
-    "ml.g4dn.xlarge": 0.74,
-    "ml.g4dn.2xlarge": 1.12,
+    "ml.m5.2xlarge": 0.461,
+    "ml.m5.4xlarge": 0.922,
+    "ml.c5.large": 0.102,
+    "ml.c5.xlarge": 0.204,
+    "ml.c5.2xlarge": 0.408,
+    # --- g4dn (1x T4 16 GB) ---
+    "ml.g4dn.xlarge": 0.7364,
+    "ml.g4dn.2xlarge": 0.94,
+    # --- g5 (A10G 24 GB/card): 1 GPU up to 8xlarge, 4 on 12/24xlarge, 8 on 48xlarge ---
     "ml.g5.xlarge": 1.41,
-    "ml.g5.2xlarge": 1.69,
+    "ml.g5.2xlarge": 1.52,
     "ml.g5.4xlarge": 2.03,
-    "ml.g5.8xlarge": 2.75,
-    "ml.g5.12xlarge": 6.68,
-    "ml.g5.24xlarge": 11.76,
+    "ml.g5.8xlarge": 3.06,
+    "ml.g5.12xlarge": 7.09,
+    "ml.g5.24xlarge": 10.18,
     "ml.g5.48xlarge": 20.36,
-    # g6 (L40S) — used as a capacity fallback when g5 is unavailable
-    "ml.g6.xlarge": 1.15,
-    "ml.g6.2xlarge": 1.41,
-    "ml.g6.4xlarge": 1.93,
-    "ml.g6.12xlarge": 5.53,
-    "ml.g6.24xlarge": 9.84,
-    "ml.g6.48xlarge": 19.69,
+    # --- g6 (L4 24 GB/card) — capacity fallback when g5 is short. Same per-GPU
+    #     VRAM as g5, so it is a cost/availability choice, not a capability one.
+    "ml.g6.xlarge": 1.127,
+    "ml.g6.2xlarge": 1.222,
+    "ml.g6.4xlarge": 1.654,
+    "ml.g6.12xlarge": 5.752,
+    "ml.g6.24xlarge": 8.344,
+    "ml.g6.48xlarge": 16.688,
+    # --- p4d/p5 — the only families clearing M4/M5's 38 GB and M6's 40 GB tiers ---
+    # NOTE: ml.p3.2xlarge is NOT in the us-west-2 SageMaker price list (V100 is
+    # being retired), so this rate is unverifiable and the type is effectively
+    # unorderable there. Kept only so is_gpu_instance()/validation stay stable.
     "ml.p3.2xlarge": 3.83,
-    "ml.p4d.24xlarge": 37.69,
-    "ml.p5.48xlarge": 113.14,
+    "ml.p4d.24xlarge": 25.251286,
+    "ml.p5.48xlarge": 63.296,
 }
 
 # Module configuration for the workshop

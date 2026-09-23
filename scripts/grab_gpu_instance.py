@@ -94,16 +94,20 @@ DEFAULT_CANDIDATES = [
     "ml.p5.48xlarge",
 ]
 
-# USD/hour, informational only (subset of config.py INSTANCE_RATES).
+# USD/hour, informational only. MUST stay in sync with the authoritative table in
+# infra/lambda/shared/config.py (AWS Price List API, us-west-2, Studio-JupyterLab,
+# effective 2026-09-01). This file cannot import that module (it runs standalone
+# outside the Lambda bundle), so the values are duplicated — if you change one,
+# change both.
 INSTANCE_RATES = {
-    "ml.g5.12xlarge": 6.68,
-    "ml.g5.24xlarge": 11.76,
+    "ml.g5.12xlarge": 7.09,
+    "ml.g5.24xlarge": 10.18,
     "ml.g5.48xlarge": 20.36,
-    "ml.g6.12xlarge": 4.60,
-    "ml.g6.24xlarge": 8.10,
-    "ml.g6.48xlarge": 14.00,
-    "ml.p4d.24xlarge": 32.77,
-    "ml.p5.48xlarge": 98.32,
+    "ml.g6.12xlarge": 5.752,
+    "ml.g6.24xlarge": 8.344,
+    "ml.g6.48xlarge": 16.688,
+    "ml.p4d.24xlarge": 25.251286,
+    "ml.p5.48xlarge": 63.296,
 }
 
 

@@ -95,12 +95,13 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     sourceUrl: "https://github.com/NVIDIA/Cosmos",
     // Stage 3 — Cosmos Reason 1 (Qwen2.5-VL) needs ~96 GB VRAM.
     recommendedInstance: "ml.g5.12xlarge",
-    // ml.g6.12xlarge (L40S) is the capacity fallback when g5 is unavailable.
+    // ml.g6.12xlarge (4× L4 24 GB) is the capacity fallback when g5 is unavailable
+    // — same 96 GB total as g5.12xlarge, so it clears M2's gate identically.
     alternatives: ["ml.g6.12xlarge", "ml.g6.24xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
     storageGB: 100,
     estimatedMinutes: 45,
     awsAdvantage:
-      "ml.g5.12xlarge (4× A10G, 96 GB VRAM) runs the 7B VLM without model sharding; the SageMaker Distribution GPU image is selected automatically.",
+      "ml.g5.12xlarge (4× A10G, 96 GB total VRAM) shards the 7B VLM across GPUs via device_map=\"auto\"; the SageMaker Distribution GPU image is selected automatically. M2 gates on TOTAL VRAM (96 GB), so 4-GPU 24 GB boxes pass — a single large card does not.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m1/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m2/",
     feedsModules: ["m03-cosmos-curator", "m08-opensearch"],
@@ -108,7 +109,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
       "No GPU detected":
         "You are on a CPU instance. Open Instance Options and switch to ml.g5.12xlarge (or ml.g6.12xlarge). The GPU image is applied automatically — reopen the workspace after it restarts.",
       "EC2InsufficientCapacity":
-        "ml.g5.12xlarge capacity is tight in the region. Pick the ml.g6.12xlarge alternative (4× L40S, 192 GB) instead.",
+        "ml.g5.12xlarge capacity is tight in the region. Pick the ml.g6.12xlarge alternative (4× L4, 96 GB total) instead — same total VRAM, so M2 behaves identically.",
     },
   },
   {
@@ -151,11 +152,15 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // Stage 5 — diffusion world model; shards across a multi-GPU box. g6.24xlarge
     // (4× L4, 96 GB) is the verified workshop default at 480p; p4d/p5 give 720p.
     recommendedInstance: "ml.g6.24xlarge",
+    // Ordered by capability, not price: p4d/p5 are the only entries that clear the
+    // per-GPU tier (40/80 GB) for full resolution + guardrails. The g5/g6 entries
+    // are 24 GB/GPU like the default — capacity fallbacks, NOT upgrades
+    // (ml.g5.24xlarge is the same tier at +22% cost).
     alternatives: ["ml.p4d.24xlarge", "ml.p5.48xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.g6.48xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "ml.g6.24xlarge (4× L4, 96 GB) generates weather-augmented driving clips at 480p by sharding across GPUs; EBS-backed scratch keeps large intermediate frames off S3. Step up to ml.p4d.24xlarge (8× A100) for full 720p.",
+      "ml.g6.24xlarge (4× L4, 24 GB/GPU, ~$8.34/hr) generates weather-augmented clips by sharding across GPUs; EBS-backed scratch keeps intermediate frames off S3. The notebook branches on PER-GPU VRAM: under 38 GB it runs 480p with guardrails OFF (16 of 57 frames). For full 720p with guardrails ON you need ≥38 GB/GPU — ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr). No g5/g6 size reaches that tier: bigger sizes add GPUs, not per-GPU VRAM.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m4/",
     feedsModules: [],
@@ -174,11 +179,15 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     license: "NVIDIA Open Model License",
     sourceUrl: "https://github.com/NVIDIA/Cosmos",
     recommendedInstance: "ml.g6.24xlarge",
+    // Ordered by capability, not price: p4d/p5 are the only entries that clear the
+    // per-GPU tier (40/80 GB) for full resolution + guardrails. The g5/g6 entries
+    // are 24 GB/GPU like the default — capacity fallbacks, NOT upgrades
+    // (ml.g5.24xlarge is the same tier at +22% cost).
     alternatives: ["ml.p4d.24xlarge", "ml.p5.48xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.g6.48xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "Synthetic traffic scenarios extend the dataset beyond what was collected — an AWS-native alternative to physical re-drives. ml.g6.24xlarge (4× L4) runs it at 480×832 by sharding across GPUs; p4d/p5 give native resolution.",
+      "Synthetic traffic scenarios extend the dataset beyond what was collected — an AWS-native alternative to physical re-drives. ml.g6.24xlarge (4× L4, 24 GB/GPU, ~$8.34/hr) runs it at 480×832 with guardrails OFF (45 frames), because the notebook branches on PER-GPU VRAM and 24 GB is under its 38 GB threshold. ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) gives native resolution with guardrails ON; no g5/g6 size can reach that tier.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m5/",
     feedsModules: [],
@@ -199,11 +208,15 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // Stage 7 — Vision-Language-Action policy. Balanced-expert placement shards
     // the VLM across GPUs and pins the action stack to cuda:0, so 4× L4 fits.
     recommendedInstance: "ml.g6.24xlarge",
+    // Ordered by capability, not price: p4d/p5 are the only entries that clear the
+    // per-GPU tier (40/80 GB) for full resolution + guardrails. The g5/g6 entries
+    // are 24 GB/GPU like the default — capacity fallbacks, NOT upgrades
+    // (ml.g5.24xlarge is the same tier at +22% cost).
     alternatives: ["ml.p4d.24xlarge", "ml.p5.48xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.g6.48xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "ml.g6.24xlarge (4× L4, 96 GB) runs the 10B VLA policy for driving-action inference via balanced-expert GPU placement; results feed directly into closed-loop simulation. p4d/p5 also work if you have the quota.",
+      "ml.g6.24xlarge (4× L4, 24 GB/GPU, ~$8.34/hr) runs the 10B VLA policy via balanced-expert placement — the VLM shards across GPUs while the action stack is pinned to cuda:0; results feed closed-loop simulation. This path is verified (docs/en/ALPAMAYO_M6.md: minADE 0.3779 m, Status: PASS). A single GPU ≥40 GB (ml.p4d.24xlarge, ~$25.25/hr) instead takes the simpler single-device path; no g5/g6 size has a 40 GB card.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m6/",
     feedsModules: ["m07-alpasim"],

@@ -91,9 +91,9 @@ GPU 이미지와 노트북 동기화를 대신 처리합니다.
 | M1 데이터 탐색 | `ml.t3.medium` | CPU |
 | **M2 Cosmos Reason 캡셔닝** | **`ml.g5.12xlarge`** | GPU (4× A10G, 96 GB) |
 | M3 Cosmos Curator | `ml.g5.12xlarge` | GPU |
-| M4 Cosmos Transfer (날씨 증강) | `ml.p4d.24xlarge` | GPU (8× A100) |
-| M5 Cosmos Predict (시나리오 생성) | `ml.p4d.24xlarge` | GPU |
-| M6 Alpamayo VLA 추론 | `ml.p4d.24xlarge` (p4d/p5 사용 불가 시 `ml.g5.48xlarge`) | GPU |
+| M4 Cosmos Transfer (날씨 증강) | **`ml.g6.24xlarge`** | GPU (4× L4, GPU당 24 GB) — 480p로 실행; 아래 티어 표 참조 |
+| M5 Cosmos Predict (시나리오 생성) | **`ml.g6.24xlarge`** | GPU (4× L4) — 480×832로 실행; 아래 티어 표 참조 |
+| M6 Alpamayo VLA 추론 | **`ml.g6.24xlarge`** | GPU (4× L4) — 샤딩 "balanced-expert" 경로, 검증됨 |
 | M7 AlpaSim 폐루프 평가 | `ml.t3.medium` | CPU (실제 AlpaSim 결과를 시각화; 실제 시뮬레이션은 GPU EC2 호스트에서 실행 — 관리자 레퍼런스 또는 SSM을 통한 본인 실행) |
 | M8 OpenSearch 시맨틱 검색 | `ml.t3.medium` | CPU |
 | M9 HyperPod 분산 학습 | `ml.t3.medium` | CPU (`ml.m5.xlarge`×2에서 실제 2노드 DDP 학습 작업 제출; HyperPod 자체는 개념적 — HYPERPOD_M9.md 참조) |
@@ -102,6 +102,32 @@ GPU 이미지와 노트북 동기화를 대신 처리합니다.
 
 모듈의 디스크가 부족한 경우 동일한 **Instance Options** 패널에서 EBS
 스토리지(+50 GB / +200 GB)를 추가할 수도 있습니다.
+
+### 출력 품질 vs 비용 — GPU당 VRAM 티어 (M4 / M5 / M6)
+
+**권장 인스턴스로 모든 모듈이 완주합니다.** 랩을 끝내기 위해 더 큰 박스가 필요하지
+않습니다. 더 큰 박스가 주는 것은 *출력 품질*이며, 이는 **GPU당 VRAM**에 달려
+있습니다 — 총 VRAM도, 인스턴스 크기 숫자도 아닙니다:
+
+| 인스턴스 | GPU당 | M4 / M5 출력 | M6 경로 | ~$/hr |
+|---|---|---|---|---|
+| **`ml.g6.24xlarge`** (기본값) | ~22.5 GB | 480p, 가드레일 **OFF** | 샤딩 `balanced-expert` | **8.34** |
+| `ml.g5.24xlarge` | ~22.5 GB | 기본값과 동일 | 샤딩 | 10.18 — **이득 없음, +22% 비용** |
+| `ml.g5.48xlarge` / `ml.g6.48xlarge` | ~22.5 GB | 기본값과 동일 | 샤딩 | 20.36 / 16.69 — GPU 수만 늘고 티어는 동일 |
+| **`ml.p4d.24xlarge`** | 40 GB | **720p / 네이티브, 가드레일 ON** | **단일 GPU** | **25.25** |
+| `ml.p5.48xlarge` | 80 GB | 720p / 네이티브, 가드레일 ON | 단일 GPU | 63.30 |
+
+알아둘 점 두 가지:
+
+- **g5·g6 패밀리에서는 사이즈를 올리면 GPU 개수만 늘고, GPU당 VRAM은 그대로입니다.**
+  A10G도 L4도 전부 24 GB입니다. 따라서 g5/g6로는 38–40 GB 티어에 도달할 수 없고,
+  p4d(A100 40 GB)와 p5(H100 80 GB)만 가능합니다.
+- **24 GB 카드는 검증된 경로이며, 성능이 떨어지는 임시 대안이 아닙니다.** M6은 24 GB
+  카드에서 처음부터 끝까지 실행해 **minADE 0.3779 m, `Status: PASS`** 를 기록했습니다 —
+  H100 레퍼런스 실행과 0.003 m 차이입니다([ALPAMAYO_M6.md](ALPAMAYO_M6.md) "Verified runs" 참조).
+
+가드레일 모델을 켠 최대 해상도 출력이 특별히 필요할 때만 `ml.p4d.24xlarge`를 고르고,
+끝나면 즉시 정지하세요 — 기본값의 약 3배 요금입니다.
 
 ---
 
@@ -217,7 +243,7 @@ Apply & Restart한 후 계속 진행하세요.
 ## 6. 비용 및 올바른 사용 태도
 
 GPU 인스턴스는 시간 단위로 과금되며 **무료가 아닙니다**(`ml.g5.12xlarge` ≈
-시간당 $6.68; `ml.p4d.24xlarge` ≈ 시간당 $37.69). 다음 사항을 지켜주세요:
+시간당 $7.09; `ml.g6.24xlarge` ≈ 시간당 $8.34; `ml.p4d.24xlarge` ≈ 시간당 $25.25). 다음 사항을 지켜주세요:
 
 - GPU 모듈에서 CPU 모듈(M8, M11)로 이동할 때는 (Instance Options를 통해)
   **`ml.t3.medium`으로 다시 전환**하세요 — GPU 인스턴스를 유휴 상태로 두지 마세요.

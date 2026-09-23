@@ -85,6 +85,8 @@ restart-jupyter-server
 # the -{region} suffix is exactly such a change). Ordinary edits to
 # _NOTEBOOK_SYNC_SCRIPT_TEMPLATE below rotate the LCC name on their own.
 _LCC_CONTENT_REV = "r2-region-suffixed-buckets"
+# Same idea for the idle-shutdown LCC (see SageMakerConstruct).
+_IDLE_CONTENT_REV = "r1"
 
 _NOTEBOOK_SYNC_SCRIPT_TEMPLATE = """\
 #!/bin/bash
@@ -473,13 +475,29 @@ class SageMakerConstruct(Construct):
         encoded_script = base64.b64encode(
             _IDLE_SHUTDOWN_SCRIPT.encode("utf-8")
         ).decode("utf-8")
+        # Revision suffix for the name (see the comment on the resource below).
+        # Derived from the script so editing the script moves the name automatically;
+        # bump _IDLE_CONTENT_REV by hand if only the surrounding props change.
+        _idle_rev = hashlib.sha256(
+            (_IDLE_CONTENT_REV + _IDLE_SHUTDOWN_SCRIPT).encode()
+        ).hexdigest()[:8]
 
         self._lifecycle_config = sagemaker.CfnStudioLifecycleConfig(
             self,
             "IdleShutdownLifecycleConfig",
             studio_lifecycle_config_app_type="JupyterServer",
             studio_lifecycle_config_content=encoded_script,
-            studio_lifecycle_config_name="av30lab-idle-shutdown-3h",
+            # Content-derived name, for the same reason as the notebook LCC below: a
+            # StudioLifecycleConfig is immutable, so ANY change to the script (or even
+            # to a stack tag, which SageMaker treats as replacement-requiring) forces
+            # replacement — and CloudFormation cannot replace a custom-named resource
+            # whose name stays the same. With a fixed name the deploy hard-fails with
+            # "Rename av30lab-idle-shutdown-3h and update the stack again". Nothing
+            # resolves this LCC by name (the domain references it by ARN), so the name
+            # is free to move.
+            studio_lifecycle_config_name=(
+                f"av30lab-idle-shutdown-{_idle_rev}"
+            ),
         )
 
         # JupyterLab lifecycle config: sync notebooks from S3 to the EFS home and

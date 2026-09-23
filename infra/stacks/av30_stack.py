@@ -25,9 +25,25 @@ class Av30BlueprintLabStack(cdk.Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # Apply project-level tags
+        # Apply project-level tags.
+        #
+        # `Owner` is settable per deployment (`-c owner_tag=...`) because SageMaker
+        # treats Tags as REPLACEMENT-REQUIRING, and several of its resources carry a
+        # fixed custom name. Changing this one cosmetic value therefore forces
+        # CloudFormation to replace the Studio domain and the idle-shutdown lifecycle
+        # config — and since their names do not change, CFN refuses outright:
+        #
+        #   CloudFormation cannot update a stack when a custom-named resource requires
+        #   replacing. Rename av30lab-idle-shutdown-3h and update the stack again.
+        #
+        # That is exactly what happened updating a stack deployed before this repo was
+        # sanitised for public release (it had Owner=<a person>). A fresh deployment
+        # never sees it; an existing one can now keep its tag and get a small, safe
+        # update instead of a domain rebuild that also orphans the domain's EFS.
         cdk.Tags.of(self).add("Project", "av30-blueprint-lab")
-        cdk.Tags.of(self).add("Owner", "av30-blueprint-lab")
+        cdk.Tags.of(self).add(
+            "Owner", self.node.try_get_context("owner_tag") or "av30-blueprint-lab"
+        )
 
         # Network layer: NAT-free VPC with the free S3 gateway endpoint.
         # The 6 paid interface endpoints (~$87.60/month per region) are OFF by

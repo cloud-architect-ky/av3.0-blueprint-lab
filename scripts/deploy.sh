@@ -6,11 +6,50 @@ ADMIN_IP_ALLOWLIST="${ADMIN_IP_ALLOWLIST:-0.0.0.0/0}"
 REGION="${AWS_REGION:-us-west-2}"
 STACK_NAME="Av30BlueprintLabStack"
 
+# --- Where am I actually deploying? -------------------------------------------
+# This script uses the ambient credential chain (no --profile anywhere), so an
+# AWS_PROFILE left over from unrelated work silently sends the WHOLE lab — Studio
+# domain, buckets, Cognito, CloudFront — into someone else's account. That is not
+# hypothetical: it nearly happened here, with AWS_PROFILE=bedrock / us-east-1
+# resolving to a different account than the lab's.
+#
+# So: print the resolved identity before doing anything, and hard-fail on a
+# mismatch when EXPECTED_ACCOUNT_ID is set. Setting it is strongly recommended and
+# costs nothing:
+#     EXPECTED_ACCOUNT_ID=123456789012 AWS_PROFILE=... AWS_REGION=... ./scripts/deploy.sh
+CALLER=$(aws sts get-caller-identity --output json 2>/dev/null) || {
+    echo "ERROR: cannot resolve AWS credentials. Set AWS_PROFILE (and AWS_REGION)." >&2
+    exit 1
+}
+ACCOUNT_ID=$(echo "$CALLER" | jq -r '.Account')
+CALLER_ARN=$(echo "$CALLER" | jq -r '.Arn')
+if [ -n "${AWS_PROFILE:-}" ]; then
+    CRED_SOURCE="AWS_PROFILE=$AWS_PROFILE"
+else
+    CRED_SOURCE="the default credential chain"
+fi
+
 echo "=== AV 3.0 Blueprint Lab Deployment ==="
-echo "Region: $REGION"
-echo "Admin: $ADMIN_EMAIL"
-echo "IP Allowlist: $ADMIN_IP_ALLOWLIST"
+echo "Account:       $ACCOUNT_ID"
+echo "Region:        $REGION"
+echo "Identity:      $CALLER_ARN"
+echo "Credentials:   $CRED_SOURCE"
+echo "Admin:         $ADMIN_EMAIL"
+echo "IP Allowlist:  $ADMIN_IP_ALLOWLIST"
 echo ""
+
+if [ -n "${EXPECTED_ACCOUNT_ID:-}" ] && [ "$ACCOUNT_ID" != "$EXPECTED_ACCOUNT_ID" ]; then
+    echo "ERROR: account mismatch — refusing to deploy." >&2
+    echo "  EXPECTED_ACCOUNT_ID = $EXPECTED_ACCOUNT_ID" >&2
+    echo "  resolved account    = $ACCOUNT_ID  (from $CRED_SOURCE)" >&2
+    echo "  Fix AWS_PROFILE / AWS_REGION and re-run." >&2
+    exit 1
+fi
+if [ -z "${EXPECTED_ACCOUNT_ID:-}" ]; then
+    echo "NOTE: EXPECTED_ACCOUNT_ID is not set, so the account above is NOT being checked."
+    echo "      Set it to guard against deploying into the wrong account."
+    echo ""
+fi
 
 cd "$(dirname "$0")/.."
 
@@ -23,9 +62,17 @@ if [ ! -d ".venv" ]; then
 else
     source .venv/bin/activate
 fi
-npx cdk deploy --require-approval never \
-    --context admin_email="$ADMIN_EMAIL" \
-    --context admin_ip_allowlist="$ADMIN_IP_ALLOWLIST"
+# OWNER_TAG: only needed when UPDATING a stack that was deployed with a different
+# Owner tag. SageMaker treats Tags as replacement-requiring, so changing this value
+# would rebuild the Studio domain (new domain id, orphaned EFS) — or hard-fail on a
+# custom-named resource whose name does not change. Leave unset for a fresh deploy.
+CDK_CONTEXT=(--context admin_email="$ADMIN_EMAIL"
+             --context admin_ip_allowlist="$ADMIN_IP_ALLOWLIST")
+if [ -n "${OWNER_TAG:-}" ]; then
+    echo "    (preserving Owner tag: $OWNER_TAG)"
+    CDK_CONTEXT+=(--context owner_tag="$OWNER_TAG")
+fi
+npx cdk deploy --require-approval never "${CDK_CONTEXT[@]}"
 cd ..
 
 echo ">>> Step 2/6: Reading stack outputs..."

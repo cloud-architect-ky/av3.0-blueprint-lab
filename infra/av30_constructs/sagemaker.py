@@ -34,7 +34,12 @@ def _load_smd_images():
     return mod
 
 
-smd_image_arn = _load_smd_images().smd_image_arn
+_smd_images = _load_smd_images()
+# Re-exported so av30_stack.py (and anything else in the CDK app) can reach the
+# tables without a third copy of the by-path loader.
+smd_image_arn = _smd_images.smd_image_arn
+first_party_image_arn = _smd_images.first_party_image_arn
+supported_regions = _smd_images.supported_regions
 
 
 _IDLE_SHUTDOWN_SCRIPT = """\

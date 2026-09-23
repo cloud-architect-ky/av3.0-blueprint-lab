@@ -71,8 +71,24 @@ export function UsersPage() {
     if (!idToken) return;
     setDeletingUserId(user.userId);
     try {
-      await apiClient.deleteUser(idToken, user.userId);
-      addFlash({ type: "success", content: `User ${user.name} deleted.` });
+      const res = await apiClient.deleteUser(idToken, user.userId);
+      // The OpenSearch Serverless teardown is best-effort and CAN fail while the rest
+      // of the delete succeeds. Reporting an unconditional "deleted" here hid exactly
+      // that case, leaving a collection billing at its 2-OCU floor with nothing on
+      // screen to say so. Show the AWS error codes and point at the sweeper.
+      if (res?.aoss && res.aoss.complete === false) {
+        addFlash({
+          type: "warning",
+          content:
+            `User ${user.name} deleted, but the OpenSearch Serverless cleanup did not ` +
+            `complete (${res.aoss.reasons.join(", ") || "unknown"}). Collection ` +
+            `"${res.aoss.collection}" may still exist and bill. ConflictException is ` +
+            `normal right after a delete — run scripts/teardown.sh to sweep it. ` +
+            `Anything else (e.g. AccessDeniedException) needs attention.`,
+        });
+      } else {
+        addFlash({ type: "success", content: `User ${user.name} deleted.` });
+      }
       setConfirmDeleteUser(null);
       await fetchUsers();
     } catch (err) {

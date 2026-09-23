@@ -63,7 +63,10 @@ val() { echo "$OUTPUTS" | jq -r --arg k "$1" '.[]|select(.OutputKey==$k)|.Output
 DOMAIN=$(val SageMakerDomainId); [ -z "$DOMAIN" ] && DOMAIN="d-on0ous0ufsac"
 WS_ARN=$(val UserWorkspaceBucketArn)
 USER_WS_BUCKET="${WS_ARN#arn:aws:s3:::}"
-[ -z "$USER_WS_BUCKET" ] && USER_WS_BUCKET="av30lab-user-workspace-${ACCOUNT}"
+# $REGION is part of the bucket name. Without it this fallback names a bucket that
+# does not exist, so the sweep below would report success while the real workspace
+# bucket (and its per-participant data) is left behind, still billing.
+[ -z "$USER_WS_BUCKET" ] && USER_WS_BUCKET="av30lab-user-workspace-${ACCOUNT}-${REGION}"
 echo "  Domain: $DOMAIN   Workspace bucket: $USER_WS_BUCKET"; echo ""
 
 # AOSS collection name — byte-matches infra/lambda/shared/config.aoss_collection_name

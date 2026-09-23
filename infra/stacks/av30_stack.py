@@ -12,7 +12,7 @@ from aws_cdk import aws_wafv2 as wafv2
 from av30_constructs.network import NetworkConstruct
 from av30_constructs.storage import StorageConstruct
 from av30_constructs.database import DatabaseConstruct
-from av30_constructs.sagemaker import SageMakerConstruct
+from av30_constructs.sagemaker import SageMakerConstruct, first_party_image_arn
 from av30_constructs.auth import AuthConstruct
 from av30_constructs.monitoring import MonitoringConstruct
 from av30_constructs.api import ApiConstruct
@@ -57,8 +57,13 @@ class Av30BlueprintLabStack(cdk.Stack):
             vpc=network.vpc,
             shared_data_bucket=storage.shared_data_bucket,
             user_workspace_bucket=storage.user_workspace_bucket,
+            # jupyter-server-3 is a FIRST-PARTY image, whose owning account is a
+            # different series from the SageMaker Distribution accounts AND differs per
+            # region (us-west-2 236514542706, us-east-1 081325390199, ...). It was
+            # pinned to the us-west-2 account, so every other region got an ARN for an
+            # image that does not exist. Resolved from the shared table instead.
             sagemaker_image_arn=self.node.try_get_context("sagemaker_image_arn")
-            or f"arn:aws:sagemaker:{self.region}:236514542706:image/jupyter-server-3",
+            or first_party_image_arn(self.region, "jupyter-server-3"),
         )
 
         # Auth layer: Cognito User Pool + WAF WebACL with IP allowlist

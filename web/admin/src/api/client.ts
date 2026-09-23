@@ -40,6 +40,30 @@ export interface CreateUserRequest {
   module?: string;
 }
 
+/** Body of DELETE /users/{id}. */
+export interface DeleteUserResult {
+  deleted: boolean;
+  userId: string;
+  filesDeleted: number;
+  /**
+   * OpenSearch Serverless teardown, which is deliberately best-effort so an AOSS
+   * hiccup cannot block the SageMaker/S3/DynamoDB teardown. `complete: false` means a
+   * collection or policy may still exist — and an orphaned AOSS collection bills at a
+   * 2-OCU floor indefinitely, so this must be shown to the admin, not swallowed.
+   * `reasons` carries AWS error CODES (e.g. "AccessDeniedException",
+   * "ConflictException"); ConflictException is expected right after a delete, while
+   * the collection is still DELETING, and the teardown.sh sweep reaps it later.
+   */
+  aoss?: {
+    collection: string;
+    collectionFound: boolean;
+    collectionDeleted: boolean;
+    policiesDeleted: string[];
+    complete: boolean;
+    reasons: string[];
+  };
+}
+
 class AdminApiClient {
   private getHeaders(idToken: string): HeadersInit {
     return {
@@ -153,9 +177,14 @@ class AdminApiClient {
    * Permanently delete a user and all their resources (SageMaker app/space/
    * profile, S3 workspace files, DynamoDB row). Backend: DELETE /users/{id}
    * (Cognito auth). Not reversible.
+   *
+   * Returns the body rather than void: the handler's OpenSearch Serverless teardown
+   * is best-effort and reports `aoss.complete === false` when a collection may still
+   * exist. An orphaned AOSS collection bills at a 2-OCU floor indefinitely, so that
+   * signal must reach the admin instead of being thrown away.
    */
-  async deleteUser(idToken: string, userId: string): Promise<void> {
-    return this.request<void>("DELETE", `/users/${userId}`, idToken);
+  async deleteUser(idToken: string, userId: string): Promise<DeleteUserResult> {
+    return this.request<DeleteUserResult>("DELETE", `/users/${userId}`, idToken);
   }
 }
 

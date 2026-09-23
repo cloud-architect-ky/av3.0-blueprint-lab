@@ -157,8 +157,11 @@ if [ -z "$HF_CACHE_S3" ]; then
     # Derive the shared bucket from the caller's env, else best-effort default.
     _shared="${SHARED_BUCKET:-}"
     if [ -z "$_shared" ]; then
+        # Per-region bucket name (infra/av30_constructs/storage.py) — the region is
+        # part of the name, so an un-suffixed guess resolves to nothing.
         _acct="$(aws sts get-caller-identity --query Account --output text 2>/dev/null || true)"
-        [ -n "$_acct" ] && _shared="av30lab-shared-data-${_acct}"
+        _reg="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || true)}}"
+        [ -n "$_acct" ] && [ -n "$_reg" ] && _shared="av30lab-shared-data-${_acct}-${_reg}"
     fi
     [ -n "$_shared" ] && HF_CACHE_S3="s3://${_shared}/hf-cache/hub/"
 fi

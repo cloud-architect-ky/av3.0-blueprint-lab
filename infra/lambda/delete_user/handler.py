@@ -68,17 +68,31 @@ def cleanup_aoss(user_id: str) -> dict:
     name = aoss_collection_name(user_id)
     result = {
         "collection": name,
+        "collectionFound": False,
         "collectionDeleted": False,
         "policiesDeleted": [],
         "complete": True,
         "reasons": [],
     }
 
+    def _why(exc: Exception) -> str:
+        """Identify a failure usefully.
+
+        type(exc).__name__ is almost always the string "ClientError" for a botocore
+        failure, which tells an operator nothing: an AccessDeniedException (needs a
+        policy fix, the collection will bill forever) and a ConflictException (expected
+        while the collection is DELETING, self-heals) both reported identically. Prefer
+        the AWS error CODE.
+        """
+        code = getattr(exc, "response", {}).get("Error", {}).get("Code")
+        return code or type(exc).__name__
+
     # 1) Delete the collection (needs the id from batch_get_collection).
     try:
         resp = aoss.batch_get_collection(names=[name])
         details = resp.get("collectionDetails", [])
         if details:
+            result["collectionFound"] = True
             coll_id = details[0]["id"]
             aoss.delete_collection(id=coll_id)  # async: enters DELETING
             result["collectionDeleted"] = True  # QUEUED, not confirmed gone
@@ -87,7 +101,7 @@ def cleanup_aoss(user_id: str) -> dict:
             logger.info(f"No aoss collection {name} (user never ran M4)")
     except Exception as e:  # noqa: BLE001 — best-effort, but now RECORDED
         result["complete"] = False
-        result["reasons"].append(f"collection:{type(e).__name__}")
+        result["reasons"].append(f"collection:{_why(e)}")
         logger.warning(f"aoss collection cleanup for {name}: {e}")
 
     # 2) Delete the security + access policies. Names/types match M4.
@@ -105,7 +119,7 @@ def cleanup_aoss(user_id: str) -> dict:
             # DELETING (it still references the policy) — the teardown.sh sweep
             # reaps these once the collection is gone.
             result["complete"] = False
-            result["reasons"].append(f"{pname}:{type(e).__name__}")
+            result["reasons"].append(f"{pname}:{_why(e)}")
             logger.warning(f"aoss policy cleanup for {pname}: {e}")
 
     return result

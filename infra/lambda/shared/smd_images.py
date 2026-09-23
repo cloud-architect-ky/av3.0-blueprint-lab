@@ -65,6 +65,43 @@ SMD_OWNER_ACCOUNT_BY_REGION: dict[str, str] = {
     "me-central-1": "358593528301",
 }
 
+# region -> account that owns the FIRST-PARTY SageMaker images in that region.
+#
+# A SECOND, UNRELATED SERIES. The same AWS page publishes two columns: "Image ARN
+# Format" (first-party images such as `jupyter-server-3`, `sagemaker-data-science-v5`)
+# and "SageMaker Distribution Image ARN Format". The accounts differ between the two
+# even within one region — us-west-2 is 236514542706 for first-party and
+# 542918446943 for Distribution. Mixing them up produces a valid-looking ARN for an
+# image that does not exist, with the same silent, per-participant failure mode.
+#
+# Used for the Studio domain's JupyterServer default image
+# (infra/stacks/av30_stack.py), which was likewise pinned to the us-west-2 account.
+FIRST_PARTY_IMAGE_ACCOUNT_BY_REGION: dict[str, str] = {
+    "us-east-1": "081325390199",
+    "us-east-2": "429704687514",
+    "us-west-1": "742091327244",
+    "us-west-2": "236514542706",
+    "af-south-1": "559312083959",
+    "ap-east-1": "493642496378",
+    "ap-south-1": "394103062818",
+    "ap-northeast-1": "102112518831",
+    "ap-northeast-2": "806072073708",
+    "ap-northeast-3": "792733760839",
+    "ap-southeast-1": "492261229750",
+    "ap-southeast-2": "452832661640",
+    "ap-southeast-3": "276181064229",
+    "ca-central-1": "310906938811",
+    "eu-central-1": "936697816551",
+    "eu-west-1": "470317259841",
+    "eu-west-2": "712779665605",
+    "eu-west-3": "615547856133",
+    "eu-north-1": "243637512696",
+    "eu-south-1": "592751261982",
+    "sa-east-1": "782484402741",
+    "me-south-1": "117516905037",
+    "me-central-1": "103105715889",
+}
+
 # The two Distribution images this lab uses. "cpu" / "gpu" are the resource-identifier
 # suffixes, not tags — the version is pinned separately via SageMakerImageVersionAlias.
 _VARIANTS = ("cpu", "gpu")
@@ -102,5 +139,30 @@ def smd_image_arn(region: str, variant: str) -> str:
     return f"arn:aws:sagemaker:{region}:{account}:image/sagemaker-distribution-{variant}"
 
 
+def first_party_image_arn(region: str, resource_identifier: str) -> str:
+    """Full ARN for a FIRST-PARTY SageMaker image (not a Distribution image).
+
+    >>> first_party_image_arn("us-west-2", "jupyter-server-3")
+    'arn:aws:sagemaker:us-west-2:236514542706:image/jupyter-server-3'
+    """
+    if not resource_identifier:
+        raise ValueError("resource_identifier is required, e.g. 'jupyter-server-3'")
+    try:
+        account = FIRST_PARTY_IMAGE_ACCOUNT_BY_REGION[region]
+    except KeyError:
+        raise UnsupportedRegionError(
+            f"No first-party SageMaker image account known for region {region!r}. "
+            f"Note this is a DIFFERENT account series from the Distribution images — "
+            f"take it from the 'Image ARN Format' column (not 'SageMaker Distribution "
+            f"Image ARN Format') at "
+            f"https://docs.aws.amazon.com/sagemaker/latest/dg/notebooks-available-images.html "
+            f"and add it to FIRST_PARTY_IMAGE_ACCOUNT_BY_REGION in "
+            f"infra/lambda/shared/smd_images.py. Supported today: "
+            f"{', '.join(sorted(FIRST_PARTY_IMAGE_ACCOUNT_BY_REGION))}"
+        ) from None
+    return f"arn:aws:sagemaker:{region}:{account}:image/{resource_identifier}"
+
+
 def supported_regions() -> list[str]:
-    return sorted(SMD_OWNER_ACCOUNT_BY_REGION)
+    """Regions with BOTH account series known — the ones this lab can deploy to."""
+    return sorted(set(SMD_OWNER_ACCOUNT_BY_REGION) & set(FIRST_PARTY_IMAGE_ACCOUNT_BY_REGION))

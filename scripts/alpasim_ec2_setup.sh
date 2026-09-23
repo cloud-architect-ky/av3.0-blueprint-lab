@@ -167,9 +167,30 @@ export HF_HOME="$HF_HOME_DIR"
 # --------------------------------------------------------------------------
 # Resolve the shared bucket (env, else STS-derived default)
 # --------------------------------------------------------------------------
+# The buckets are per-region (infra/av30_constructs/storage.py), so a hand-built
+# name MUST carry the region or it points at a bucket that does not exist.
+_av30_region() {
+    if [ -n "${AWS_REGION:-}" ]; then echo "$AWS_REGION"; return; fi
+    if [ -n "${AWS_DEFAULT_REGION:-}" ]; then echo "$AWS_DEFAULT_REGION"; return; fi
+    _r="$(aws configure get region 2>/dev/null || true)"
+    if [ -n "$_r" ]; then echo "$_r"; return; fi
+    # Running on EC2 with no config: ask IMDSv2.
+    _t="$(curl -sf -X PUT http://169.254.169.254/latest/api/token \
+            -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)"
+    [ -n "$_t" ] && curl -sf -H "X-aws-ec2-metadata-token: $_t" \
+        http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || true
+}
+
 if [ -z "${SHARED_BUCKET:-}" ]; then
     _acct="$(aws sts get-caller-identity --query Account --output text 2>/dev/null || true)"
-    [ -n "$_acct" ] && SHARED_BUCKET="av30lab-shared-data-${_acct}"
+    _reg="$(_av30_region)"
+    if [ -n "$_acct" ] && [ -n "$_reg" ]; then
+        SHARED_BUCKET="av30lab-shared-data-${_acct}-${_reg}"
+    elif [ -n "$_acct" ]; then
+        echo "ERROR: resolved the account but not the region, so the shared-bucket" >&2
+        echo "       name cannot be built. Export AWS_REGION or SHARED_BUCKET." >&2
+        exit 1
+    fi
 fi
 [ -n "${SHARED_BUCKET:-}" ] || { echo "ERROR: SHARED_BUCKET unresolved."; exit 1; }
 echo "[s3] shared bucket: $SHARED_BUCKET"

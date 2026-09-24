@@ -125,7 +125,7 @@ Studio カーネル + マネージドトレーニングジョブは、ローカ�
    s3://<bucket>/users/<profile>/m12/code`。
 5. **`iam:PassRole` + `sagemaker:CreateTrainingJob` の欠如** — exec ロールは Studio アプリ
    管理用に構築されており、トレーニングジョブの投入用ではなかった。修正:
-   `infra/av30_constructs/sagemaker.py` にスコープ付きの `SageMakerTrainingJobs` (av30-m9-* ARN)
+   `infra/av30_constructs/sagemaker.py` にスコープ付きの `SageMakerTrainingJobs` (av30-m12-* ARN)
    + 自分自身のみの `PassRole` (`iam:PassedToService=sagemaker.amazonaws.com`) ステートメントを
    追加してデプロイした。
 6. **MPI の rank 順 ≠ SM_HOSTS の順 → ランデブーハング。** 最初の CPU 試行では

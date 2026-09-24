@@ -195,6 +195,39 @@ def provision_single_user(user_data: dict) -> dict:
         }
 
 
+def parse_user_rows(rows: list, default_region: str = "") -> list[dict]:
+    """Normalise a JSON `users` array into the same shape parse_csv_body produces.
+
+    Shares parse_csv_body's region contract: an unknown region fails the WHOLE batch
+    up front rather than provisioning half a room into a region this control plane
+    does not manage — the choice is immutable per participant, so a partial batch
+    would have to be deleted and re-provisioned.
+    """
+    default_region = default_region or CONTROL_REGION
+    users = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name") or "").strip()
+        if not name:
+            continue
+        row_region = str(row.get("region") or default_region).strip()
+        if row_region not in TARGET_REGIONS:
+            raise ApiError(
+                400,
+                f"Unknown region '{row_region}' for '{name}'",
+                details=f"This control plane manages: {', '.join(TARGET_REGIONS)}",
+            )
+        users.append(
+            {
+                "name": name,
+                "email": str(row.get("email") or "").strip(),
+                "region": row_region,
+            }
+        )
+    return users
+
+
 def parse_csv_body(body: str, is_base64: bool, default_region: str = "") -> list[dict]:
     """Parse CSV content from request body.
 
@@ -263,20 +296,34 @@ def handler(event, context):
     # parse_csv_body fall back to CONTROL_REGION".
     batch_region = ""
 
-    # Try JSON wrapper first: {"csv": "<base64 data>", "region": "<optional>"}
+    users = None
+
+    # Two accepted body shapes:
+    #   {"users": [{name, email, module?, region?}, ...], "region": "<optional>"}
+    #   {"csv": "<base64 CSV>", "region": "<optional>"}   (or a raw CSV body)
+    #
+    # The "users" form is what the admin UI has always sent (BulkUploadModal parses
+    # the CSV in the browser, then posts rows via apiClient.bulkProvision), but only
+    # the "csv" form was handled. The raw JSON string then fell through to the CSV
+    # parser, whose header row became ['{"users": [{"name": "Alice"', ' "email": ...']
+    # — no "name" column — so bulk provisioning returned 400 every single time. It is
+    # the documented way to seat a room, so it was never usable from the dashboard.
     if not is_base64:
         try:
             json_body = json.loads(body)
-            if isinstance(json_body, dict) and "csv" in json_body:
+        except (json.JSONDecodeError, TypeError):
+            json_body = None
+        if isinstance(json_body, dict):
+            batch_region = (json_body.get("region") or "").strip()
+            if isinstance(json_body.get("users"), list):
+                users = parse_user_rows(json_body["users"], default_region=batch_region)
+            elif "csv" in json_body:
                 body = json_body["csv"]
                 is_base64 = True
-                # Optional batch-wide default; a per-row `region` column still wins.
-                batch_region = (json_body.get("region") or "").strip()
-        except (json.JSONDecodeError, TypeError):
-            pass
 
-    # Parse CSV
-    users = parse_csv_body(body, is_base64, default_region=batch_region)
+    # Fall back to CSV (base64-wrapped or raw) when no "users" array was supplied.
+    if users is None:
+        users = parse_csv_body(body, is_base64, default_region=batch_region)
 
     if not users:
         raise ApiError(400, "No valid users found in CSV")
@@ -304,9 +351,32 @@ def handler(event, context):
         f"Bulk provision complete: {len(successful)} succeeded, {len(failed)} failed"
     )
 
+    # Shape is a CONTRACT with BulkProvisionResult in web/admin/src/api/client.ts:
+    # succeeded[] / failed[] are ARRAYS of objects. This used to return
+    # {successful: int, failed: int}, so BulkUploadModal's
+    # `res.succeeded.length` threw (succeeded was undefined) and `res.failed.length`
+    # was undefined-on-an-int — a second, independent break behind the 400 above.
+    # `failed` keeping the same NAME but changing TYPE (int -> array) is exactly the
+    # kind of mismatch TypeScript cannot catch across HTTP, so keep both sides in step.
     return {
+        "succeeded": [
+            {
+                "email": r.get("email", ""),
+                "name": r.get("name", ""),
+                "workspaceUrl": r.get("workspaceUrl", ""),
+            }
+            for r in successful
+        ],
+        "failed": [
+            {
+                "email": r.get("email", ""),
+                "name": r.get("name", ""),
+                "error": r.get("error", "unknown error"),
+            }
+            for r in failed
+        ],
         "total": len(users),
-        "successful": len(successful),
-        "failed": len(failed),
+        # Full per-user detail (userId, participantToken, presigned URL, expiry) for
+        # anything that needs more than the summary the modal renders.
         "results": results,
     }

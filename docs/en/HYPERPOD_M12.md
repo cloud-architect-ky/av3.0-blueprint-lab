@@ -124,7 +124,7 @@ could never hit:
    s3://<bucket>/users/<profile>/m12/code`.
 5. **`iam:PassRole` + `sagemaker:CreateTrainingJob` missing** — the exec role was
    built for Studio app management, not training-job submission. Fix: added a
-   scoped `SageMakerTrainingJobs` (av30-m9-* ARN) + self-only `PassRole`
+   scoped `SageMakerTrainingJobs` (av30-m12-* ARN) + self-only `PassRole`
    (`iam:PassedToService=sagemaker.amazonaws.com`) statement in
    `infra/av30_constructs/sagemaker.py` and deployed.
 6. **MPI rank order ≠ SM_HOSTS order → rendezvous hang.** The first CPU attempt

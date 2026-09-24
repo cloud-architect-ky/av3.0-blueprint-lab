@@ -498,7 +498,7 @@ source-builds `gsplat==1.4.0`.
 | Symptom | Cause / Fix |
 |---|---|
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU app quota not raised — §2a. |
-| M12 job fails at submission / M11 processing step never starts | m5.xlarge **job** quota (§2b) or exec-role IAM — both verified present in this account; re-check if you redeployed. |
+| M12 job fails at submission (`AccessDeniedException` on `CreateTrainingJob`) | The exec-role's training-job ARN prefix must match the notebook's `JOB_NAME`. The module renumber moved HyperPod M9→M12 and the notebook now submits `av30-m12-distributed-*`; a deployment predating that fix still grants `av30-m9-*` and every submission is denied. The m5.xlarge **job** quota (§2b) is a separate, rarer cause — check the error first: `AccessDenied` = IAM prefix, `ResourceLimitExceeded` = quota. |
 | Participant "No GPU detected" on a GPU instance | CPU image selected — re-Apply via Instance Options. |
 | M5/M6/M9 ask for an HF token | `hf-cache/hub/` not staged (§6.3) — participants fall back to online download. |
 | M7 training cell fails on gsplat | Re-run M7 cell 3 (`scripts/setup_gsplat_env.sh`) — the CUDA build is per-session and resets on app restart. §11. |

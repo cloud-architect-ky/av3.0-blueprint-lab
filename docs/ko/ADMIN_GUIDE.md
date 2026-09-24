@@ -497,7 +497,7 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 | 증상 | 원인 / 해결 |
 |---|---|
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU 앱 쿼터가 증설되지 않음 — §2a. |
-| M12 작업이 제출에서 실패 / M11 프로세싱 단계가 시작되지 않음 | m5.xlarge **작업** 쿼터(§2b) 또는 exec-role IAM — 둘 다 이 계정에서 존재함이 검증됨; 재배포했다면 다시 확인. |
+| M12 작업이 제출에서 실패 (`CreateTrainingJob`에 `AccessDeniedException`) | exec-role의 training-job ARN 프리픽스가 노트북 `JOB_NAME`과 일치해야 합니다. 모듈 재번호로 HyperPod가 M9→M12로 옮겨져 노트북은 `av30-m12-distributed-*`를 제출하는데, 그 수정 이전 배포는 여전히 `av30-m9-*`만 허용해 모든 제출이 거부됩니다. m5.xlarge **작업** 쿼터(§2b)는 별개의 드문 원인입니다 — 에러를 먼저 보세요: `AccessDenied`는 IAM 프리픽스, `ResourceLimitExceeded`는 쿼터. |
 | GPU 인스턴스에서 참가자 "No GPU detected" | CPU 이미지가 선택됨 — Instance Options로 다시 Apply. |
 | M5/M6/M9이 HF 토큰을 요구 | `hf-cache/hub/`가 스테이징되지 않음(§6.3) — 참가자가 온라인 다운로드로 폴백. |
 | M9이 클립 로드에 실패 | 데모 `.pt`가 `hf-cache/alpamayo-demo/`에 업로드되지 않음(§6.3). |

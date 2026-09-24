@@ -492,7 +492,7 @@ AlpaSim を自分自身で実行する**ようにしたい場合:
 | 症状 | 原因 / 対処 |
 |---|---|
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU アプリクォータが未引き上げ — §2a。 |
-| M12 ジョブが送信時に失敗 / M11 処理ステップが開始しない | m5.xlarge の**ジョブ**クォータ（§2b）または実行ロール IAM — どちらもこのアカウントで存在を検証済み。再デプロイした場合は再確認。 |
+| M12 ジョブが送信時に失敗（`CreateTrainingJob` で `AccessDeniedException`） | 実行ロールの training-job ARN プレフィックスがノートブックの `JOB_NAME` と一致する 必要があります。モジュール再採番で HyperPod が M9→M12 に移動しノートブックは `av30-m12-distributed-*` を送信しますが、その修正より前のデプロイは `av30-m9-*` のみを 許可するため全ての送信が拒否されます。m5.xlarge の**ジョブ**クォータ（§2b）は別の稀な 原因です — まずエラーを確認してください: `AccessDenied` は IAM プレフィックス、`ResourceLimitExceeded` はクォータ。|
 | GPU インスタンスで参加者が「No GPU detected」 | CPU イメージが選択されている — Instance Options で再 Apply。 |
 | M5/M6/M9 が HF トークンを要求する | `hf-cache/hub/` が未ステージング（§6.3） — 参加者はオンラインダウンロードにフォールバックします。 |
 | M7 トレーニングセルが gsplat で失敗する | M7 セル 3（`scripts/setup_gsplat_env.sh`）を再実行 — CUDA ビルドはセッションごとで、アプリ再起動時にリセットされます。§11。 |

@@ -300,9 +300,18 @@ class SageMakerConstruct(Construct):
 
         # SageMaker Training Jobs — needed by M12, which submits a real 2-node
         # torch.distributed DDP job from the notebook via the PyTorch estimator.
-        # Scoped to the av30-m9-* job-name prefix so this does not grant blanket
+        # Scoped to the av30-m12-* job-name prefix so this does not grant blanket
         # training control. Describe/Stop are needed for estimator.fit(wait=True)
         # polling and the metrics/cleanup cells.
+        #
+        # The prefix MUST track the notebook's JOB_NAME. The module renumber moved
+        # HyperPod from M9 to M12 and the notebook now submits
+        # f"av30-m12-distributed-{PROFILE}-{ts}", but this stayed av30-m9-*, so every
+        # participant hit AccessDenied on CreateTrainingJob. Nothing else rescued it:
+        # the execution role has no attached managed policies. Worse, the ADMIN_GUIDE
+        # troubleshooting table blamed the m5.xlarge training-job quota, which is
+        # genuinely fine (30) — so an admin would verify the quota, find no problem,
+        # and conclude the module was simply broken.
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="SageMakerTrainingJobs",
@@ -314,7 +323,7 @@ class SageMakerConstruct(Construct):
                 ],
                 resources=[
                     f"arn:aws:sagemaker:{cdk.Stack.of(self).region}:"
-                    f"{cdk.Stack.of(self).account}:training-job/av30-m9-*",
+                    f"{cdk.Stack.of(self).account}:training-job/av30-m12-*",
                 ],
             )
         )

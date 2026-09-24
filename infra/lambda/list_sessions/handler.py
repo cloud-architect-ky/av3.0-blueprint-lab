@@ -83,7 +83,19 @@ def handler(event, context):
     sessions = []
 
     for item in items:
-        status = item.get("status", "offline")
+        # `status` is the AUTH field (token_authorizer requires "active"); appStatus is
+        # compute state, written by terminate_session. Terminating used to set
+        # status="offline", which revoked the participant's token permanently — so the two
+        # are now separate and the DISPLAY status is derived from both. Legacy rows with
+        # status="offline" still render as offline.
+        auth_status = item.get("status", "offline")
+        app_state = item.get("appStatus")
+        if auth_status != "active":
+            status = auth_status
+        elif app_state == "stopped":
+            status = "offline"
+        else:
+            status = auth_status
         instance_type = item.get("instanceType", "ml.t3.medium")
         user_id = item.get("userId")
 

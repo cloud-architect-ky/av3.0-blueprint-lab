@@ -515,7 +515,17 @@ PRESIGNED_URL_EXPIRY = 28800
 #
 # NOT A QUOTA. A rate here only means the region SELLS the type. Whether this account may
 # launch it is a separate per-(account x region) fact: ml.g6.* is priced in ap-northeast-2
-# but its Studio quota there is 0. instance_options resolves live quota at request time.
+# but its Studio quota there is 0.
+#
+# NOTHING IN THE REQUEST PATH CHECKS QUOTA TODAY. An earlier version of this comment said
+# "instance_options resolves live quota at request time" — that was false: instance_options
+# is dead code (zero call sites, keyed to placeholder module ids, imports no boto3), and
+# change_instance validates only membership in this table. So a participant can still pick
+# a type this region sells but the account has 0 quota for, and the failure surfaces as a
+# stalled app rather than a rejection. The admin-side check is
+# scripts/check_quotas.py --region <r> --participants N, which deploy.sh runs at the end of
+# a deployment; wiring a GetServiceQuota call into change_instance is the real fix and has
+# not been done.
 #
 # GPU GEOMETRY (the recurring source of confusion — size is NOT GPU count, and within a
 # family a bigger size adds GPUs, never per-GPU VRAM):

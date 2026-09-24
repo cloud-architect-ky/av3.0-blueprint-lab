@@ -57,7 +57,10 @@ def handler(event, context):
     if not item:
         raise ApiError(404, f"User not found: {user_id}")
 
-    if item.get("status") == "offline":
+    # Keyed on appStatus, NOT status. `status` is the AUTH field the TokenAuthorizer reads
+    # (it requires "active"); appStatus is compute state. Legacy rows that predate the split
+    # may still carry status="offline", so honour both.
+    if item.get("appStatus") == "stopped" or item.get("status") == "offline":
         raise ApiError(409, "Session is already offline")
 
     space_name = item.get("spaceName", f"{user_id}-space")
@@ -90,17 +93,30 @@ def handler(event, context):
             ),
         }
 
-    # Only now is "offline" true.
+    # Only now is "offline" true — but record it as COMPUTE state, not auth state.
+    #
+    # This used to write status="offline", and token_authorizer requires
+    # status == "active". Since the only writers of "active" are create_user and
+    # bulk_provision, there was NO re-enable path anywhere: an admin reclaiming an idle
+    # GPU — normal operation, not misuse — permanently 401'd that participant's dashboard
+    # on every route, recoverable only by hand-editing the DynamoDB item mid-workshop.
+    #
+    # appStatus carries the compute state instead; `status` stays "active" so the token
+    # keeps working and the participant can reopen their workspace. list_sessions reads
+    # appStatus for the cost-skip and display, so a stopped app is still reported as
+    # offline and still costs nothing.
     now_iso = datetime.now(timezone.utc).isoformat()
     table.update_item(
         Key={"userId": user_id},
-        UpdateExpression="SET #s = :status, terminatedAt = :terminated_at",
-        ExpressionAttributeNames={"#s": "status"},
+        UpdateExpression="SET appStatus = :app_status, terminatedAt = :terminated_at",
         ExpressionAttributeValues={
-            ":status": "offline",
+            ":app_status": "stopped",
             ":terminated_at": now_iso,
         },
     )
-    logger.info(f"Deleted JupyterLab app and marked {user_id} offline")
+    logger.info(
+        f"Deleted JupyterLab app for {user_id}; appStatus=stopped "
+        f"(auth status left active so their dashboard keeps working)"
+    )
 
     return {"terminated": True, "userId": user_id}

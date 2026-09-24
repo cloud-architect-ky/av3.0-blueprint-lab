@@ -1,7 +1,26 @@
 """Lambda handler for retrieving module instance options.
 
 GET /modules/{id}/instance-options
-Returns the configuration and available instance types for a given module.
+
+DEAD CODE — nothing calls this. `getInstanceOptions` exists in
+web/user/src/api/client.ts but has ZERO call sites; the participant UI builds its instance
+list from the STATIC data in web/user/src/data/pipeline-config.ts
+(`recommendedInstance` + `alternatives`), rendered by InstanceOptionsPanel.
+
+It is also wired to placeholder data. MODULE_CONFIG in shared/config.py is keyed
+"module-1".."module-5" with notebooks "01-data-preparation.ipynb" etc., which are not this
+lab: the real modules are M0..M12 (`M1_Data_Exploration.ipynb`, `M4_Cosmos_...`). So every
+real module id 404s here, and the five ids that do resolve describe a workshop that does not
+exist.
+
+Two consequences worth knowing before touching this:
+  * Do NOT "fix" MODULE_CONFIG expecting the participant dropdown to change — edit
+    pipeline-config.ts, which is the only place that recommendation lives (and what
+    scripts/check_quotas.py parses).
+  * If you ever DO wire this endpoint up, `default_rate = INSTANCE_RATES.get(default, 0)`
+    below becomes a bug: INSTANCE_RATES is now per-region, so a module whose default is not
+    sold in the deploy region yields rate 0, and the `rate >= default_rate` filter then
+    offers EVERY type — including the absent default.
 """
 
 import logging

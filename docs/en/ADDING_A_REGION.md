@@ -116,8 +116,21 @@ request at all**: use `ml.g5.12xlarge` for M2/M3 and `ml.g5.24xlarge` for M4/M5/
 quality option. Request `g6` only if you want the documented default — and note the price
 there is ~23% above us-west-2 either way.
 
+Rather than reading that table, run the pre-flight — it resolves live quota, cross-checks
+the generated rate table, and names the modules each shortfall affects:
+
 ```bash
-# Only if you want the g6 default. Must be filed IN the target region.
+./scripts/check_quotas.py --region $R --participants 10
+```
+
+It exits non-zero if any type the participant dashboard recommends cannot run. `deploy.sh`
+also runs it at the end of a deployment. Measured for this account at 10 participants:
+**neither** region passes as configured — `ml.g6.24xlarge` is wanted by four modules and
+allows 2 concurrent in us-west-2 and 0 in ap-northeast-2, and `ml.g5.12xlarge` /
+`ml.g5.xlarge` allow 5. Plan the cohort around that, or raise quota:
+
+```bash
+# Must be filed IN the target region. The script prints the exact code for each shortfall.
 aws service-quotas request-service-quota-increase --region $R \
   --service-code sagemaker --quota-code L-8ACE1754 --desired-value 10
 ```
@@ -270,12 +283,18 @@ correct and region-independent.
    `$R`.
 5. `aws cognito-idp describe-user-pool-domain --domain av30lab-admin --region $R` →
    `ACTIVE`, pool id prefixed `$R`.
-6. Create a Cognito admin, sign in through the hosted UI, provision **one** participant,
+6. **Instance rates exist for this region.** The Lambdas raise at import without them, so
+   a missing table shows up as 500s on the instance endpoints rather than wrong prices:
+   ```bash
+   ./scripts/refresh_instance_rates.py --region $R --merge   # if not already generated
+   ./scripts/check_quotas.py --region $R --participants <cohort>
+   ```
+7. Create a Cognito admin, sign in through the hosted UI, provision **one** participant,
    and confirm the workspace is **not empty** (measured: **32** objects — 31 staged
    templates + `.av30-progress.env`).
-7. `aws apigateway get-account --region $R --query cloudwatchRoleArn` unchanged from its
+8. `aws apigateway get-account --region $R --query cloudwatchRoleArn` unchanged from its
    value in §0.
-8. **The region you already had is untouched:** its stack still `UPDATE_COMPLETE`, its
+9. **The region you already had is untouched:** its stack still `UPDATE_COMPLETE`, its
    budget still present, its `apigateway get-account` unchanged.
 
 ### A cheap honest smoke test (well under $1)

@@ -109,12 +109,12 @@ SG=$(UN aws ec2 create-security-group --region $REGION \
 # (no inbound rules added — we connect via SSM Session Manager)
 
 # (d) IAM instance-profile (not present in the lab account → create it on the spot). hf-cache read + m10-reference write + KMS + SSM.
-UN aws iam create-role --role-name av30-alpasim-m7 \
+UN aws iam create-role --role-name av30-alpasim-m7-$REGION \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-UN aws iam attach-role-policy --role-name av30-alpasim-m7 \
+UN aws iam attach-role-policy --role-name av30-alpasim-m7-$REGION \
   --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 # Build the policy JSON with a heredoc so $SHARED_BUCKET expands (single-quotes would not expand it).
-UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-m7ref \
+UN aws iam put-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-hfcache-m7ref \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
@@ -122,15 +122,24 @@ UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
-UN aws iam create-instance-profile --instance-profile-name av30-alpasim-m7
-UN aws iam add-role-to-instance-profile --instance-profile-name av30-alpasim-m7 --role-name av30-alpasim-m7
+UN aws iam create-instance-profile --instance-profile-name av30-alpasim-m7-$REGION
+UN aws iam add-role-to-instance-profile --instance-profile-name av30-alpasim-m7-$REGION --role-name av30-alpasim-m7-$REGION
+
+> **Why the `-$REGION` suffix on the IAM names.** IAM role and instance-profile names are
+> **account-global**, unlike the security group above (which is per-VPC, so it keeps the bare
+> name). Without the suffix a second region's M10 run fails `EntityAlreadyExists`, and — far
+> worse — the teardown block below deletes them unconditionally "to prevent name collisions
+> on the next run", so tearing down M10 in EITHER region would destroy the role the OTHER
+> region's running GPU host is using. Suffixing at create AND teardown keeps the two
+> deployments independent, which is the model this lab uses (one region per deployment; see
+> `docs/en/ADDING_A_REGION.md`).
 sleep 15   # wait for IAM propagation
 
 # (e) launch: g6e.12xlarge (4× L40S 48GB), gp3 300GB, public IP
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
-  --iam-instance-profile Name=av30-alpasim-m7 \
+  --iam-instance-profile Name=av30-alpasim-m7-$REGION \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=300,VolumeType=gp3}' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=av30-alpasim-m7}]' \
   --query 'Instances[0].InstanceId' --output text)
@@ -223,11 +232,11 @@ UN aws s3 ls s3://$SHARED_BUCKET/m10-reference/ --recursive --region $REGION
 UN aws ec2 terminate-instances --region $REGION --instance-ids $IID
 UN aws ec2 wait instance-terminated --region $REGION --instance-ids $IID
 # Clean up IAM/SG too (to prevent name collisions on the next run):
-UN aws iam remove-role-from-instance-profile --instance-profile-name av30-alpasim-m7 --role-name av30-alpasim-m7
-UN aws iam delete-instance-profile --instance-profile-name av30-alpasim-m7
-UN aws iam delete-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-m7ref
-UN aws iam detach-role-policy --role-name av30-alpasim-m7 --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-UN aws iam delete-role --role-name av30-alpasim-m7
+UN aws iam remove-role-from-instance-profile --instance-profile-name av30-alpasim-m7-$REGION --role-name av30-alpasim-m7-$REGION
+UN aws iam delete-instance-profile --instance-profile-name av30-alpasim-m7-$REGION
+UN aws iam delete-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-hfcache-m7ref
+UN aws iam detach-role-policy --role-name av30-alpasim-m7-$REGION --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+UN aws iam delete-role --role-name av30-alpasim-m7-$REGION
 UN aws ec2 delete-security-group --region $REGION --group-id $SG
 ```
 
@@ -251,7 +260,7 @@ Part A's `av30-alpasim-m7` instance role only writes to `m10-reference/`. Partic
 `users/<id>/m10/`, so extend the policy (a prefix restriction lets multiple participants share it):
 ```bash
 # ⟸ You must first have defined the §0 UN() wrapper + the SHARED_BUCKET/USER_BUCKET variables.
-UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-participant-m7 \
+UN aws iam put-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-participant-m7 \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
@@ -269,7 +278,7 @@ PID=m10-test01     # participant id
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
-  --iam-instance-profile Name=av30-alpasim-m7 \
+  --iam-instance-profile Name=av30-alpasim-m7-$REGION \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=300,VolumeType=gp3}' \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=av30-alpasim-$PID},{Key=Participant,Value=$PID}]" \
   --query 'Instances[0].InstanceId' --output text)

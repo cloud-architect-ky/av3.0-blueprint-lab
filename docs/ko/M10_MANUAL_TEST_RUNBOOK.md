@@ -108,12 +108,12 @@ SG=$(UN aws ec2 create-security-group --region $REGION \
 # (인바운드 규칙 추가 안 함 — SSM Session Manager로 접속)
 
 # (d) IAM instance-profile (랩계정에 없음 → 즉석 생성). hf-cache read + m10-reference write + KMS + SSM.
-UN aws iam create-role --role-name av30-alpasim-m7 \
+UN aws iam create-role --role-name av30-alpasim-m7-$REGION \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-UN aws iam attach-role-policy --role-name av30-alpasim-m7 \
+UN aws iam attach-role-policy --role-name av30-alpasim-m7-$REGION \
   --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 # 정책 JSON은 $SHARED_BUCKET 이 확장되도록 heredoc으로 만든다(single-quote면 확장 안 됨).
-UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-m7ref \
+UN aws iam put-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-hfcache-m7ref \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
@@ -121,15 +121,22 @@ UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
-UN aws iam create-instance-profile --instance-profile-name av30-alpasim-m7
-UN aws iam add-role-to-instance-profile --instance-profile-name av30-alpasim-m7 --role-name av30-alpasim-m7
+UN aws iam create-instance-profile --instance-profile-name av30-alpasim-m7-$REGION
+UN aws iam add-role-to-instance-profile --instance-profile-name av30-alpasim-m7-$REGION --role-name av30-alpasim-m7-$REGION
+
+> **IAM 이름에 `-$REGION` 접미사를 붙이는 이유.** IAM 역할·인스턴스 프로파일 이름은 **계정 전역**이다
+> (위의 보안그룹은 VPC 단위이므로 접미사 없이 그대로 둔다). 접미사가 없으면 두 번째 리전의 M10 실행이
+> `EntityAlreadyExists`로 실패하고, 더 심각하게는 아래 teardown 블록이 "다음 실행 시 이름 충돌을 막기
+> 위해" 이를 무조건 삭제하므로 **어느 한 리전에서 M10을 teardown하면 다른 리전에서 실행 중인 GPU
+> 호스트가 쓰는 역할이 지워진다**. 생성과 teardown 양쪽에 접미사를 붙이면 두 배포가 독립을 유지한다
+> (이 랩의 모델: 배포당 한 리전 — `docs/en/ADDING_A_REGION.md` 참조).
 sleep 15   # IAM 전파 대기
 
 # (e) launch: g6e.12xlarge (4× L40S 48GB), gp3 300GB, 퍼블릭 IP
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
-  --iam-instance-profile Name=av30-alpasim-m7 \
+  --iam-instance-profile Name=av30-alpasim-m7-$REGION \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=300,VolumeType=gp3}' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=av30-alpasim-m7}]' \
   --query 'Instances[0].InstanceId' --output text)
@@ -222,11 +229,11 @@ UN aws s3 ls s3://$SHARED_BUCKET/m10-reference/ --recursive --region $REGION
 UN aws ec2 terminate-instances --region $REGION --instance-ids $IID
 UN aws ec2 wait instance-terminated --region $REGION --instance-ids $IID
 # IAM/SG도 정리 (다음 실행 때 이름충돌 방지):
-UN aws iam remove-role-from-instance-profile --instance-profile-name av30-alpasim-m7 --role-name av30-alpasim-m7
-UN aws iam delete-instance-profile --instance-profile-name av30-alpasim-m7
-UN aws iam delete-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-m7ref
-UN aws iam detach-role-policy --role-name av30-alpasim-m7 --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-UN aws iam delete-role --role-name av30-alpasim-m7
+UN aws iam remove-role-from-instance-profile --instance-profile-name av30-alpasim-m7-$REGION --role-name av30-alpasim-m7-$REGION
+UN aws iam delete-instance-profile --instance-profile-name av30-alpasim-m7-$REGION
+UN aws iam delete-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-hfcache-m7ref
+UN aws iam detach-role-policy --role-name av30-alpasim-m7-$REGION --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+UN aws iam delete-role --role-name av30-alpasim-m7-$REGION
 UN aws ec2 delete-security-group --region $REGION --group-id $SG
 ```
 
@@ -250,7 +257,7 @@ Part A의 `av30-alpasim-m7` 인스턴스 역할은 `m10-reference/`에만 write�
 `users/<id>/m10/`에 써야 하므로 정책을 확장한다(prefix 제한으로 여러 참가자 공유 가능):
 ```bash
 # ⟸ 먼저 §0의 UN() 래퍼 + SHARED_BUCKET/USER_BUCKET 변수를 정의했어야 함.
-UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-participant-m7 \
+UN aws iam put-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-participant-m7 \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
@@ -268,7 +275,7 @@ PID=m10-test01     # 참가자 id
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
-  --iam-instance-profile Name=av30-alpasim-m7 \
+  --iam-instance-profile Name=av30-alpasim-m7-$REGION \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=300,VolumeType=gp3}' \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=av30-alpasim-$PID},{Key=Participant,Value=$PID}]" \
   --query 'Instances[0].InstanceId' --output text)

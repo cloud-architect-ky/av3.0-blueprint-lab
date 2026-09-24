@@ -111,12 +111,12 @@ SG=$(UN aws ec2 create-security-group --region $REGION \
 # (インバウンドルールは追加しない — SSM Session Manager で接続)
 
 # (d) IAM instance-profile (ラボアカウントにない → その場で作成)。hf-cache read + m10-reference write + KMS + SSM。
-UN aws iam create-role --role-name av30-alpasim-m7 \
+UN aws iam create-role --role-name av30-alpasim-m7-$REGION \
   --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
-UN aws iam attach-role-policy --role-name av30-alpasim-m7 \
+UN aws iam attach-role-policy --role-name av30-alpasim-m7-$REGION \
   --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 # ポリシー JSON は $SHARED_BUCKET が展開されるよう heredoc で作る (single-quote だと展開されない)。
-UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-m7ref \
+UN aws iam put-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-hfcache-m7ref \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
@@ -124,15 +124,23 @@ UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-
   {"Effect":"Allow","Action":["kms:Decrypt","kms:GenerateDataKey"],"Resource":"*"}]}
 JSON
 )"
-UN aws iam create-instance-profile --instance-profile-name av30-alpasim-m7
-UN aws iam add-role-to-instance-profile --instance-profile-name av30-alpasim-m7 --role-name av30-alpasim-m7
+UN aws iam create-instance-profile --instance-profile-name av30-alpasim-m7-$REGION
+UN aws iam add-role-to-instance-profile --instance-profile-name av30-alpasim-m7-$REGION --role-name av30-alpasim-m7-$REGION
+
+> **IAM 名に `-$REGION` を付ける理由。** IAM ロール名とインスタンスプロファイル名は**アカウント全体で
+> グローバル**です（上のセキュリティグループは VPC 単位なので接尾辞なしのまま）。接尾辞がないと 2 つ目の
+> リージョンの M10 実行が `EntityAlreadyExists` で失敗し、さらに深刻なことに、下の teardown ブロックは
+> 「次回実行時の名前衝突を防ぐため」これらを無条件に削除するので、**どちらか一方のリージョンで M10 を
+> teardown すると、もう一方のリージョンで稼働中の GPU ホストが使っているロールが消えます**。作成と
+> teardown の両方で接尾辞を付けることで 2 つのデプロイが独立します（本ラボのモデル: 1 デプロイ 1
+> リージョン — `docs/en/ADDING_A_REGION.md` 参照）。
 sleep 15   # IAM 伝播待ち
 
 # (e) launch: g6e.12xlarge (4× L40S 48GB)、gp3 300GB、パブリック IP
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
-  --iam-instance-profile Name=av30-alpasim-m7 \
+  --iam-instance-profile Name=av30-alpasim-m7-$REGION \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=300,VolumeType=gp3}' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=av30-alpasim-m7}]' \
   --query 'Instances[0].InstanceId' --output text)
@@ -225,11 +233,11 @@ UN aws s3 ls s3://$SHARED_BUCKET/m10-reference/ --recursive --region $REGION
 UN aws ec2 terminate-instances --region $REGION --instance-ids $IID
 UN aws ec2 wait instance-terminated --region $REGION --instance-ids $IID
 # IAM/SG も整理 (次回実行時の名前衝突を防ぐ):
-UN aws iam remove-role-from-instance-profile --instance-profile-name av30-alpasim-m7 --role-name av30-alpasim-m7
-UN aws iam delete-instance-profile --instance-profile-name av30-alpasim-m7
-UN aws iam delete-role-policy --role-name av30-alpasim-m7 --policy-name s3-hfcache-m7ref
-UN aws iam detach-role-policy --role-name av30-alpasim-m7 --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-UN aws iam delete-role --role-name av30-alpasim-m7
+UN aws iam remove-role-from-instance-profile --instance-profile-name av30-alpasim-m7-$REGION --role-name av30-alpasim-m7-$REGION
+UN aws iam delete-instance-profile --instance-profile-name av30-alpasim-m7-$REGION
+UN aws iam delete-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-hfcache-m7ref
+UN aws iam detach-role-policy --role-name av30-alpasim-m7-$REGION --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+UN aws iam delete-role --role-name av30-alpasim-m7-$REGION
 UN aws ec2 delete-security-group --region $REGION --group-id $SG
 ```
 
@@ -253,7 +261,7 @@ Part A の `av30-alpasim-m7` インスタンスロールは `m10-reference/` に
 `users/<id>/m10/` に書く必要があるのでポリシーを拡張します (prefix 制限で複数参加者の共有が可能):
 ```bash
 # ⟸ 先に §0 の UN() ラッパー + SHARED_BUCKET/USER_BUCKET 変数を定義しておくこと。
-UN aws iam put-role-policy --role-name av30-alpasim-m7 --policy-name s3-participant-m7 \
+UN aws iam put-role-policy --role-name av30-alpasim-m7-$REGION --policy-name s3-participant-m7 \
   --policy-document "$(cat <<JSON
 {"Version":"2012-10-17","Statement":[
   {"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket"],"Resource":["arn:aws:s3:::${SHARED_BUCKET}","arn:aws:s3:::${SHARED_BUCKET}/*"]},
@@ -271,7 +279,7 @@ PID=m10-test01     # 参加者 id
 IID=$(UN aws ec2 run-instances --region $REGION \
   --image-id $AMI --instance-type g6e.12xlarge \
   --subnet-id $SUBNET --security-group-ids $SG --associate-public-ip-address \
-  --iam-instance-profile Name=av30-alpasim-m7 \
+  --iam-instance-profile Name=av30-alpasim-m7-$REGION \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=300,VolumeType=gp3}' \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=av30-alpasim-$PID},{Key=Participant,Value=$PID}]" \
   --query 'Instances[0].InstanceId' --output text)

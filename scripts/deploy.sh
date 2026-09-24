@@ -249,6 +249,20 @@ echo "=== Deployment Complete ==="
 echo "Admin Dashboard: $ADMIN_URL"
 echo "API Endpoint:    $API_URL"
 echo ""
+# Quota pre-flight. A price existing in this region does NOT mean the account can launch
+# it: ap-northeast-2 sells ml.g6.24xlarge and has Studio quota 0 for it, and four modules
+# recommend that type. Surfacing it here means the admin learns it now, not from a
+# participant mid-workshop. Non-fatal — the deployment itself is fine either way.
+if [ -x ./scripts/check_quotas.py ]; then
+    echo ""
+    echo ">>> GPU quota pre-flight for $REGION ..."
+    if ./scripts/check_quotas.py --region "$REGION" --participants "${PARTICIPANTS:-10}" \
+         2>/dev/null | sed -n '/RECOMMENDS/,$p' | grep -E "QUOTA 0|NOT SOLD|NO QUOTA ROW|TIGHT|BLOCKED|All recommended"; then
+        :
+    fi
+    echo "    (full report: ./scripts/check_quotas.py --region $REGION --participants N)"
+fi
+
 echo "Next steps:"
 echo "  1. Create Cognito admin user: aws cognito-idp admin-create-user --user-pool-id $POOL_ID --username admin"
 # AWS_REGION is spelled out on purpose. This line used to omit it, and the seeding

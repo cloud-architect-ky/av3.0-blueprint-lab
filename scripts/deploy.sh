@@ -98,22 +98,110 @@ if [ ! -d ".venv" ]; then
 else
     source .venv/bin/activate
 fi
-# OWNER_TAG: only needed when UPDATING a stack that was deployed with a different
-# Owner tag. SageMaker treats Tags as replacement-requiring, so changing this value
-# would rebuild the Studio domain (new domain id, orphaned EFS) — or hard-fail on a
-# custom-named resource whose name does not change. Leave unset for a fresh deploy.
 CDK_CONTEXT=(--context admin_email="$ADMIN_EMAIL"
              --context admin_ip_allowlist="$ADMIN_IP_ALLOWLIST"
              # Pin the CDK to the same region this script resolved, so infra/app.py
              # cannot pick a different one from the ambient environment.
              --context region="$REGION")
+
+# --- Live-state guards for the two contexts that destroy things when forgotten ------
+#
+# OWNER_TAG and HOSTED_UI_DOMAIN_EXISTS were documented-only, in one file the deploy
+# runbook does not even link. Forgetting either on an UPDATE is destructive, so decide
+# both from the LIVE state and REFUSE on a mismatch — the same shape this script already
+# uses for APIGW_ACCOUNT_ROLE below, rather than trusting the operator to have read a doc.
+#
+# Defaults are READ FROM THE CDK SOURCE, not duplicated here. A literal copy would drift
+# silently, and drift means this guard would compare against the wrong value and either
+# refuse a correct deploy or wave through a destructive one.
+OWNER_DEFAULT=$(sed -n 's/.*try_get_context("owner_tag") or "\([^"]*\)".*/\1/p' \
+    stacks/av30_stack.py | head -1)
+UI_PREFIX_DEFAULT=$(sed -n 's/.*try_get_context("hosted_ui_prefix") or "\([^"]*\)".*/\1/p' \
+    stacks/av30_stack.py | head -1)
+if [ -z "$OWNER_DEFAULT" ] || [ -z "$UI_PREFIX_DEFAULT" ]; then
+    echo "ERROR: could not read the owner_tag / hosted_ui_prefix defaults from" >&2
+    echo "       infra/stacks/av30_stack.py. The shape of that file changed, so these" >&2
+    echo "       guards cannot be trusted — fix the extraction rather than bypassing it." >&2
+    exit 1
+fi
+
+STACK_STATUS_NOW=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+    --region "$REGION" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "")
+
+# 1. Owner tag. SageMaker treats domain TAGS as replacement-requiring, so a changed value
+#    rebuilds the Studio domain — new domain id, every participant's workspace gone, the
+#    EFS filesystem orphaned and still billing. Only matters on an update.
+OWNER_EFFECTIVE="${OWNER_TAG:-$OWNER_DEFAULT}"
+if [ -n "$STACK_STATUS_NOW" ]; then
+    OWNER_LIVE=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+        --region "$REGION" --query "Stacks[0].Tags[?Key=='Owner'].Value|[0]" \
+        --output text 2>/dev/null || echo "None")
+    if [ "$OWNER_LIVE" != "None" ] && [ -n "$OWNER_LIVE" ] \
+       && [ "$OWNER_LIVE" != "$OWNER_EFFECTIVE" ]; then
+        echo "REFUSING: this would change the stack's Owner tag from" >&2
+        echo "            '$OWNER_LIVE'  ->  '$OWNER_EFFECTIVE'" >&2
+        echo "          SageMaker treats domain tags as replacement-requiring, so that" >&2
+        echo "          REPLACES the Studio domain: new domain id, every participant" >&2
+        echo "          workspace lost, and the EFS filesystem orphaned but still billing." >&2
+        echo "          Re-run with:  OWNER_TAG='$OWNER_LIVE' $0 --region $REGION" >&2
+        echo "          (Only change the Owner tag deliberately, with the domain empty.)" >&2
+        exit 1
+    fi
+fi
 if [ -n "${OWNER_TAG:-}" ]; then
     echo "    (preserving Owner tag: $OWNER_TAG)"
     CDK_CONTEXT+=(--context owner_tag="$OWNER_TAG")
 fi
-# HOSTED_UI_DOMAIN_EXISTS: set ONLY for a deployment that already has an unmanaged
-# Cognito hosted-UI domain with this prefix (see AuthConstruct for why adoption needs
-# a delete). Leave unset for a new account so CloudFormation creates the domain.
+
+# 2. Cognito hosted-UI domain. The prefix is unique per REGION (not globally), so a second
+#    region needs no rename — but if a domain with this prefix already exists in THIS region
+#    and the stack does not own it, declaring it fails the create. Conversely, setting the
+#    flag when no domain exists yields a user pool with NO sign-in endpoint.
+UI_PREFIX="${HOSTED_UI_PREFIX:-$UI_PREFIX_DEFAULT}"
+[ -n "${HOSTED_UI_PREFIX:-}" ] && CDK_CONTEXT+=(--context hosted_ui_prefix="$HOSTED_UI_PREFIX")
+UI_DOMAIN_POOL=$(aws cognito-idp describe-user-pool-domain --domain "$UI_PREFIX" \
+    --region "$REGION" --output json 2>/dev/null | jq -r '.DomainDescription.UserPoolId // empty')
+# list-stack-resources, NOT describe-stack-resources: the latter caps at 100 resources with
+# no pagination and this stack has 176, so it reported "0 UserPoolDomain" for a region that
+# demonstrably manages one. Counting non-empty lines sums across pages.
+UI_DOMAIN_MANAGED=$(aws cloudformation list-stack-resources --stack-name "$STACK_NAME" \
+    --region "$REGION" \
+    --query "StackResourceSummaries[?ResourceType=='AWS::Cognito::UserPoolDomain'].LogicalResourceId" \
+    --output text 2>/dev/null | tr '\t' '\n' | grep -c . || true)
+
+if [ -n "$UI_DOMAIN_POOL" ] && [ "$UI_DOMAIN_MANAGED" = "0" ] \
+   && [ -z "${HOSTED_UI_DOMAIN_EXISTS:-}" ]; then
+    echo "REFUSING: '$UI_PREFIX' already exists as a Cognito hosted-UI domain in $REGION" >&2
+    echo "          (user pool $UI_DOMAIN_POOL) and this stack does NOT manage it." >&2
+    echo "          Declaring it would fail the create partway through the deploy." >&2
+    echo "          Re-run with:  HOSTED_UI_DOMAIN_EXISTS=true $0 --region $REGION" >&2
+    echo "          Or pick an unused prefix:  HOSTED_UI_PREFIX=<other> $0 --region $REGION" >&2
+    exit 1
+fi
+if [ -n "${HOSTED_UI_DOMAIN_EXISTS:-}" ] && [ -z "$UI_DOMAIN_POOL" ]; then
+    echo "REFUSING: HOSTED_UI_DOMAIN_EXISTS is set, but no hosted-UI domain named" >&2
+    echo "          '$UI_PREFIX' exists in $REGION. With the flag set the stack does not" >&2
+    echo "          declare one, so you would get a user pool with NO sign-in endpoint" >&2
+    echo "          and this script would abort later on the missing CognitoHostedUiUrl." >&2
+    echo "          Unset it for a region that needs its own domain." >&2
+    exit 1
+fi
+# The mirror-image mistake, and the easier one to make once the flag is in your shell
+# history: setting it in a region where the stack DOES manage the domain removes that
+# resource from the template, so CloudFormation DELETES the live Cognito domain and
+# sign-in stops working. Nothing about that reads as destructive at the command line.
+if [ -n "${HOSTED_UI_DOMAIN_EXISTS:-}" ] && [ "$UI_DOMAIN_MANAGED" != "0" ]; then
+    echo "REFUSING: HOSTED_UI_DOMAIN_EXISTS is set, but this stack MANAGES the hosted-UI" >&2
+    echo "          domain '$UI_PREFIX' in $REGION. Setting the flag drops the resource" >&2
+    echo "          from the template, so CloudFormation would DELETE the live domain and" >&2
+    echo "          admin sign-in would stop working." >&2
+    echo "          Unset it here — it exists only for a domain the stack does not own." >&2
+    exit 1
+fi
+if [ -n "${HOSTED_UI_DOMAIN_EXISTS:-}" ]; then
+    echo "    (hosted-UI domain '$UI_PREFIX' exists and stays unmanaged)"
+    CDK_CONTEXT+=(--context hosted_ui_domain_exists="$HOSTED_UI_DOMAIN_EXISTS")
+fi
 # API Gateway account-level CloudWatch role. AWS::ApiGateway::Account is a per-account
 # PER-REGION singleton implemented as an unconditional PATCH /account, so creating it
 # OVERWRITES whatever role the region already has — measured in this account,
@@ -153,10 +241,6 @@ if [ -n "${ACCOUNT_BUDGET:-}" ]; then
     CDK_CONTEXT+=(--context account_budget="$ACCOUNT_BUDGET")
     [ -n "${ACCOUNT_BUDGET_LIMIT:-}" ] \
         && CDK_CONTEXT+=(--context account_budget_limit="$ACCOUNT_BUDGET_LIMIT")
-fi
-if [ -n "${HOSTED_UI_DOMAIN_EXISTS:-}" ]; then
-    echo "    (hosted-UI domain assumed to exist and stay unmanaged)"
-    CDK_CONTEXT+=(--context hosted_ui_domain_exists="$HOSTED_UI_DOMAIN_EXISTS")
 fi
 npx cdk deploy --require-approval never "${CDK_CONTEXT[@]}"
 cd ..

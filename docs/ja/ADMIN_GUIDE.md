@@ -244,21 +244,37 @@ M12 と M11 には**キャッシュ不要** — §2b のジョブクォータだ
 
 ## 5. プラットフォームのデプロイ（Day −3）
 
+> **リージョンは明示指定で、再デプロイにはガードがあります。** `--region` を渡してください —
+> デプロイ経路のどこにも既定値はありません。既存スタックを**更新**する場合、`deploy.sh` は
+> ライブ状態を読み取り、破壊的な動作を黙って実行する代わりに**拒否**します: スタックの
+> `Owner` タグが変わるデプロイ（Studio ドメインが置き換えられ、全参加者のワークスペースが
+> 失われ EFS が孤立します）と、`HOSTED_UI_DOMAIN_EXISTS` の誤った組み合わせ（既存の非管理
+> Cognito ドメインを宣言する、逆にスタックが管理中のドメインを削除してしまう）の両方を
+> 止めます。拒否のたびに再実行すべき正確なコマンドを出力します。**新しいリージョンでは
+> これらのフラグは一切不要です。**
+> リージョンを**追加**する場合は [ADDING_A_REGION.md](ADDING_A_REGION.md) を参照してください。
+
+
 ```bash
 # Required env
 export ADMIN_EMAIL="you@example.com"       # becomes the Cognito admin + SNS alert target
-export AWS_REGION="us-west-2"              # YOUR chosen region (§1.5); account comes from your creds
+export REGION="us-west-2"                  # YOUR chosen region (§1.5) — passed explicitly below
+export AWS_REGION="$REGION"                # the seeding scripts in §6 read this
 export HF_TOKEN="hf_..."                    # for the caching steps in §6
 # Optional: lock the admin dashboard to your IP
 export ADMIN_IP_ALLOWLIST="203.0.113.0/24" # default 0.0.0.0/0
 
 # One-time CDK bootstrap (per account+region)
 cd infra && source .venv/bin/activate && pip install -r requirements.txt
-npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$AWS_REGION
+npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$REGION
 cd ..
 
-# Deploy stack + build/upload both dashboards (~25 min)
-./scripts/deploy.sh
+# Generate this region's instance rate table (REQUIRED — the Lambdas raise at import
+# without it rather than quoting another region's prices)
+./scripts/refresh_instance_rates.py --region "$REGION" --merge
+
+# Deploy stack + build/upload both dashboards (~25 min). Region is explicit.
+./scripts/deploy.sh --region "$REGION"
 ```
 
 `deploy.sh` は `ADMIN_EMAIL` と `ADMIN_IP_ALLOWLIST` を `--context` 経由で CDK に渡します
@@ -511,4 +527,6 @@ AlpaSim を自分自身で実行する**ようにしたい場合:
 - モジュールの深掘り: [COSMOS_M5_M6.md](COSMOS_M5_M6.md)、[ALPAMAYO_M9.md](ALPAMAYO_M9.md)、
   [ALPASIM_M10.md](ALPASIM_M10.md)、[HYPERPOD_M12.md](HYPERPOD_M12.md)、
   [PIPELINE_M11.md](PIPELINE_M11.md)。
+- [ADDING_A_REGION.md](ADDING_A_REGION.md) — 独立した追加リージョンの構築（クォータ、
+  データ配置、再デプロイに必要なコンテキスト）。
 - [README.md](../../README.md) — 完全なデプロイ + アーキテクチャリファレンス。

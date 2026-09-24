@@ -249,21 +249,37 @@ aws service-quotas request-service-quota-increase \
 
 ## 5. 플랫폼 배포 (D−3)
 
+> **리전은 명시적이며, 재배포에는 가드가 걸려 있습니다.** `--region`을 넘기세요 — 배포 경로
+> 어디에도 기본값이 없습니다. 기존 스택을 **업데이트**할 때 `deploy.sh`가 라이브 상태를 읽고
+> 파괴적인 동작을 조용히 수행하는 대신 **거부**합니다: 스택의 `Owner` 태그가 바뀌는 배포
+> (Studio 도메인이 교체되어 모든 참가자 워크스페이스가 사라지고 EFS가 고아가 됨)와,
+> `HOSTED_UI_DOMAIN_EXISTS`의 잘못된 조합(이미 존재하는 비관리 Cognito 도메인을 선언하거나,
+> 반대로 스택이 관리 중인 도메인을 삭제하게 되는 경우) 양쪽을 막습니다. 거부할 때마다 다시
+> 실행할 정확한 명령을 출력합니다. **새 리전은 이 플래그가 전혀 필요 없습니다.**
+> 리전을 **추가**하려면 [../en/ADDING_A_REGION.md](../en/ADDING_A_REGION.md) 를 보세요
+> (한국어: [ADDING_A_REGION.md](ADDING_A_REGION.md)).
+
+
 ```bash
 # Required env
 export ADMIN_EMAIL="you@example.com"       # becomes the Cognito admin + SNS alert target
-export AWS_REGION="us-west-2"              # YOUR chosen region (§1.5); account comes from your creds
+export REGION="us-west-2"                  # YOUR chosen region (§1.5) — passed explicitly below
+export AWS_REGION="$REGION"                # the seeding scripts in §6 read this
 export HF_TOKEN="hf_..."                    # for the caching steps in §6
 # Optional: lock the admin dashboard to your IP
 export ADMIN_IP_ALLOWLIST="203.0.113.0/24" # default 0.0.0.0/0
 
 # One-time CDK bootstrap (per account+region)
 cd infra && source .venv/bin/activate && pip install -r requirements.txt
-npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$AWS_REGION
+npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$REGION
 cd ..
 
-# Deploy stack + build/upload both dashboards (~25 min)
-./scripts/deploy.sh
+# Generate this region's instance rate table (REQUIRED — the Lambdas raise at import
+# without it rather than quoting another region's prices)
+./scripts/refresh_instance_rates.py --region "$REGION" --merge
+
+# Deploy stack + build/upload both dashboards (~25 min). Region is explicit.
+./scripts/deploy.sh --region "$REGION"
 ```
 
 `deploy.sh`는 `ADMIN_EMAIL`과 `ADMIN_IP_ALLOWLIST`를 `--context`를 통해 CDK에 전달합니다
@@ -516,4 +532,6 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 - 모듈 심화: [COSMOS_M5_M6.md](COSMOS_M5_M6.md), [ALPAMAYO_M9.md](ALPAMAYO_M9.md),
   [ALPASIM_M10.md](ALPASIM_M10.md), [HYPERPOD_M12.md](HYPERPOD_M12.md),
   [PIPELINE_M11.md](PIPELINE_M11.md).
+- [ADDING_A_REGION.md](ADDING_A_REGION.md) — 독립적인 추가 리전 구축(쿼터, 데이터 적재,
+  재배포에 필요한 컨텍스트).
 - [README.md](../../README.md) — 전체 배포 + 아키텍처 레퍼런스.

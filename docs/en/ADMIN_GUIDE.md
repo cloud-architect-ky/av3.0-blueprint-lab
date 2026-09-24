@@ -250,27 +250,45 @@ running M10. M12 and M11 need **no cache** — just the job quotas in §2b.
 
 ## 5. Deploy the platform (Day −3)
 
+> **Region is explicit, and a redeploy is guarded.** Pass `--region` — there is no default
+> anywhere in the deploy path. On an UPDATE of an existing stack, `deploy.sh` now reads the
+> live state and **refuses** rather than doing something destructive silently: it stops if
+> the deploy would change the stack's `Owner` tag (which replaces the Studio domain, losing
+> every participant workspace and orphaning the EFS), and it stops on any wrong combination
+> of `HOSTED_UI_DOMAIN_EXISTS` (either declaring a Cognito domain that already exists
+> unmanaged, or deleting one the stack does own). Each refusal prints the exact command to
+> re-run. A brand-new region needs none of these flags.
+> To stand up an ADDITIONAL region, see [../en/ADDING_A_REGION.md](ADDING_A_REGION.md).
+
+
 ```bash
 # Required env
 export ADMIN_EMAIL="you@example.com"       # becomes the Cognito admin + SNS alert target
-export AWS_REGION="us-west-2"              # YOUR chosen region (§1.5); account comes from your creds
+export REGION="us-west-2"                  # YOUR chosen region (§1.5) — passed explicitly below
+export AWS_REGION="$REGION"                # the seeding scripts in §6 read this
 export HF_TOKEN="hf_..."                    # for the caching steps in §6
 # Optional: lock the admin dashboard to your IP
 export ADMIN_IP_ALLOWLIST="203.0.113.0/24" # default 0.0.0.0/0
 
 # One-time CDK bootstrap (per account+region)
 cd infra && source .venv/bin/activate && pip install -r requirements.txt
-npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$AWS_REGION
+npx cdk bootstrap aws://$(aws sts get-caller-identity --query Account --output text)/$REGION
 cd ..
 
-# Deploy stack + build/upload both dashboards (~25 min)
-./scripts/deploy.sh
+# Generate this region's instance rate table (REQUIRED — the Lambdas raise at import
+# without it rather than quoting another region's prices)
+./scripts/refresh_instance_rates.py --region "$REGION" --merge
+
+# Deploy stack + build/upload both dashboards (~25 min). Region is explicit.
+./scripts/deploy.sh --region "$REGION"
 ```
 
-`deploy.sh` passes `ADMIN_EMAIL` and `ADMIN_IP_ALLOWLIST` to CDK via `--context`
-(**not** env vars — if you skip `deploy.sh` and run `cdk deploy` by hand, you must
-pass `--context admin_email=...` or the SNS budget alert reverts to a placeholder).
-It prints the **Admin Dashboard URL** and **API endpoint** at the end.
+`deploy.sh` passes `ADMIN_EMAIL`, `ADMIN_IP_ALLOWLIST` and the resolved region to CDK via
+`--context` (**not** env vars). If you skip `deploy.sh` and run `cdk deploy` by hand you must
+pass `--context admin_email=...` — omitting it does not fail, it silently replaces your alert
+email with `placeholder@example.com` and **deletes the real subscription**, including a
+confirmed one. It prints the **Admin Dashboard URL** and **API endpoint** at the end, plus a
+GPU-quota pre-flight and a warning if the account has no account-wide budget.
 
 **Create the admin login** (username must be the email — Cognito uses email as the
 sign-in alias):
@@ -517,4 +535,6 @@ source-builds `gsplat==1.4.0`.
 - Module deep-dives: [COSMOS_M5_M6.md](COSMOS_M5_M6.md), [ALPAMAYO_M9.md](ALPAMAYO_M9.md),
   [ALPASIM_M10.md](ALPASIM_M10.md), [HYPERPOD_M12.md](HYPERPOD_M12.md),
   [PIPELINE_M11.md](PIPELINE_M11.md).
+- [ADDING_A_REGION.md](ADDING_A_REGION.md) — stand up an additional, independent
+  region (quotas, seeding, the contexts a redeploy needs).
 - [README.md](../../README.md) — full deployment + architecture reference.

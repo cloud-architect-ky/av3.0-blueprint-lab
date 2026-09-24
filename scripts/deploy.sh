@@ -157,6 +157,10 @@ echo ">>> Step 2/6: Reading stack outputs..."
 OUTPUTS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --region "$REGION")
 ADMIN_BUCKET=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="AdminBucketName") | .OutputValue')
 USER_BUCKET=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserBucketName") | .OutputValue')
+# The stack exports the shared bucket as an ARN; strip the prefix to get the name. Used
+# only in the "Next steps" staging commands printed at the end — but it must be resolved
+# HERE, because `set -u` turns an undefined variable in those echoes into a hard abort.
+SHARED_BUCKET=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="SharedDataBucketArn") | .OutputValue' | sed 's|^arn:aws:s3:::||')
 ADMIN_CF=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="AdminDistributionId") | .OutputValue')
 USER_CF=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserDistributionId") | .OutputValue')
 API_URL=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="ApiUrl") | .OutputValue')
@@ -247,4 +251,12 @@ echo "API Endpoint:    $API_URL"
 echo ""
 echo "Next steps:"
 echo "  1. Create Cognito admin user: aws cognito-idp admin-create-user --user-pool-id $POOL_ID --username admin"
-echo "  2. Pre-cache models: HF_TOKEN=xxx ./scripts/cache_models.sh"
+# AWS_REGION is spelled out on purpose. This line used to omit it, and the seeding
+# scripts defaulted to us-west-2 — so copy-pasting it into a fresh shell after deploying
+# a second region re-seeded the FIRST region's bucket. Both scripts now refuse to guess,
+# and this command carries the region that was actually deployed.
+echo "  2. Stage notebook templates (REQUIRED — provisioning fails without them):"
+echo "       aws s3 sync notebooks/ s3://$SHARED_BUCKET/notebook-templates/ --region $REGION"
+echo "       aws s3 sync scripts/   s3://$SHARED_BUCKET/notebook-templates/scripts/ --region $REGION"
+echo "  3. Stage nuScenes:   AWS_REGION=$REGION ./scripts/stage_nuscenes.sh"
+echo "  4. Pre-cache models: AWS_REGION=$REGION HF_TOKEN=xxx ./scripts/cache_models.sh"

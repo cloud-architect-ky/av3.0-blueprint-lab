@@ -7,7 +7,21 @@ set -uo pipefail
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
-REGION="${AWS_REGION:-us-west-2}"
+# Region must be explicit — NO literal default. This used to be "us-west-2", and the
+# destination bucket is resolved from the CloudFormation stack in $REGION (below), so
+# running this with AWS_REGION unset after deploying a SECOND region re-synced ~157 GB
+# of models into the ALREADY-POPULATED first region's bucket, printing
+# "Region: us-west-2" the whole time — which reads as success.
+#
+# deploy.sh baited that trap by printing "HF_TOKEN=xxx ./scripts/cache_models.sh" with
+# no region: deploy.sh exports AWS_REGION in its OWN process, which does not survive
+# into the operator's next shell. It now prints the region explicitly.
+REGION="${AWS_REGION:-}"
+if [ -z "$REGION" ]; then
+    echo "ERROR: set AWS_REGION (e.g. AWS_REGION=ap-northeast-2 $0)." >&2
+    echo "       Refusing to guess: guessing seeds the wrong region, silently." >&2
+    exit 2
+fi
 STACK_NAME="Av30BlueprintLabStack"
 TEMP_DIR="${TMPDIR:-/tmp}/av30-model-cache"
 

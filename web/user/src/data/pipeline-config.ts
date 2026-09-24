@@ -341,7 +341,12 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
       steps: [
         "Prepare a Hugging Face token and accept the nvidia/PhysicalAI-Autonomous-Vehicles-NuRec dataset license (see Prerequisites).",
         "Get your AWS access key + GPU instance ID from the workshop admin.",
-        "aws ssm start-session --target <instance-id> --region us-west-2",
+        // {region} is substituted at render time from config.json (see
+        // ModuleDetailPanel). It was hardcoded "us-west-2", which in any other
+        // deployment region told participants to target the WRONG region: either the
+        // instance is not found, or — if that region happens to have a GPU host up —
+        // they attach to a box that is not theirs.
+        "aws ssm start-session --target <instance-id> --region {region}",
         "In the session, export PARTICIPANT_ID / M10_OUTPUT_PREFIX / OUTPUT_BUCKET / HF_TOKEN (one per line), then run alpasim_ec2_setup.sh (first build tens of minutes to ~2–3 h).",
         "When it prints DONE, tell the admin so they terminate the host.",
         "Back here: open this notebook (CPU) and Run All — it auto-loads your results.",

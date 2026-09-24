@@ -26,7 +26,16 @@
 #   MODEL_BUCKET env var  >  first CLI arg  >  CloudFormation stack output
 set -uo pipefail
 
-REGION="${AWS_REGION:-us-west-2}"
+# Region must be explicit — NO literal default. See cache_models.sh for the full
+# rationale: the destination bucket comes from the CloudFormation stack in $REGION, so a
+# default silently re-seeds the FIRST region after a second region is deployed.
+# (NUSCENES_S3_REGION below is unrelated — it is the public source bucket's region.)
+REGION="${AWS_REGION:-}"
+if [ -z "$REGION" ]; then
+    echo "ERROR: set AWS_REGION (e.g. AWS_REGION=ap-northeast-2 $0)." >&2
+    echo "       Refusing to guess: guessing seeds the wrong region, silently." >&2
+    exit 2
+fi
 STACK_NAME="Av30BlueprintLabStack"
 DEST_PREFIX="datasets/nuscenes-mini/"
 

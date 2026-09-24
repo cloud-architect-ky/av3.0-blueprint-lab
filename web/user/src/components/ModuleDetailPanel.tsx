@@ -14,6 +14,7 @@ import {
 } from "@cloudscape-design/components";
 import { type ModuleConfig, PHASE_COLORS } from "../data/pipeline-config";
 import { InstanceOptionsPanel } from "./InstanceOptionsPanel";
+import { getConfig } from "../config";
 
 interface ModuleDetailPanelProps {
   module: ModuleConfig;
@@ -204,7 +205,10 @@ export function ModuleDetailPanel({
                   <ol style={{ margin: 0, paddingLeft: 18 }}>
                     {module.externalExecution.steps.map((step, i) => (
                       <li key={i} style={{ fontSize: "13px", marginBottom: 4 }}>
-                        {step}
+                        {/* Substitute the DEPLOYED region. The SSM command used to
+                            hardcode us-west-2, so participants in any other region
+                            were told to target a region their host is not in. */}
+                        {step.replace(/\{region\}/g, getConfig().region)}
                       </li>
                     ))}
                   </ol>

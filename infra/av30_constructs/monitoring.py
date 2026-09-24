@@ -13,37 +13,34 @@ from aws_cdk import (
     aws_budgets as budgets,
 )
 
-# Cost Explorer identifies a region by its DISPLAY name, not its code, and the Budgets
-# Region cost filter uses the same vocabulary — "us-west-2" is silently not a match.
-# Only regions this lab can actually be deployed to need an entry; an unlisted region
-# raises rather than producing a budget that measures the whole account by accident.
-_CE_REGION_DISPLAY_NAME = {
-    "us-east-1": "US East (N. Virginia)",
-    "us-east-2": "US East (Ohio)",
-    "us-west-1": "US West (N. California)",
-    "us-west-2": "US West (Oregon)",
-    "eu-west-1": "EU (Ireland)",
-    "eu-west-2": "EU (London)",
-    "eu-central-1": "EU (Frankfurt)",
-    "eu-north-1": "EU (Stockholm)",
-    "ap-northeast-1": "Asia Pacific (Tokyo)",
-    "ap-northeast-2": "Asia Pacific (Seoul)",
-    "ap-northeast-3": "Asia Pacific (Osaka)",
-    "ap-southeast-1": "Asia Pacific (Singapore)",
-    "ap-southeast-2": "Asia Pacific (Sydney)",
-    "ap-south-1": "Asia Pacific (Mumbai)",
-    "ca-central-1": "Canada (Central)",
-    "sa-east-1": "South America (Sao Paulo)",
-}
-
-
-class UnsupportedBudgetRegionError(ValueError):
-    """No Cost Explorer display name known for this region.
-
-    Raised instead of omitting the Region cost filter: a budget with no filter measures
-    ENTIRE-ACCOUNT spend, so silently dropping it would give every region a budget that
-    alarms on everyone else's usage and names no culprit.
-    """
+# The Region cost filter takes the region CODE ("ap-northeast-2"), not the Cost Explorer
+# console's display name ("Asia Pacific (Seoul)").
+#
+# This file previously mapped codes to display names, on the belief that Cost Explorer
+# identifies regions the way its console labels them. That is wrong, and it fails in the
+# worst possible way: a display name is not rejected, it simply matches NOTHING, so the
+# budget reports $0.00 for ever and never alarms. Measured in account <aws-account-id> over
+# the same 14-day window:
+#
+#     filter                        UnblendedCost
+#     (none)                        $1647.76
+#     REGION = "us-west-2"          $ 950.18
+#     REGION = "US West (Oregon)"   $   0.00     <-- silently no match
+#     REGION = "ap-northeast-2"     $ 371.63
+#     REGION = "Asia Pacific (Seoul)" $ 0.00     <-- silently no match
+#
+# `ce get-dimension-values --dimension REGION` returns ONLY codes (18 values plus
+# "global"); no display name exists in the vocabulary at all. The deployed proof: the
+# Seoul budget read ActualSpend 0.0 while Cost Explorer showed $371.63 of real
+# ap-northeast-2 spend in the same period.
+#
+# That made the guardrail strictly worse than the unfiltered budget it replaced — that
+# one at least alarmed. This repo's own history is the cost of a silent budget:
+# $269/day ran unnoticed against a $200 limit for roughly 85 days.
+#
+# Using the code also removes a side effect of the old table: it raised for 7 regions
+# that smd_images.py otherwise supports (af-south-1, ap-east-1, ap-southeast-3,
+# eu-south-1, eu-west-3, me-central-1, me-south-1), hard-failing synth there.
 
 
 class MonitoringConstruct(Construct):
@@ -129,7 +126,7 @@ class MonitoringConstruct(Construct):
                 budget_name=f"av30lab-daily-budget-{cdk.Stack.of(self).region}",
                 budget_type="COST",
                 time_unit="DAILY",
-                cost_filters={"Region": [self._ce_region_name()]},
+                cost_filters={"Region": [cdk.Stack.of(self).region]},
                 budget_limit=budgets.CfnBudget.SpendProperty(
                     amount=200,
                     unit="USD",
@@ -152,18 +149,6 @@ class MonitoringConstruct(Construct):
                 ),
             ],
         )
-
-    def _ce_region_name(self) -> str:
-        """Cost Explorer display name for this stack's region."""
-        region = cdk.Stack.of(self).region
-        try:
-            return _CE_REGION_DISPLAY_NAME[region]
-        except KeyError:
-            raise UnsupportedBudgetRegionError(
-                f"No Cost Explorer region display name for {region!r}. Add it to "
-                f"_CE_REGION_DISPLAY_NAME in monitoring.py — do NOT drop the Region "
-                f"cost filter, which would silently make this an account-wide budget."
-            ) from None
 
     @property
     def sns_topic(self) -> sns.Topic:

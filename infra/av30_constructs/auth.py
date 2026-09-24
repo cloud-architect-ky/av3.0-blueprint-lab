@@ -18,7 +18,8 @@ class AuthConstruct(Construct):
     Attributes:
         user_pool: Cognito User Pool with strict password policy (admin-only).
         user_pool_client: App client for admin dashboard SPA.
-        web_acl_arn: ARN of the WAF WebACL (CLOUDFRONT scope) with IP allowlist.
+        web_acl_arn: ARN of the WAF WebACL (REGIONAL scope — it attaches to API Gateway,
+            not CloudFront) with IP allowlist, or None when the allowlist is 0.0.0.0/0.
     """
 
     def __init__(
@@ -36,8 +37,20 @@ class AuthConstruct(Construct):
                 every /oauth2/authorize request, and it is the single reason a fresh
                 account could not sign in — the live pool had these URLs set BY HAND
                 and the CDK never knew about them.
-            hosted_ui_prefix: Cognito hosted-UI domain prefix. Globally unique across
-                AWS. The SPA builds ${cognitoDomain}/oauth2/authorize from it.
+            hosted_ui_prefix: Cognito hosted-UI domain prefix. Unique across all AWS
+                accounts WITHIN A REGION — not globally. The region is part of the
+                hostname (<prefix>.auth.<region>.amazoncognito.com), so there is no
+                shared name to contend for and ONE account can hold the SAME prefix in
+                several regions simultaneously. Verified: "av30lab-admin" is ACTIVE in
+                both us-west-2 and ap-northeast-2 of account <aws-account-id>, fronting
+                different pools. So a second region needs NO rename.
+                The SPA builds ${cognitoDomain}/oauth2/authorize from it.
+
+                Probing a target region, read `describe-user-pool-domain` like this:
+                  HTTP 200 + populated DomainDescription -> already ours
+                  HTTP 200 + EMPTY DomainDescription     -> free
+                  ResourceNotFoundException              -> taken by ANOTHER account
+                Only the third case requires a different prefix.
         """
         super().__init__(scope, construct_id)
 
@@ -105,9 +118,15 @@ class AuthConstruct(Construct):
         # contain no other create/update/delete, and CFN reports ~60 unchanged resources
         # in this stack as "modified" during import validation (verified — plain
         # `cdk diff --method=template` reports 0 changes for the same template), so a
-        # clean import change set cannot be produced. Deleting the domain releases a
-        # GLOBALLY-unique prefix, so that is a deliberate, separately-approved step.
-        # Leave this flag unset for any new deployment.
+        # clean import change set cannot be produced.
+        #
+        # DO NOT set this flag for a new region. It is the most dangerous lever in this
+        # file: skipping the domain declaration yields a user pool with NO sign-in
+        # endpoint, and deploy.sh then aborts on the missing CognitoHostedUiUrl output.
+        # It exists ONLY to accommodate the single pre-existing unmanaged domain in
+        # us-west-2. A second region does not need it — the prefix is per-region (see
+        # hosted_ui_prefix above), so CFN can simply create its own domain there, which
+        # is exactly what happened in ap-northeast-2.
         self._hosted_ui_prefix = hosted_ui_prefix
         self._user_pool_domain = None
         if not self.node.try_get_context("hosted_ui_domain_exists"):

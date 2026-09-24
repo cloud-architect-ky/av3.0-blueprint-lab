@@ -237,17 +237,27 @@ class ApiConstruct(Construct):
         # self-invoke tail (delete -> wait -> update_space -> wait -> create_app)
         # can block up to ~660s worst-case (240+180+240) — well past the old
         # 5-min timeout, which would kill the recreate mid-flight.
+        #
+        # retry_attempts=0: both of these self-invoke asynchronously, and Lambda's default
+        # of 2 retries on a failed async invocation is DESTRUCTIVE here, not helpful. The
+        # request path deletes the running app before dispatching, so a retry re-enters the
+        # tail against whatever state the previous attempt left — including waiting for the
+        # deletion of an app the failure handler just restored. The handlers recover and
+        # record the failure themselves (lastInstanceChangeError, surfaced by /app-status)
+        # instead of relying on a retry.
         change_instance_fn = self._create_lambda(
             "ChangeInstanceFn",
             handler_dir="change_instance",
             environment=shared_env,
             timeout=Duration.minutes(15),
+            retry_attempts=0,
         )
         expand_storage_fn = self._create_lambda(
             "ExpandStorageFn",
             handler_dir="expand_storage",
             environment=shared_env,
             timeout=Duration.minutes(15),
+            retry_attempts=0,
         )
         instance_options_fn = self._create_lambda(
             "InstanceOptionsFn", handler_dir="instance_options", environment=shared_env
@@ -371,6 +381,27 @@ class ApiConstruct(Construct):
                     resources=[self_arn],
                 )
             )
+
+        # Service Quotas read for change_instance — it resolves the live Studio-JupyterLab
+        # quota for the REQUESTED type before touching the participant's running app, so a
+        # quota-0 type is rejected up front instead of being accepted and then failing to
+        # start. (Measured: all ml.g6.* sizes are priced in ap-northeast-2 with quota 0.)
+        #
+        # GetServiceQuota only; the Lambda never needs to list (the quota CODE is generated
+        # ahead of time into instance_rates.QUOTA_CODES) and never requests an increase.
+        # GetServiceQuota does not support resource-level ARNs, hence "*".
+        #
+        # config.studio_quota_for degrades to "unknown -> allow" if this grant is absent, so
+        # removing it silently restores the old accept-then-fail behaviour rather than
+        # breaking the route.
+        change_instance_fn.add_to_role_policy(
+            iam.PolicyStatement(
+                sid="ServiceQuotasRead",
+                effect=iam.Effect.ALLOW,
+                actions=["servicequotas:GetServiceQuota"],
+                resources=["*"],
+            )
+        )
 
         # OpenSearch Serverless cleanup for delete_user — it tears down the
         # collection + policies that M4 creates for a user. Lookup+delete of the
@@ -555,6 +586,7 @@ class ApiConstruct(Construct):
         handler_dir: str,
         environment: dict[str, str],
         timeout: Duration = Duration.seconds(30),
+        retry_attempts: int | None = None,
     ) -> lambda_.Function:
         """Create a Lambda function with shared bundling configuration.
 
@@ -575,6 +607,7 @@ class ApiConstruct(Construct):
             timeout=timeout,
             memory_size=256,
             tracing=lambda_.Tracing.ACTIVE,
+            retry_attempts=retry_attempts,
         )
 
     @property

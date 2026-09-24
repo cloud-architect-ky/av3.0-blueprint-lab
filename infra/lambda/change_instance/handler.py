@@ -41,6 +41,7 @@ from config import (
     create_app_when_ready,
     jupyterlab_resource_spec,
     safe_delete_app,
+    studio_quota_for,
     wait_for_app_deleted,
     wait_for_space_in_service,
 )
@@ -113,9 +114,7 @@ def _http_handler(event, context):
             f"{new_instance_type} is not available for Studio JupyterLab in {AWS_REGION}",
             details=(
                 f"This is a REGIONAL limitation, not a quota. Types available in "
-                f"{AWS_REGION}: {sorted(VALID_INSTANCE_TYPES)}. "
-                f"(A type listed here can still fail to start if its Studio quota is 0 — "
-                f"run scripts/check_quotas.py --region {AWS_REGION} to see quotas.)"
+                f"{AWS_REGION}: {sorted(VALID_INSTANCE_TYPES)}."
             ),
         )
 
@@ -161,8 +160,35 @@ def _http_handler(event, context):
     if new_instance_type == previous_type:
         raise ApiError(409, "Instance type is already set to the requested type")
 
+    # Being SOLD in this region is not the same as being LAUNCHABLE by this account. A priced
+    # type whose Studio quota is 0 is accepted by CreateApp and then fails to start —
+    # measured: every ml.g6.* size is priced in ap-northeast-2 with quota 0, and
+    # pipeline-config.ts still offers some of them as alternatives for M2/M3/M7.
+    #
+    # This MUST stay ahead of safe_delete_app below. The request path deletes the running app
+    # before handing off to the async tail, so accepting a quota-0 type would destroy a
+    # working workspace and leave the participant with nothing running to fall back to.
+    #
+    # Compared against 0 explicitly: studio_quota_for returns None for "unknown" (missing
+    # IAM grant, throttle, no such quota in this region) and unknown must NOT block, so
+    # `if not quota` would be wrong in both directions.
+    quota = studio_quota_for(new_instance_type)
+    if quota == 0:
+        raise ApiError(
+            400,
+            f"{new_instance_type} is available in {AWS_REGION} but this account's quota "
+            f"for it is 0, so the app would be accepted and then fail to start",
+            details=(
+                f"Your current instance ({previous_type}) is still running and has not been "
+                f"touched. Pick a different type, or ask the workshop admin to request an "
+                f"increase for 'Studio JupyterLab Apps running on {new_instance_type} "
+                f"instances' in {AWS_REGION}."
+            ),
+        )
+
     logger.info(
-        f"Changing instance for {user_id}: {previous_type} -> {new_instance_type}"
+        f"Changing instance for {user_id}: {previous_type} -> {new_instance_type} "
+        f"(quota={'unknown' if quota is None else quota})"
     )
 
     # Issue the delete SYNCHRONOUSLY (instant, async server-side) so the OLD app
@@ -201,12 +227,95 @@ def _http_handler(event, context):
     }
 
 
+def _record_change_error(user_id, previous_type, new_instance_type, message, recovered):
+    """Persist why the change failed so GET /app-status can explain it.
+
+    Best-effort: a failure to write the explanation must not mask the real error.
+    """
+    try:
+        table = dynamodb.Table(SESSIONS_TABLE_NAME)
+        table.update_item(
+            Key={"userId": user_id},
+            UpdateExpression="SET lastInstanceChangeError = :err",
+            ExpressionAttributeValues={
+                ":err": {
+                    "requestedType": new_instance_type,
+                    "previousType": previous_type,
+                    "message": message[:900],  # DDB item-size hygiene
+                    "recovered": recovered,
+                    "failedAt": datetime.now(timezone.utc).isoformat(),
+                }
+            },
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(f"[async] Could not record change error for {user_id}")
+
+
+def _restore_previous(space_name, previous_type):
+    """Put the space back on `previous_type` and relaunch, so the user is not left empty.
+
+    The request path already deleted the old app before dispatching here, so a failure in
+    the middle of the change leaves the participant with NO workspace at all. Rolling the
+    space's DefaultResourceSpec back and relaunching returns them to what they had.
+
+    Never raises: the caller is already handling a failure and must not lose it.
+    Returns True only if the app is actually back up.
+    """
+    if not previous_type:
+        logger.error(f"[async] No previousType recorded for {space_name}; cannot restore")
+        return False
+    try:
+        sagemaker.update_space(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            SpaceName=space_name,
+            SpaceSettings={
+                "JupyterLabAppSettings": {
+                    "DefaultResourceSpec": jupyterlab_resource_spec(
+                        previous_type, include_lcc=False
+                    ),
+                }
+            },
+        )
+        wait_for_space_in_service(sagemaker, SAGEMAKER_DOMAIN_ID, space_name)
+        # The failed attempt may have left an app behind (e.g. Failed state); clear it
+        # first or create_app will collide with the existing name.
+        safe_delete_app(sagemaker, SAGEMAKER_DOMAIN_ID, space_name, APP_TYPE)
+        wait_for_app_deleted(sagemaker, SAGEMAKER_DOMAIN_ID, space_name, APP_TYPE)
+        create_app_when_ready(
+            sagemaker,
+            SAGEMAKER_DOMAIN_ID,
+            space_name,
+            jupyterlab_resource_spec(previous_type),
+            APP_TYPE,
+        )
+        logger.info(f"[async] Restored {space_name} to {previous_type}")
+        return True
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            f"[async] RESTORE FAILED for {space_name} -> {previous_type}; "
+            f"the participant has no running app and needs admin help"
+        )
+        return False
+
+
 def _apply_async(event):
     """Slow continuation: wait for delete, resize the space, recreate the app.
 
-    Not @api_handler-decorated: there is no HTTP caller to answer. On failure it
-    raises, which fails the async invocation (logged + retried by Lambda). The
-    app is left in a Failed state that GET /app-status surfaces as capacityError.
+    Not @api_handler-decorated: there is no HTTP caller to answer.
+
+    DELIBERATELY DOES NOT RAISE on a handled failure. Lambda retries a failed async
+    invocation twice by default, and a retry here is actively destructive: it would run
+    wait_for_app_deleted against the app the recovery just brought back, then resize the
+    space to the failing type a second time. Instead the failure is recovered, recorded in
+    lastInstanceChangeError for GET /app-status, logged at ERROR (greppable, and the only
+    signal CloudWatch metrics would otherwise have given us), and reported in the return
+    value.
+
+    The most likely failure left is ResourceLimitExceeded — quota exists but every slot is
+    in use by other participants. In a region where the heavy types have a quota of 2, that
+    is an ordinary Tuesday, not an exception, so "leave them with nothing" is not acceptable
+    behaviour. (A quota of literally 0 is now rejected on the request path before anything
+    is deleted; see studio_quota_for in _http_handler.)
     """
     user_id = event["userId"]
     space_name = event["spaceName"]
@@ -215,38 +324,58 @@ def _apply_async(event):
 
     logger.info(f"[async] Applying {new_instance_type} for {user_id}")
 
-    # The delete was already issued on the request path; wait for it to finish.
-    wait_for_app_deleted(sagemaker, SAGEMAKER_DOMAIN_ID, space_name, APP_TYPE)
+    try:
+        # The delete was already issued on the request path; wait for it to finish.
+        wait_for_app_deleted(sagemaker, SAGEMAKER_DOMAIN_ID, space_name, APP_TYPE)
 
-    # Update space with new instance type + matching CPU/GPU image.
-    sagemaker.update_space(
-        DomainId=SAGEMAKER_DOMAIN_ID,
-        SpaceName=space_name,
-        SpaceSettings={
-            "JupyterLabAppSettings": {
-                "DefaultResourceSpec": jupyterlab_resource_spec(
-                    new_instance_type, include_lcc=False
-                ),
-            }
-        },
-    )
-    logger.info(f"[async] Updated space {space_name} -> {new_instance_type}")
+        # Update space with new instance type + matching CPU/GPU image.
+        sagemaker.update_space(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            SpaceName=space_name,
+            SpaceSettings={
+                "JupyterLabAppSettings": {
+                    "DefaultResourceSpec": jupyterlab_resource_spec(
+                        new_instance_type, include_lcc=False
+                    ),
+                }
+            },
+        )
+        logger.info(f"[async] Updated space {space_name} -> {new_instance_type}")
 
-    # update_space briefly takes the space out of InService; wait for it to
-    # settle before creating the app (otherwise create_app 502s on first try).
-    wait_for_space_in_service(sagemaker, SAGEMAKER_DOMAIN_ID, space_name)
+        # update_space briefly takes the space out of InService; wait for it to
+        # settle before creating the app (otherwise create_app 502s on first try).
+        wait_for_space_in_service(sagemaker, SAGEMAKER_DOMAIN_ID, space_name)
 
-    # Create new app with the correct image (GPU image for GPU instances) and the
-    # notebook-sync LCC. create_app_when_ready retries while the EBS volume is
-    # still re-attaching (ResourceInUse "storage is not in Available status").
-    create_app_when_ready(
-        sagemaker,
-        SAGEMAKER_DOMAIN_ID,
-        space_name,
-        jupyterlab_resource_spec(new_instance_type),
-        APP_TYPE,
-    )
-    logger.info(f"[async] Created new {APP_TYPE} app for space: {space_name}")
+        # Create new app with the correct image (GPU image for GPU instances) and the
+        # notebook-sync LCC. create_app_when_ready retries while the EBS volume is
+        # still re-attaching (ResourceInUse "storage is not in Available status").
+        create_app_when_ready(
+            sagemaker,
+            SAGEMAKER_DOMAIN_ID,
+            space_name,
+            jupyterlab_resource_spec(new_instance_type),
+            APP_TYPE,
+        )
+        logger.info(f"[async] Created new {APP_TYPE} app for space: {space_name}")
+    except Exception as exc:  # noqa: BLE001 — every failure path must recover, then report
+        logger.exception(
+            f"[async] Failed applying {new_instance_type} for {user_id}; "
+            f"restoring {previous_type}"
+        )
+        recovered = _restore_previous(space_name, previous_type)
+        _record_change_error(
+            user_id, previous_type, new_instance_type, str(exc), recovered
+        )
+        # DynamoDB instanceType is deliberately left on previous_type: it was only ever
+        # written after a successful recreate, so it already reflects what is running.
+        return {
+            "applied": False,
+            "userId": user_id,
+            "requestedType": new_instance_type,
+            "restoredType": previous_type if recovered else None,
+            "recovered": recovered,
+            "error": str(exc),
+        }
 
     # Persist ONLY after the recreate succeeds — keeps the 409 "already set"
     # guard meaningful and never records a type that isn't actually running.
@@ -254,9 +383,15 @@ def _apply_async(event):
     table = dynamodb.Table(SESSIONS_TABLE_NAME)
     table.update_item(
         Key={"userId": user_id},
+        # REMOVE in the SAME expression as the SET: a stale lastInstanceChangeError from an
+        # earlier failed attempt would otherwise keep being surfaced by /app-status after
+        # this attempt succeeded. Doing it in one call also means there is no window where
+        # the new type is recorded while the old error is still attached. REMOVE on an
+        # absent attribute is a no-op, so this is safe on the common first-try path.
         UpdateExpression=(
             "SET instanceType = :new_type, "
-            "instanceHistory = list_append(if_not_exists(instanceHistory, :empty_list), :history)"
+            "instanceHistory = list_append(if_not_exists(instanceHistory, :empty_list), :history) "
+            "REMOVE lastInstanceChangeError"
         ),
         ExpressionAttributeValues={
             ":new_type": new_instance_type,
@@ -266,5 +401,6 @@ def _apply_async(event):
             ":empty_list": [],
         },
     )
+
     logger.info(f"[async] Apply complete for {user_id} -> {new_instance_type}")
     return {"applied": True, "userId": user_id, "newType": new_instance_type}

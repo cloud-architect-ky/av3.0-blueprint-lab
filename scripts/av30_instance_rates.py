@@ -13,7 +13,8 @@ config.py raise at import rather than quote another region's prices — regenera
     ./scripts/refresh_instance_rates.py --region <region> --merge
 
 Prices are NOT quotas. A rate here only means the region sells the type; whether this
-account may launch it is a separate per-(account x region) fact resolved at runtime.
+account may launch it is a separate per-(account x region) fact. QUOTA_CODES below lets
+change_instance resolve that live value with one GetServiceQuota call per request.
 """
 
 RATES_BY_REGION = {
@@ -181,4 +182,51 @@ RATES_BY_REGION = {
         "ml.g7e.48xlarge": 41.4304,
         "ml.p5.48xlarge": 63.296,
     },
+}
+
+
+# Studio-JupyterLab service-quota code per instance type, for GetServiceQuota.
+#
+# NOT keyed by region: codes were measured identical across us-west-2 / ap-northeast-2 /
+# eu-west-1 (zero mismatches on every shared type). Which types HAVE a quota does differ
+# per region, so a lookup can legitimately miss — callers must treat a miss as 'unknown',
+# never as 'quota 0', or they would block a launchable type.
+#
+# Values are deliberately absent: a quota can be raised minutes after this file is
+# generated, so baking one in would make the lab reject a type the account now owns.
+QUOTA_CODES = {
+    "ml.c5.2xlarge": "L-C1AE5754",
+    "ml.c5.large": "L-A6419EF6",
+    "ml.c5.xlarge": "L-BD09952F",
+    "ml.g4dn.2xlarge": "L-138F29A9",
+    "ml.g4dn.xlarge": "L-39F81BFB",
+    "ml.g5.12xlarge": "L-8D2ED7BF",
+    "ml.g5.24xlarge": "L-F087CCFC",
+    "ml.g5.2xlarge": "L-F73C7DB9",
+    "ml.g5.48xlarge": "L-83AB5D73",
+    "ml.g5.4xlarge": "L-81940D85",
+    "ml.g5.8xlarge": "L-19B6BAFC",
+    "ml.g5.xlarge": "L-988CE6C5",
+    "ml.g6.12xlarge": "L-962247BA",
+    "ml.g6.24xlarge": "L-8ACE1754",
+    "ml.g6.2xlarge": "L-92D1521D",
+    "ml.g6.48xlarge": "L-125B7142",
+    "ml.g6.4xlarge": "L-692B8304",
+    "ml.g6.xlarge": "L-AABA5942",
+    "ml.g7e.12xlarge": "L-5F015F52",
+    "ml.g7e.24xlarge": "L-E481E4F8",
+    "ml.g7e.2xlarge": "L-7A3E0A2C",
+    "ml.g7e.48xlarge": "L-A48244DF",
+    "ml.g7e.4xlarge": "L-B7228EBF",
+    "ml.g7e.8xlarge": "L-0407753C",
+    "ml.m5.2xlarge": "L-7C9662F1",
+    "ml.m5.4xlarge": "L-2CA31BFA",
+    "ml.m5.large": "L-3BDCD216",
+    "ml.m5.xlarge": "L-77B8159A",
+    "ml.p4d.24xlarge": "L-AD63F1D2",
+    "ml.p5.48xlarge": "L-B41FBF28",
+    "ml.t3.2xlarge": "L-B039EA8F",
+    "ml.t3.large": "L-2733D4D5",
+    "ml.t3.medium": "L-71FAF417",
+    "ml.t3.xlarge": "L-61F9C762",
 }

@@ -537,7 +537,10 @@ PRESIGNED_URL_EXPIRY = 28800
 # (single-GPU "verified path"). So no g5/g6 size reaches the top tier; g7e (96 GB), p4d
 # (40 GB) and p5 (80 GB) do. 24 GB cards still COMPLETE the lab — see
 # docs/en/ALPAMAYO_M9.md "Verified runs" (minADE 0.3779 m, Status: PASS).
-from instance_rates import RATES_BY_REGION  # noqa: E402  (shared layer, same directory)
+from instance_rates import (  # noqa: E402  (shared layer, same directory)
+    QUOTA_CODES,
+    RATES_BY_REGION,
+)
 
 
 class UnpricedRegionError(RuntimeError):
@@ -558,6 +561,54 @@ def _rates_for_region(region: str) -> dict:
 
 
 INSTANCE_RATES = _rates_for_region(AWS_REGION)
+
+
+def studio_quota_for(instance_type: str, *, client=None):
+    """Live Studio-JupyterLab quota for `instance_type` in THIS region, or None if unknown.
+
+    Prices and quotas are independent facts. A type can be priced here (so it passes the
+    INSTANCE_RATES allowlist) yet have a quota of 0, in which case SageMaker accepts
+    CreateApp and the app then fails to start. Measured in ap-northeast-2: the entire
+    ml.g6.* family is priced but quota 0. Resolving the quota BEFORE acting turns that
+    into an immediate, explainable rejection.
+
+    One GetServiceQuota call (~55-110 ms measured) using the code baked into
+    instance_rates.QUOTA_CODES — as opposed to paginating 2,258 SageMaker quotas, which is
+    why the code is generated ahead of time and only the VALUE is fetched live.
+
+    Returns None — meaning "unknown, do not block" — for every case where the number
+    cannot be trusted, because blocking on a bad read would deny a type the account
+    legitimately owns:
+
+      * no code for the type (region has no such quota; a raise cannot be requested either)
+      * NoSuchResourceException (the code is not offered in this region)
+      * AccessDeniedException (the servicequotas grant is missing — must degrade, not fail)
+      * throttling or any other ClientError
+
+    Callers MUST therefore branch on `== 0`, never on falsiness: `not 0.0` and `not None`
+    are both True, which would collapse "quota is zero" into "unknown" and vice versa.
+    """
+    code = QUOTA_CODES.get(instance_type)
+    if not code:
+        return None
+    try:
+        if client is None:
+            import boto3  # local: keeps the import off the cold path of every Lambda
+
+            client = boto3.client("service-quotas", region_name=AWS_REGION)
+        response = client.get_service_quota(ServiceCode="sagemaker", QuotaCode=code)
+        return float(response["Quota"]["Value"])
+    except Exception as exc:  # noqa: BLE001 — availability beats precision here
+        _logger.warning(
+            "Could not resolve Studio quota for %s (%s=%s) in %s: %s; "
+            "treating as unknown and allowing the request",
+            instance_type,
+            "QuotaCode",
+            code,
+            AWS_REGION,
+            exc,
+        )
+        return None
 
 # Module configuration for the workshop
 MODULE_CONFIG = {

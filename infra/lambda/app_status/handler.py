@@ -60,6 +60,12 @@ def handler(event, context):
     space_name = item.get("spaceName", f"{user_id}-space")
     ddb_instance = item.get("instanceType", "ml.t3.medium")
 
+    # A failed instance change recovers by restoring the PREVIOUS type and relaunching
+    # (change_instance._restore_previous), so the live app reads InService and looks
+    # perfectly healthy — the participant would otherwise just see their requested change
+    # silently not happen. change_instance clears this on the next success.
+    change_error = item.get("lastInstanceChangeError")
+
     # Describe the app. A space with no app (never launched, or previous app
     # failed and was auto-deleted) is a normal state — report "NotFound" rather
     # than erroring, so the UI can prompt the user to open the workspace.
@@ -80,6 +86,7 @@ def handler(event, context):
             "isGpu": is_gpu_instance(ddb_instance),
             "capacityError": False,
             "moduleProgress": item.get("moduleProgress", {}),
+            "lastInstanceChangeError": change_error,
         }
 
     status = resp.get("Status")  # Pending | InService | Deleting | Deleted | Failed
@@ -96,4 +103,5 @@ def handler(event, context):
         "isGpu": is_gpu_instance(instance_type),
         "capacityError": capacity_error,
         "moduleProgress": item.get("moduleProgress", {}),
+        "lastInstanceChangeError": change_error,
     }

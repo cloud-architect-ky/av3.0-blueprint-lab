@@ -89,11 +89,11 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 | **M2 Cosmos Reason Captioning** | **`ml.g5.12xlarge`** | GPU（4× A10G、96 GB） |
 | M3 Cosmos Curator | `ml.g5.12xlarge` | GPU |
 | M4 OpenSearch Semantic Search | `ml.t3.medium` | CPU |
-| M5 Cosmos Transfer (Weather Aug) | **`ml.g6.24xlarge`** | GPU（4× L4、GPU あたり 24 GB） — 480p で実行; 下のティア表を参照 |
-| M6 Cosmos Predict (Scenario Gen) | **`ml.g6.24xlarge`** | GPU（4× L4） — 480×832 で実行; 下のティア表を参照 |
+| M5 Cosmos Transfer (Weather Aug) | **`ml.g5.12xlarge`** | GPU（4× A10G、GPU あたり 24 GB） — 480p で実行; 下のティア表を参照 |
+| M6 Cosmos Predict (Scenario Gen) | **`ml.g5.12xlarge`** | GPU（4× A10G） — 480×832 で実行; 下のティア表を参照 |
 | M7 Nerfstudio 3D Reconstruction | `ml.g5.xlarge` | GPU（1× A10G）— ⚠️ **既知の制限あり**：GPU チェックとデータ準備のセルは実行されますが、最終的な 3D トレーニングのセル（splatfacto）は現在のイメージでは実行されません。M7 はオプション／デモモジュールとして扱ってください（下記の注記を参照）。 |
-| M8 Cosmos Reason LoRA SFT | **`ml.g6.24xlarge`** | GPU（4× L4）— ネイティブ 1600×900 で実測: 最悪 GPU ピーク 11.28 GiB、余裕 10.76 GiB。GPU 2 枚以上（または 40 GB 以上 1 枚）が必要。 |
-| M9 Alpamayo VLA Inference | **`ml.g6.24xlarge`** | GPU（4× L4） — シャーディング "balanced-expert" 経路、検証済み |
+| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU（4× A10G）— 4× 24 GB でネイティブ 1600×900 を実測: 最悪 GPU ピーク 11.28 GiB、余裕 10.76 GiB。GPU 2 枚以上（または 40 GB 以上 1 枚）が必要。 |
+| M9 Alpamayo VLA Inference | **`ml.g5.12xlarge`** | GPU（4× A10G） — シャーディング "balanced-expert" 経路; 合格した実行（minADE 0.3779）は A10G 上のものです |
 | M10 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU（本物の AlpaSim の結果を可視化。実際のシミュレーションは GPU EC2 ホスト上で実行 — 管理者リファレンス、または SSM 経由の自己実行） |
 | M11 Pipeline Automation | `ml.t3.medium` | CPU |
 | M12 HyperPod Distributed Training | `ml.t3.medium` | CPU（`ml.m5.xlarge`×2 上で実際の 2 ノード DDP トレーニングジョブを送信。HyperPod 自体は概念的なもの — HYPERPOD_M12.md を参照） |
@@ -110,9 +110,10 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 
 | インスタンス | GPU あたり | M5 / M6 の出力 | M9 の経路 | 約 $/時 |
 |---|---|---|---|---|
-| **`ml.g6.24xlarge`**（デフォルト、**検証済み**） | 約 22.5 GB | 480p、ガードレール **OFF** | シャーディング `balanced-expert` | **8.34** |
+| **`ml.g5.12xlarge`**（デフォルト） | 約 22.5 GB | 480p、ガードレール **OFF** | シャーディング `balanced-expert` | **7.09** |
+| `ml.g6.24xlarge` | 約 22.5 GB | デフォルトと同一 | シャーディング | 8.34 — 同じティアでコスト +18% |
 | `ml.g7e.2xlarge`（RTX PRO 6000 1 枚） | **96 GB** | **720p / ネイティブ、ガードレール ON** | **単一 GPU** | **4.20** — 下の注意点を参照 |
-| `ml.g5.24xlarge` | 約 22.5 GB | デフォルトと同一 | シャーディング | 10.18 — **利点なし、コスト +22%** |
+| `ml.g5.24xlarge` | 約 22.5 GB | デフォルトと同一 | シャーディング | 10.18 — **利点なし、コスト +44%** |
 | `ml.g5.48xlarge` / `ml.g6.48xlarge` | 約 22.5 GB | デフォルトと同一 | シャーディング | 20.36 / 16.69 — GPU 数のみ増加、ティアは同じ |
 | `ml.p4d.24xlarge` | 40 GB | 720p / ネイティブ、ガードレール ON | 単一 GPU | 25.25 |
 | `ml.p5.48xlarge` | 80 GB | 720p / ネイティブ、ガードレール ON | 単一 GPU | 63.30 |

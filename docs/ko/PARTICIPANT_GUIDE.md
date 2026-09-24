@@ -92,11 +92,11 @@ GPU 이미지와 노트북 동기화를 대신 처리합니다.
 | **M2 Cosmos Reason 캡셔닝** | **`ml.g5.12xlarge`** | GPU (4× A10G, 96 GB) |
 | M3 Cosmos Curator | `ml.g5.12xlarge` | GPU |
 | M4 OpenSearch 시맨틱 검색 | `ml.t3.medium` | CPU |
-| M5 Cosmos Transfer (날씨 증강) | **`ml.g6.24xlarge`** | GPU (4× L4, GPU당 24 GB) — 480p로 실행; 아래 티어 표 참조 |
-| M6 Cosmos Predict (시나리오 생성) | **`ml.g6.24xlarge`** | GPU (4× L4) — 480×832로 실행; 아래 티어 표 참조 |
+| M5 Cosmos Transfer (날씨 증강) | **`ml.g5.12xlarge`** | GPU (4× A10G, GPU당 24 GB) — 480p로 실행; 아래 티어 표 참조 |
+| M6 Cosmos Predict (시나리오 생성) | **`ml.g5.12xlarge`** | GPU (4× A10G) — 480×832로 실행; 아래 티어 표 참조 |
 | M7 Nerfstudio 3D 재구성 | `ml.g5.xlarge` | GPU (1× A10G) — ⚠️ **제한적으로 동작**: GPU 확인 + 데이터 준비 셀은 실행되지만, 최종 3D 학습 셀(splatfacto)은 현재 이미지에서 실행되지 않습니다. M7은 선택/데모 모듈로 취급하세요(아래 참고 사항 참조). |
-| M8 Cosmos Reason LoRA SFT | **`ml.g6.24xlarge`** | GPU (4× L4) — 네이티브 1600×900에서 실측: 최악 GPU 피크 11.28 GiB, 여유 10.76 GiB. GPU 2장 이상(또는 40 GB 이상 1장) 필요. |
-| M9 Alpamayo VLA 추론 | **`ml.g6.24xlarge`** | GPU (4× L4) — 샤딩 "balanced-expert" 경로, 검증됨 |
+| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU (4× A10G) — 4× 24 GB에서 네이티브 1600×900 실측: 최악 GPU 피크 11.28 GiB, 여유 10.76 GiB. GPU 2장 이상(또는 40 GB 이상 1장) 필요. |
+| M9 Alpamayo VLA 추론 | **`ml.g5.12xlarge`** | GPU (4× A10G) — 샤딩 "balanced-expert" 경로; 통과한 실행(minADE 0.3779)은 A10G에서 나왔습니다 |
 | M10 AlpaSim 폐루프 평가 | `ml.t3.medium` | CPU (실제 AlpaSim 결과를 시각화; 실제 시뮬레이션은 GPU EC2 호스트에서 실행 — 관리자 레퍼런스 또는 SSM을 통한 본인 실행) |
 | M11 파이프라인 자동화 | `ml.t3.medium` | CPU |
 | M12 HyperPod 분산 학습 | `ml.t3.medium` | CPU (`ml.m5.xlarge`×2에서 실제 2노드 DDP 학습 작업 제출; HyperPod 자체는 개념적 — HYPERPOD_M12.md 참조) |
@@ -112,9 +112,10 @@ GPU 이미지와 노트북 동기화를 대신 처리합니다.
 
 | 인스턴스 | GPU당 | M5 / M6 출력 | M9 경로 | ~$/hr |
 |---|---|---|---|---|
-| **`ml.g6.24xlarge`** (기본값, **검증됨**) | ~22.5 GB | 480p, 가드레일 **OFF** | 샤딩 `balanced-expert` | **8.34** |
+| **`ml.g5.12xlarge`** (기본값) | ~22.5 GB | 480p, 가드레일 **OFF** | 샤딩 `balanced-expert` | **7.09** |
+| `ml.g6.24xlarge` | ~22.5 GB | 기본값과 동일 | 샤딩 | 8.34 — 같은 티어, +18% 비용 |
 | `ml.g7e.2xlarge` (RTX PRO 6000 1장) | **96 GB** | **720p / 네이티브, 가드레일 ON** | **단일 GPU** | **4.20** — 아래 주의사항 참조 |
-| `ml.g5.24xlarge` | ~22.5 GB | 기본값과 동일 | 샤딩 | 10.18 — **이득 없음, +22% 비용** |
+| `ml.g5.24xlarge` | ~22.5 GB | 기본값과 동일 | 샤딩 | 10.18 — **이득 없음, +44% 비용** |
 | `ml.g5.48xlarge` / `ml.g6.48xlarge` | ~22.5 GB | 기본값과 동일 | 샤딩 | 20.36 / 16.69 — GPU 수만 늘고 티어는 동일 |
 | `ml.p4d.24xlarge` | 40 GB | 720p / 네이티브, 가드레일 ON | 단일 GPU | 25.25 |
 | `ml.p5.48xlarge` | 80 GB | 720p / 네이티브, 가드레일 ON | 단일 GPU | 63.30 |

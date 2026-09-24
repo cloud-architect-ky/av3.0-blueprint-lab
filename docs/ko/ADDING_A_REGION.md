@@ -98,11 +98,11 @@ the ACCOUNT, RESOURCE, or ALL levels"라고 말합니다. 즉 *account-level*은
 | `ml.t3.medium` | `L-71FAF417` | 2500 | 2500 | 기본 워크스페이스 |
 | `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M10 |
 | `ml.g5.12xlarge` | `L-8D2ED7BF` | 5 | 5 | M2/M3 |
-| `ml.g5.24xlarge` | `L-F087CCFC` | 2 | 2 | M4/M5/M6 (24 GB 티어) |
+| `ml.g5.24xlarge` | `L-F087CCFC` | 2 | 2 | M5/M6/M8/M9 대안 (24 GB 티어) |
 | `ml.g5.48xlarge` | `L-83AB5D73` | 2 | 2 | M6 샤딩 |
 | `ml.p4d.24xlarge` | `L-AD63F1D2` | 2 | **2** | 40 GB 티어 — 720p, guardrails ON |
 | **`ml.g6.12xlarge`** | `L-962247BA` | 2 | **0** ⚠ | M2/M3 대안 |
-| **`ml.g6.24xlarge`** | `L-8ACE1754` | 2 | **0** ⚠ | M4–M9의 문서상 기본값 |
+| `ml.g6.24xlarge` | `L-8ACE1754` | 2 | **0** | 대시보드가 권장하지 않음(g5.12xlarge와 같은 티어인데 더 비쌈) |
 | `ml.p5.48xlarge` | `L-B41FBF28` | 1 | **0** | 80 GB 티어 |
 | `ml.m5.xlarge` *학습* | `L-CCE2AFA6` | 30 | 30 | M12 |
 | `ml.m5.xlarge` *프로세싱* | `L-0307F515` | 16 | 16 | M11 |
@@ -112,11 +112,13 @@ the ACCOUNT, RESOURCE, or ALL levels"라고 말합니다. 즉 *account-level*은
 
 **그렇다고 서울이 GPU를 못 쓰는 것은 아닙니다.** `g5`는 전 범위가 제공되고
 `p4d.24xlarge`는 이미 2로 승인되어 있어서, **할당량 신청을 전혀 하지 않고도** 오늘
-당장 랩을 돌릴 수 있습니다: M2/M3에는 `ml.g5.12xlarge`, M4/M5/M6에는
-`ml.g5.24xlarge`(g6 기본값과 같은 GPU당 ~22.5 GB 티어이며 ~22% 더 비쌉니다)를 쓰고,
-품질 옵션으로 `ml.p4d.24xlarge`를 쓰면 됩니다. 문서상 기본값을 그대로 쓰고 싶을 때만
-`g6`를 신청하세요 — 어느 쪽이든 그곳 가격은 us-west-2보다 ~23% 높다는 점도 함께
-감안하세요.
+당장 랩을 돌릴 수 있습니다. 대시보드가 권장하는 타입에 `g6`가 하나도 없기 때문입니다:
+M2/M3과 무거운 네 모듈(M5/M6/M8/M9) 모두 `ml.g5.12xlarge`(서울 쿼터 5)를 기본값으로
+쓰고, 대안이 `ml.g5.24xlarge`(같은 22.5 GB 티어, ~44% 더 비쌈), 품질 옵션이
+`ml.p4d.24xlarge`(40 GB 티어)입니다. 네 모듈은 예전에 `ml.g6.24xlarge`(서울 쿼터 **0**)를
+기본값으로 썼는데, 기하 구조가 동일하고(4 GPU × 22,888 MiB) 더 싸고 양쪽 리전에서
+쿼터가 5인 `ml.g5.12xlarge`로 바뀌었습니다. 그래도 서울 가격은 us-west-2보다 ~23%
+높다는 점은 감안하세요.
 
 위 표를 읽는 대신 사전 점검(pre-flight)을 실행하세요 — 실시간 할당량을 조회하고,
 생성된 요율 표와 교차 검증하며, 각 부족분이 영향을 주는 모듈을 알려 줍니다:
@@ -126,11 +128,10 @@ the ACCOUNT, RESOURCE, or ALL levels"라고 말합니다. 즉 *account-level*은
 ```
 
 참가자 대시보드가 권장하는 타입 중 하나라도 실행할 수 없으면 0이 아닌 코드로
-종료합니다. `deploy.sh`도 배포 마지막에 이를 실행합니다. 참가자 10명 기준으로 이
-계정을 실측한 결과: 현재 구성으로는 **두 리전 모두** 통과하지 못합니다 —
-`ml.g6.24xlarge`는 네 개 모듈이 필요로 하는데 us-west-2에서는 동시 2개,
-ap-northeast-2에서는 0개만 허용되고, `ml.g5.12xlarge` / `ml.g5.xlarge`는 5개를
-허용합니다. 이를 감안해 인원을 계획하거나, 할당량을 올리세요:
+종료합니다. `deploy.sh`도 배포 마지막에 이를 실행합니다. 이 계정 실측 결과: **두 리전
+모두 동시 5명까지 통과하고, 10명에서는 양쪽 다 통과하지 못합니다** — 한계는 양쪽 모두
+`ml.g5.12xlarge` / `ml.g5.xlarge`의 쿼터 5로 동일하므로, 이 점에서 서울이 불리하지
+않습니다. 이를 감안해 인원을 계획하거나, 그 두 타입의 할당량을 올리세요:
 
 ```bash
 # Must be filed IN the target region. The script prints the exact code for each shortfall.

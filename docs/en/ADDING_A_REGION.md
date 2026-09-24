@@ -101,7 +101,7 @@ search hits for "g6.24xlarge").
 | `ml.g5.48xlarge` | `L-83AB5D73` | 2 | 2 | M6/M9 sharded |
 | `ml.p4d.24xlarge` | `L-AD63F1D2` | 2 | **2** | 40 GB tier — 720p, guardrails ON |
 | **`ml.g6.12xlarge`** | `L-962247BA` | 2 | **0** ⚠ | M2/M3 alternative |
-| **`ml.g6.24xlarge`** | `L-8ACE1754` | 2 | **0** ⚠ | dashboard default for M5, M6, M8, M9 |
+| `ml.g6.24xlarge` | `L-8ACE1754` | 2 | **0** | not recommended by the dashboard (same tier as g5.12xlarge, dearer) |
 | `ml.p5.48xlarge` | `L-B41FBF28` | 1 | **0** | 80 GB tier |
 | `ml.m5.xlarge` *training* | `L-CCE2AFA6` | 30 | 30 | M12 |
 | `ml.m5.xlarge` *processing* | `L-0307F515` | 16 | 16 | M11 |
@@ -118,18 +118,23 @@ request at all**. The module-to-instance mapping, read from
 |---|---|---|
 | `ml.t3.medium` | 2500 | M1, **M4** (OpenSearch is CPU-only), M10 viz, M11, M12 |
 | `ml.g5.xlarge` | 5 | M7 |
-| `ml.g5.12xlarge` | 5 | M2, M3 |
-| `ml.g5.24xlarge` | **2** | M5, M6, M8, M9 — the four that default to the quota-0 g6.24xlarge |
-| `ml.p4d.24xlarge` | 2 | same four, at the 40 GB tier |
+| `ml.g5.12xlarge` | 5 | M2, M3 **and** M5, M6, M8, M9 — the dashboard default for all six |
+| `ml.g5.24xlarge` | **2** | alternative for the same six (same 22.5 GB tier, ~44% dearer) |
+| `ml.p4d.24xlarge` | 2 | the same six, at the 40 GB tier (720p / guardrails ON) |
 
-So only the `ml.g5.24xlarge` row is contended: **2 concurrent participants** on M5/M6/M8/M9
-(6 if you also steer people onto `g5.48xlarge` and `p4d.24xlarge`). `ml.g5.24xlarge` is the
-same ~22.5 GB-per-GPU tier as the g6 default and ~22% dearer; `ml.p4d.24xlarge` is the
-quality option.
+So the binding number is **5 concurrent participants**, set by `ml.g5.12xlarge` and
+`ml.g5.xlarge` — and it is the same 5 in us-west-2, so Seoul is not the weaker choice.
+Measured with `check_quotas.py`: both regions pass at 5 and neither passes at 10. To run a
+bigger room, raise those two; steering people onto `g5.24xlarge`/`g5.48xlarge`/`p4d.24xlarge`
+adds a few more slots on top.
+
+Nothing here recommends a `g6` type, which is why Seoul needs no quota request: the four
+heavy modules used to default to `ml.g6.24xlarge` (quota **0** here, and 2 in us-west-2), and
+now default to `ml.g5.12xlarge` — identical geometry (4 GPUs × 22,888 MiB), cheaper, and
+quota 5 in both regions.
 
 An earlier version of this table put CPU-only M4 on the 24 GB tier and M10 on `g5.xlarge`,
-because it used pre-renumbering module numbers. Request `g6` only if you want the documented default — and note the price
-there is ~23% above us-west-2 either way.
+because it used pre-renumbering module numbers.
 
 Rather than reading that table, run the pre-flight — it resolves live quota, cross-checks
 the generated rate table, and names the modules each shortfall affects:

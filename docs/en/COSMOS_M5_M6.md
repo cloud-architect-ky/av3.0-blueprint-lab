@@ -158,7 +158,7 @@ offline:
   |---|---|---|---|---|---|
   | ≥70 GB | single GPU | 720p | native | ON | `ml.g7e.2xlarge` (**4.20**), `ml.p5.48xlarge` (63.30) |
   | ≥38 GB | N-GPU shard | 720p | native | ON | `ml.p4d.24xlarge` (25.25) |
-  | <38 GB | N-GPU shard | 480p, 16/57 frames | 480×832, 45 frames | **OFF** | `ml.g6.24xlarge` (8.34) ← default |
+  | <38 GB | N-GPU shard | 480p, 16/57 frames | 480×832, 45 frames | **OFF** | `ml.g5.12xlarge` (7.09) ← default |
 
   Because every A10G and L4 is 24 GB, **no g5/g6 size reaches the ≥38 GB tier** —
   a bigger g5/g6 adds GPUs, not per-GPU VRAM. The families that do are g7e
@@ -171,8 +171,11 @@ offline:
   p5.48xlarge). Treat it as a promising opt-in, not the tested path.
 - The 24 GB path also halts if another process already holds GPU memory (the
   "foreign occupancy" check) — close other notebooks' kernels before running.
-- Verified on `ml.g6.24xlarge` (the workshop default, 480p) and on p5.48xlarge
-  H100×8 (720p). The original blocker was never the instance — it was the
+- Verified on 24 GB cards — `ml.g6.24xlarge` (480p) — and on p5.48xlarge H100×8
+  (720p). The default is now `ml.g5.12xlarge`, which is the SAME tier (4 GPUs ×
+  22,888 MiB, identical to g6.24xlarge per `describe-instance-types`), so it takes the
+  same <38 GB branch; it is cheaper and, unlike g6, has non-zero quota in
+  ap-northeast-2. The original blocker was never the instance — it was the
   environment wiring, now scripted.
 - The env + checkpoints live on the NVMe and are **reset on app restart**; the
   setup cell is idempotent, so re-running after a restart is the intended flow.

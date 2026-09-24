@@ -90,11 +90,11 @@ the GPU image and the notebook-sync for you.
 | **M2 Cosmos Reason Captioning** | **`ml.g5.12xlarge`** | GPU (4× A10G, 96 GB) |
 | M3 Cosmos Curator | `ml.g5.12xlarge` | GPU |
 | M4 OpenSearch Semantic Search | `ml.t3.medium` | CPU |
-| M5 Cosmos Transfer (Weather Aug) | **`ml.g6.24xlarge`** | GPU (4× L4, 24 GB/GPU) — runs at 480p; see tier table below |
-| M6 Cosmos Predict (Scenario Gen) | **`ml.g6.24xlarge`** | GPU (4× L4) — runs at 480×832; see tier table below |
+| M5 Cosmos Transfer (Weather Aug) | **`ml.g5.12xlarge`** | GPU (4× A10G, 24 GB/GPU) — runs at 480p; see tier table below |
+| M6 Cosmos Predict (Scenario Gen) | **`ml.g5.12xlarge`** | GPU (4× A10G) — runs at 480×832; see tier table below |
 | M7 Nerfstudio 3D Reconstruction | `ml.g5.xlarge` | GPU (1× A10G) — ⚠️ **known-limited**: the GPU check + data-prep cells run, but the final 3D-training cell (splatfacto) does not run on the current image. Treat M7 as an optional/demo module (see note below). |
-| M8 Cosmos Reason LoRA SFT | **`ml.g6.24xlarge`** | GPU (4× L4) — measured at native 1600×900: 11.28 GiB worst-GPU peak, 10.76 GiB spare. Needs ≥2 GPUs (or one card ≥40 GB). |
-| M9 Alpamayo VLA Inference | **`ml.g6.24xlarge`** | GPU (4× L4) — sharded "balanced-expert" path, verified |
+| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU (4× A10G) — measured at native 1600×900 on 4× 24 GB: 11.28 GiB worst-GPU peak, 10.76 GiB spare. Needs ≥2 GPUs (or one card ≥40 GB). |
+| M9 Alpamayo VLA Inference | **`ml.g5.12xlarge`** | GPU (4× A10G) — sharded "balanced-expert" path; the passing run (minADE 0.3779) was on A10G |
 | M10 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU (visualizes genuine AlpaSim results; real sim runs on a GPU EC2 host — admin reference, or your own via SSM) |
 | M11 Pipeline Automation | `ml.t3.medium` | CPU |
 | M12 HyperPod Distributed Training | `ml.t3.medium` | CPU (submits a real 2-node DDP training job on `ml.m5.xlarge`×2; HyperPod itself is conceptual — see HYPERPOD_M12.md) |
@@ -110,9 +110,10 @@ per GPU** — not total VRAM, and not the instance size number:
 
 | Instance | per-GPU | M5 / M6 output | M9 path | ~$/hr |
 |---|---|---|---|---|
-| **`ml.g6.24xlarge`** (default, **verified**) | ~22.5 GB | 480p, guardrails **OFF** | sharded `balanced-expert` | **8.34** |
+| **`ml.g5.12xlarge`** (default) | ~22.5 GB | 480p, guardrails **OFF** | sharded `balanced-expert` | **7.09** |
+| `ml.g6.24xlarge` | ~22.5 GB | identical to the default | sharded | 8.34 — same tier, +18% cost |
 | `ml.g7e.2xlarge` (1× RTX PRO 6000) | **96 GB** | **720p / native, guardrails ON** | **single-GPU** | **4.20** — see caveat below |
-| `ml.g5.24xlarge` | ~22.5 GB | identical to the default | sharded | 10.18 — **no benefit, +22% cost** |
+| `ml.g5.24xlarge` | ~22.5 GB | identical to the default | sharded | 10.18 — **no benefit, +44% cost** |
 | `ml.g5.48xlarge` / `ml.g6.48xlarge` | ~22.5 GB | identical to the default | sharded | 20.36 / 16.69 — more GPUs, same tier |
 | `ml.p4d.24xlarge` | 40 GB | 720p / native, guardrails ON | single-GPU | 25.25 |
 | `ml.p5.48xlarge` | 80 GB | 720p / native, guardrails ON | single-GPU | 63.30 |

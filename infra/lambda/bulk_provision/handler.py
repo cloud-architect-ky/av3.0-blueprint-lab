@@ -33,6 +33,7 @@ from config import (
     TARGET_REGIONS,
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
+    rollback_partial_provision,
     wait_for_user_profile_in_service,
     write_progress_env,
 )
@@ -233,7 +234,9 @@ def provision_single_user(user_data: dict) -> dict:
         # delete_user keys on the DynamoDB row, which is written last, so it answers
         # 404 and the profile (plus its EFS home directory) lingers invisibly.
         # Best-effort and never raises: the row's real error must survive.
-        cleanup_note = _rollback_partial_provision(user_id)
+        cleanup_note = rollback_partial_provision(
+            sagemaker, SAGEMAKER_DOMAIN_ID, user_id
+        )
         return {
             "name": name,
             "email": email,
@@ -241,31 +244,6 @@ def provision_single_user(user_data: dict) -> dict:
             "success": False,
             "error": str(e) + cleanup_note,
         }
-
-
-def _rollback_partial_provision(user_id: str) -> str:
-    """Delete the space/profile a failed provision left behind. Never raises.
-
-    Returns "" when nothing needed removing, or a short " (cleanup: ...)" suffix to
-    append to the row's error so the admin can see whether an orphan remains.
-    """
-    notes = []
-    for label, fn in (
-        ("space", lambda: sagemaker.delete_space(
-            DomainId=SAGEMAKER_DOMAIN_ID, SpaceName=f"{user_id}-space")),
-        ("profile", lambda: sagemaker.delete_user_profile(
-            DomainId=SAGEMAKER_DOMAIN_ID, UserProfileName=user_id)),
-    ):
-        try:
-            fn()
-            notes.append(f"{label} removed")
-        except Exception as ce:  # noqa: BLE001 — cleanup must not mask the real error
-            code = getattr(ce, "response", {}).get("Error", {}).get("Code", "")
-            # Never created / already gone: nothing to report.
-            if code in ("ResourceNotFound", "ResourceNotFoundException", "ValidationException"):
-                continue
-            notes.append(f"{label} NOT removed ({code or type(ce).__name__})")
-    return f" (cleanup: {'; '.join(notes)})" if notes else ""
 
 
 def parse_user_rows(rows: list, default_region: str = "") -> list[dict]:

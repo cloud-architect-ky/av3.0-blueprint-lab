@@ -1,18 +1,45 @@
 #!/bin/bash
 set -euo pipefail
 
+# --- Target region ------------------------------------------------------------------
+# This lab supports deploying an ADDITIONAL, independent copy into another region in the
+# same account (see docs/en/ADDING_A_REGION.md). Choose it explicitly:
+#
+#     ./scripts/deploy.sh --region ap-northeast-2
+#     REGION=ap-northeast-2 ./scripts/deploy.sh
+#     AWS_REGION=ap-northeast-2 ./scripts/deploy.sh
+#
+# Precedence: --region > REGION > AWS_REGION > the profile's region. There is NO literal
+# default. It used to be "us-west-2" here while infra/app.py independently defaulted the
+# same way, so the two could disagree — the CDK would build region B while every later
+# step in this script operated on region A. The resolved value is now pinned into the CDK
+# with -c region so they cannot diverge.
+REGION_CLI=""
+ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --region) shift; REGION_CLI="${1:-}" ;;
+        --region=*) REGION_CLI="${1#*=}" ;;
+        -h|--help)
+            sed -n '1,40p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'
+            exit 0 ;;
+        *) ARGS+=("$1") ;;
+    esac
+    shift
+done
+[ ${#ARGS[@]} -gt 0 ] && { echo "Unknown argument: ${ARGS[0]}" >&2; exit 2; }
+
 ADMIN_EMAIL="${ADMIN_EMAIL:?Set ADMIN_EMAIL environment variable}"
 ADMIN_IP_ALLOWLIST="${ADMIN_IP_ALLOWLIST:-0.0.0.0/0}"
-# Resolve the region ONCE and pass it to the CDK explicitly (see the --context below).
-# This used to default to the literal "us-west-2" while infra/app.py independently
-# defaulted the same way, so two separate region sources could disagree: with AWS_REGION
-# unset and a profile pinned to another region, the CDK step built region B while every
-# later step in this script operated on us-west-2.
-REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null)}"
+REGION="${REGION_CLI:-${REGION:-${AWS_REGION:-$(aws configure get region 2>/dev/null)}}}"
 if [ -z "$REGION" ]; then
-    echo "ERROR: no region. Set AWS_REGION (or a profile region) explicitly." >&2
+    echo "ERROR: no region. Pass --region <region>, or set REGION/AWS_REGION." >&2
+    echo "       This script will not guess: guessing deploys to the wrong region." >&2
     exit 2
 fi
+# Everything downstream (aws CLI calls, the CDK, S3 syncs) must use this one value.
+export AWS_REGION="$REGION"
+export AWS_DEFAULT_REGION="$REGION"
 STACK_NAME="Av30BlueprintLabStack"
 
 # --- Where am I actually deploying? -------------------------------------------

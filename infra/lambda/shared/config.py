@@ -392,6 +392,111 @@ def wait_for_user_profile_in_service(sagemaker_client, domain_id: str,
     )
 
 
+def rollback_partial_provision(sagemaker_client, domain_id: str, user_id: str) -> str:
+    """Delete the space/profile a failed provision left behind. NEVER raises.
+
+    Compensation for a half-finished provision. Without it the leftover UserProfile is
+    unreachable from the dashboard: delete_user keys on the DynamoDB row, which is
+    written LAST, so it answers 404 while the profile (and its EFS home directory)
+    lingers invisibly — and the user_id is random, so the admin cannot even name it.
+
+    Both provisioning paths need this, not just the bulk one. A single-user create can
+    fail at the same points, and one failure mode is now GUARANTEED by design: an
+    unseeded region makes copy_notebook_templates raise on purpose (rather than hand out
+    an empty workspace), which is exactly when a fresh region is first exercised.
+
+    Returns "" when nothing needed removing, else a " (cleanup: ...)" suffix stating
+    per-resource outcome, so a remaining orphan is visible instead of assumed gone.
+    """
+    notes = []
+    space_name = f"{user_id}-space"
+
+    # Ordering and waits here are not defensive padding — both were established by
+    # running this against a real half-provisioned user in ap-northeast-2:
+    #
+    #  1. DeleteSpace is ASYNCHRONOUS and DeleteUserProfile refuses while any space is
+    #     still attached ("ResourceInUse: Unable to delete UserProfile [...] because
+    #     Space(s) are associated with it"). Measured: the space took ~20 s to vanish,
+    #     so deleting the profile straight after failed every single time.
+    #  2. CreateSpace is also asynchronous, and the failure this compensates for
+    #     usually lands within a second of it — so the space is typically still
+    #     Pending, and DeleteSpace on a Pending space raises ValidationException.
+    #     Classifying ValidationException as "already gone" (which it means for
+    #     DescribeSpace) silently skipped the space delete, left space_clear True, and
+    #     produced exactly "(cleanup: profile NOT removed (ResourceInUse))" with the
+    #     space still live. ValidationException is therefore treated as RETRY, never
+    #     as absent; only ResourceNotFound* means absent.
+    space_clear, note = _delete_space_and_wait(sagemaker_client, domain_id, space_name)
+    if note:
+        notes.append(note)
+
+    if space_clear:
+        try:
+            sagemaker_client.delete_user_profile(
+                DomainId=domain_id, UserProfileName=user_id)
+            notes.append("profile removed")
+        except Exception as ce:  # noqa: BLE001 — cleanup must not mask the real error
+            code = _err_code(ce)
+            if code not in _ABSENT_CODES:
+                notes.append(f"profile NOT removed ({code or type(ce).__name__})")
+    else:
+        notes.append("profile left in place (space not gone)")
+
+    return f" (cleanup: {'; '.join(notes)})" if notes else ""
+
+
+# Only these mean "the resource is not there". NOT ValidationException: SageMaker uses
+# it for "wrong state" too, and conflating the two is what stranded the space above.
+_ABSENT_CODES = ("ResourceNotFound", "ResourceNotFoundException")
+
+
+def _err_code(exc) -> str:
+    return getattr(exc, "response", {}).get("Error", {}).get("Code", "")
+
+
+def _delete_space_and_wait(sagemaker_client, domain_id: str, space_name: str,
+                           max_wait: int = 90) -> tuple[bool, str]:
+    """Delete the space and wait until it is really gone. Never raises.
+
+    Returns (space_is_gone, note). Retries DeleteSpace while the space is in a
+    not-yet-deletable state, then polls until it 404s.
+
+    Budget: 90 s. create_user's Lambda timeout is 300 s and the UserProfile wait can
+    already consume 120 s of it, and bulk_provision runs up to 20 of these
+    concurrently inside ONE 300 s invocation — a rollback that hung would convert a
+    failed provision into a timeout with no error body at all.
+    """
+    deadline = time.time() + max_wait
+    requested = False
+    while time.time() < deadline:
+        if not requested:
+            try:
+                sagemaker_client.delete_space(DomainId=domain_id, SpaceName=space_name)
+                requested = True
+                continue  # poll for actual removal
+            except Exception as ce:  # noqa: BLE001
+                code = _err_code(ce)
+                if code in _ABSENT_CODES:
+                    return True, ""  # never created / already gone
+                if code != "ValidationException":
+                    return False, f"space NOT removed ({code or type(ce).__name__})"
+                # Still settling (typically Pending) — fall through and retry.
+        else:
+            try:
+                sagemaker_client.describe_space(
+                    DomainId=domain_id, SpaceName=space_name)
+            except ClientError as e:
+                if _err_code(e) in _ABSENT_CODES:
+                    return True, "space removed"
+                return False, f"space state unknown ({_err_code(e)})"
+            except Exception:  # noqa: BLE001
+                return False, "space state unknown"
+        time.sleep(3)
+
+    return False, ("space removed but still deleting" if requested
+                   else "space NOT removed (still not deletable after 90s)")
+
+
 def wait_for_space_in_service(sagemaker_client, domain_id: str, space_name: str,
                               max_wait: int = 180) -> None:
     """Poll DescribeSpace until the space returns to InService.

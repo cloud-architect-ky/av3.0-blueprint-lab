@@ -30,6 +30,7 @@ from config import (
     TARGET_REGIONS,
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
+    rollback_partial_provision,
     wait_for_user_profile_in_service,
     write_progress_env,
 )
@@ -147,100 +148,119 @@ def handler(event, context):
 
     logger.info(f"Creating user: {user_id} (name={name})")
 
-    # Create SageMaker user profile
-    sagemaker.create_user_profile(
-        DomainId=SAGEMAKER_DOMAIN_ID,
-        UserProfileName=user_id,
-        Tags=[
-            {"Key": "SageMakerUserProfile", "Value": user_id},
-            {"Key": "Workshop", "Value": "av3-blueprint-lab"},
-            {"Key": "ParticipantName", "Value": name},
-        ],
-    )
-    logger.info(f"Created SageMaker user profile: {user_id}")
-
-    # UserProfile creation is asynchronous — wait until it is InService before
-    # creating the space (CreateSpace fails otherwise). Shared with bulk_provision,
-    # which was missing this wait entirely.
+    # Every step below creates real resources, and any of them can fail: quota,
+    # throttling, a profile that never settles — and, by design, an unseeded
+    # region, where copy_notebook_templates RAISES rather than handing out an
+    # empty workspace. Without compensation that leaves an orphaned UserProfile
+    # the admin cannot remove: delete_user keys on the DynamoDB row written at the
+    # very end, so it answers 404, and user_id is random so it cannot even be
+    # named. bulk_provision has rolled back since its own partial-failure bug;
+    # this path did not, so making the unseeded-region failure loud would have
+    # started manufacturing exactly those orphans.
     try:
-        wait_for_user_profile_in_service(sagemaker, SAGEMAKER_DOMAIN_ID, user_id)
-    except TimeoutError as e:
-        raise ApiError(504, str(e))
-    except RuntimeError as e:
-        raise ApiError(502, str(e))
-    logger.info(f"UserProfile {user_id} is InService")
+        # Create SageMaker user profile
+        sagemaker.create_user_profile(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            UserProfileName=user_id,
+            Tags=[
+                {"Key": "SageMakerUserProfile", "Value": user_id},
+                {"Key": "Workshop", "Value": "av3-blueprint-lab"},
+                {"Key": "ParticipantName", "Value": name},
+            ],
+        )
+        logger.info(f"Created SageMaker user profile: {user_id}")
 
-    # Create SageMaker space for the user
-    space_name = f"{user_id}-space"
-    sagemaker.create_space(
-        DomainId=SAGEMAKER_DOMAIN_ID,
-        SpaceName=space_name,
-        OwnershipSettings={"OwnerUserProfileName": user_id},
-        SpaceSettings={
-            "AppType": "JupyterLab",
-            "JupyterLabAppSettings": {
-                # CPU image on the initial t3.medium; instance + image are
-                # switched together later via change_instance.
-                "DefaultResourceSpec": jupyterlab_resource_spec("ml.t3.medium"),
+        # UserProfile creation is asynchronous — wait until it is InService before
+        # creating the space (CreateSpace fails otherwise). Shared with bulk_provision,
+        # which was missing this wait entirely.
+        try:
+            wait_for_user_profile_in_service(sagemaker, SAGEMAKER_DOMAIN_ID, user_id)
+        except TimeoutError as e:
+            raise ApiError(504, str(e))
+        except RuntimeError as e:
+            raise ApiError(502, str(e))
+        logger.info(f"UserProfile {user_id} is InService")
+
+        # Create SageMaker space for the user
+        space_name = f"{user_id}-space"
+        sagemaker.create_space(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            SpaceName=space_name,
+            OwnershipSettings={"OwnerUserProfileName": user_id},
+            SpaceSettings={
+                "AppType": "JupyterLab",
+                "JupyterLabAppSettings": {
+                    # CPU image on the initial t3.medium; instance + image are
+                    # switched together later via change_instance.
+                    "DefaultResourceSpec": jupyterlab_resource_spec("ml.t3.medium"),
+                },
             },
-        },
-        SpaceSharingSettings={"SharingType": "Private"},
-        Tags=[
-            {"Key": "Workshop", "Value": "av3-blueprint-lab"},
-            {"Key": "UserId", "Value": user_id},
-        ],
-    )
-    logger.info(f"Created SageMaker space: {space_name}")
+            SpaceSharingSettings={"SharingType": "Private"},
+            Tags=[
+                {"Key": "Workshop", "Value": "av3-blueprint-lab"},
+                {"Key": "UserId", "Value": user_id},
+            ],
+        )
+        logger.info(f"Created SageMaker space: {space_name}")
 
-    # Copy notebook templates to user workspace
-    copy_notebook_templates(user_id)
+        # Copy notebook templates to user workspace
+        copy_notebook_templates(user_id)
 
-    # B2 progress tracking: write the participant's own progress credentials into
-    # their workspace prefix. The notebook-sync LCC already `aws s3 sync`s
-    # users/<id>/ to the home dir at app launch, so it lands as
-    # ~/.av30-progress.env with NO new IAM grant (the file holds only this
-    # participant's own token — same trust boundary as their browser session).
-    # The notebook mark-complete cells source AV30_API_URL + AV30_PROGRESS_TOKEN.
-    if write_progress_env(
-        s3, USER_BUCKET_NAME, user_id, participant_token,
-        os.environ.get("API_URL", ""),
-    ):
-        logger.info(f"Wrote progress env for {user_id}")
-    else:
-        logger.warning(f"No progress env written for {user_id}")
+        # B2 progress tracking: write the participant's own progress credentials into
+        # their workspace prefix. The notebook-sync LCC already `aws s3 sync`s
+        # users/<id>/ to the home dir at app launch, so it lands as
+        # ~/.av30-progress.env with NO new IAM grant (the file holds only this
+        # participant's own token — same trust boundary as their browser session).
+        # The notebook mark-complete cells source AV30_API_URL + AV30_PROGRESS_TOKEN.
+        if write_progress_env(
+            s3, USER_BUCKET_NAME, user_id, participant_token,
+            os.environ.get("API_URL", ""),
+        ):
+            logger.info(f"Wrote progress env for {user_id}")
+        else:
+            logger.warning(f"No progress env written for {user_id}")
 
-    # Generate presigned URL (8 hours)
-    presigned_url_response = sagemaker.create_presigned_domain_url(
-        DomainId=SAGEMAKER_DOMAIN_ID,
-        UserProfileName=user_id,
-        SessionExpirationDurationInSeconds=PRESIGNED_URL_EXPIRY,
-    )
-    presigned_url = presigned_url_response["AuthorizedUrl"]
+        # Generate presigned URL (8 hours)
+        presigned_url_response = sagemaker.create_presigned_domain_url(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            UserProfileName=user_id,
+            SessionExpirationDurationInSeconds=PRESIGNED_URL_EXPIRY,
+        )
+        presigned_url = presigned_url_response["AuthorizedUrl"]
 
-    # Calculate expiry timestamp
-    now = datetime.now(timezone.utc)
-    expires_at = int(now.timestamp()) + PRESIGNED_URL_EXPIRY
-    expires_at_iso = datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat()
+        # Calculate expiry timestamp
+        now = datetime.now(timezone.utc)
+        expires_at = int(now.timestamp()) + PRESIGNED_URL_EXPIRY
+        expires_at_iso = datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat()
 
-    # Save to DynamoDB
-    table = dynamodb.Table(SESSIONS_TABLE_NAME)
-    item = {
-        "userId": user_id,
-        "participantToken": participant_token,
-        "name": name,
-        "email": email,
-        "spaceName": space_name,
-        "presignedUrl": presigned_url,
-        "expiresAt": expires_at,
-        "expiresAtIso": expires_at_iso,
-        "createdAt": now.isoformat(),
-        "status": "active",
-        "moduleProgress": {},
-        # The ONLY record of which region's domain holds this user's profile. Every
-        # later handler resolves its SageMaker/S3 clients from this, so the row is
-        # read before teardown starts and deleted last.
-        "region": region,
-    }
+        # Save to DynamoDB
+        table = dynamodb.Table(SESSIONS_TABLE_NAME)
+        item = {
+            "userId": user_id,
+            "participantToken": participant_token,
+            "name": name,
+            "email": email,
+            "spaceName": space_name,
+            "presignedUrl": presigned_url,
+            "expiresAt": expires_at,
+            "expiresAtIso": expires_at_iso,
+            "createdAt": now.isoformat(),
+            "status": "active",
+            "moduleProgress": {},
+            # The ONLY record of which region's domain holds this user's profile. Every
+            # later handler resolves its SageMaker/S3 clients from this, so the row is
+            # read before teardown starts and deleted last.
+            "region": region,
+        }
+    except Exception as e:
+        note = rollback_partial_provision(sagemaker, SAGEMAKER_DOMAIN_ID, user_id)
+        logger.error(f"Provisioning failed for {user_id}: {e}{note}")
+        # Surface the cleanup outcome to the admin: if an orphan survived, the note
+        # names it. Re-raise the ORIGINAL error — the failure, not the cleanup, is
+        # what needs fixing.
+        if isinstance(e, ApiError) and note:
+            e.details = f"{e.details or ''}{note}".strip()
+        raise
     table.put_item(Item=item)
     logger.info(f"Saved session to DynamoDB: {user_id}")
 

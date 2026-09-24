@@ -179,16 +179,36 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     sourceUrl: "https://github.com/nvidia-cosmos/cosmos-transfer2.5",
     // Stage 5 — diffusion world model; shards across a multi-GPU box. g6.24xlarge
     // (4× L4, 96 GB) is the verified workshop default at 480p; p4d/p5 give 720p.
-    recommendedInstance: "ml.g6.24xlarge",
+    // ml.g5.12xlarge, NOT ml.g6.24xlarge. The two are GEOMETRICALLY IDENTICAL to every
+    // gate in this module — `aws ec2 describe-instance-types` reports 4 GPUs of 22,888 MiB
+    // for both (A10G vs L4 is the only difference) — and the pre-flight branches only on
+    // per-GPU VRAM and GPU count. So the run, the resolution, the guardrail setting and the
+    // torchrun --nproc_per_node are byte-for-byte the same.
+    //
+    // g5.12xlarge is strictly better on everything else, in BOTH regions:
+    //   price   us-west-2 $7.090 vs $8.344 | ap-northeast-2 $8.718 vs $10.260
+    //   quota   us-west-2 5 vs 2           | ap-northeast-2 5 vs 0  <-- g6 cannot run there
+    // Recommending a quota-0 type is not a soft problem: nothing in the request path checks
+    // quota, so the change is accepted, the app never starts, and a failed instance change
+    // leaves the space pinned to an unlaunchable type.
+    //
+    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
+    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
+    // label used elsewhere is a misattribution of a g5 result.
+    //
+    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
+    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
+    // it takes the same branch; nobody has watched it finish.
+    recommendedInstance: "ml.g5.12xlarge",
     // Ordered by capability-per-dollar. g7e (96 GB/card) clears the per-GPU tier
     // and is CHEAPER than the default, so it leads; p4d/p5 also clear it but cost
     // more. The g5/g6 entries are 24 GB/GPU like the default — capacity
     // fallbacks, NOT upgrades (ml.g5.24xlarge is the same tier at +22% cost).
-    alternatives: ["ml.g7e.2xlarge", "ml.g7e.24xlarge", "ml.p4d.24xlarge", "ml.p5.48xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.g6.48xlarge"],
+    alternatives: ["ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "ml.g6.24xlarge (4× L4, 24 GB/GPU, ~$8.34/hr) generates weather-augmented clips by sharding across GPUs; EBS-backed scratch keeps intermediate frames off S3. The notebook branches on PER-GPU VRAM: under 38 GB it runs 480p with guardrails OFF (16 of 57 frames). For full 720p with guardrails ON you need ≥38 GB/GPU, and the cheapest route is ml.g7e.2xlarge — ONE RTX PRO 6000 Blackwell with 96 GB, ~$4.20/hr, i.e. better output at half the default's price (needs its own quota; not yet run in this lab). ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) also clears the tier. No g5/g6 size does: bigger sizes add GPUs, not per-GPU VRAM.",
+      "ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) generates weather-augmented clips by sharding across GPUs; EBS-backed scratch keeps intermediate frames off S3. The notebook branches on PER-GPU VRAM: under 38 GB it runs 480p with guardrails OFF (16 of 57 frames). For full 720p with guardrails ON you need ≥38 GB/GPU — in both regions that means ml.p4d.24xlarge (4× A100 40 GB). Not ml.g7e.2xlarge — ONE RTX PRO 6000 Blackwell with 96 GB, ~$4.20/hr, i.e. better output at half the default's price (needs its own quota; not yet run in this lab). ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) also clears the tier. No g5/g6 size does: bigger sizes add GPUs, not per-GPU VRAM.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m5/",
     feedsModules: [],
@@ -206,16 +226,36 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     status: "locked",
     license: "NVIDIA Open Model License",
     sourceUrl: "https://github.com/nvidia-cosmos/cosmos-predict2.5",
-    recommendedInstance: "ml.g6.24xlarge",
+    // ml.g5.12xlarge, NOT ml.g6.24xlarge. The two are GEOMETRICALLY IDENTICAL to every
+    // gate in this module — `aws ec2 describe-instance-types` reports 4 GPUs of 22,888 MiB
+    // for both (A10G vs L4 is the only difference) — and the pre-flight branches only on
+    // per-GPU VRAM and GPU count. So the run, the resolution, the guardrail setting and the
+    // torchrun --nproc_per_node are byte-for-byte the same.
+    //
+    // g5.12xlarge is strictly better on everything else, in BOTH regions:
+    //   price   us-west-2 $7.090 vs $8.344 | ap-northeast-2 $8.718 vs $10.260
+    //   quota   us-west-2 5 vs 2           | ap-northeast-2 5 vs 0  <-- g6 cannot run there
+    // Recommending a quota-0 type is not a soft problem: nothing in the request path checks
+    // quota, so the change is accepted, the app never starts, and a failed instance change
+    // leaves the space pinned to an unlaunchable type.
+    //
+    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
+    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
+    // label used elsewhere is a misattribution of a g5 result.
+    //
+    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
+    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
+    // it takes the same branch; nobody has watched it finish.
+    recommendedInstance: "ml.g5.12xlarge",
     // Ordered by capability-per-dollar. g7e (96 GB/card) clears the per-GPU tier
     // and is CHEAPER than the default, so it leads; p4d/p5 also clear it but cost
     // more. The g5/g6 entries are 24 GB/GPU like the default — capacity
     // fallbacks, NOT upgrades (ml.g5.24xlarge is the same tier at +22% cost).
-    alternatives: ["ml.g7e.2xlarge", "ml.g7e.24xlarge", "ml.p4d.24xlarge", "ml.p5.48xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.g6.48xlarge"],
+    alternatives: ["ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "Synthetic traffic scenarios extend the dataset beyond what was collected — an AWS-native alternative to physical re-drives. ml.g6.24xlarge (4× L4, 24 GB/GPU, ~$8.34/hr) runs it at 480×832 with guardrails OFF (45 frames), because the notebook branches on PER-GPU VRAM and 24 GB is under its 38 GB threshold. For native resolution with guardrails ON, ml.g7e.2xlarge is the cheapest route — ONE RTX PRO 6000 Blackwell with 96 GB at ~$4.20/hr, half the default's price (needs its own quota; not yet run in this lab). ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) also qualifies; no g5/g6 size can reach that tier.",
+      "Synthetic traffic scenarios extend the dataset beyond what was collected — an AWS-native alternative to physical re-drives. ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) runs it at 480×832 with guardrails OFF (45 frames), because the notebook branches on PER-GPU VRAM and 24 GB is under its 38 GB threshold. For native resolution with guardrails ON, ml.p4d.24xlarge (4× A100 40 GB) is the route in both regions; ml.g7e.2xlarge is NOT — ONE RTX PRO 6000 Blackwell with 96 GB at ~$4.20/hr, half the default's price (needs its own quota; not yet run in this lab). ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) also qualifies; no g5/g6 size can reach that tier.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m6/",
     feedsModules: [],
@@ -261,14 +301,34 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // weights 15.61 GiB sharded by device_map="auto", worst-GPU peak 11.28 GiB at
     // NATIVE 1600x900 with 10.76 GiB headroom. A single 24 GB card OOMs (weights
     // alone take 15.6 of 22.04 GiB), so this needs >=2 GPUs or one card >=40 GB.
-    recommendedInstance: "ml.g6.24xlarge",
+    // ml.g5.12xlarge, NOT ml.g6.24xlarge. The two are GEOMETRICALLY IDENTICAL to every
+    // gate in this module — `aws ec2 describe-instance-types` reports 4 GPUs of 22,888 MiB
+    // for both (A10G vs L4 is the only difference) — and the pre-flight branches only on
+    // per-GPU VRAM and GPU count. So the run, the resolution, the guardrail setting and the
+    // torchrun --nproc_per_node are byte-for-byte the same.
+    //
+    // g5.12xlarge is strictly better on everything else, in BOTH regions:
+    //   price   us-west-2 $7.090 vs $8.344 | ap-northeast-2 $8.718 vs $10.260
+    //   quota   us-west-2 5 vs 2           | ap-northeast-2 5 vs 0  <-- g6 cannot run there
+    // Recommending a quota-0 type is not a soft problem: nothing in the request path checks
+    // quota, so the change is accepted, the app never starts, and a failed instance change
+    // leaves the space pinned to an unlaunchable type.
+    //
+    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
+    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
+    // label used elsewhere is a misattribution of a g5 result.
+    //
+    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
+    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
+    // it takes the same branch; nobody has watched it finish.
+    recommendedInstance: "ml.g5.12xlarge",
     // g7e clears it on ONE 96 GB card and costs half the default; p4d/p5 also fit.
     // g5/g6 entries are the same 24 GB tier — capacity fallbacks, not upgrades.
-    alternatives: ["ml.g7e.2xlarge", "ml.g7e.24xlarge", "ml.p4d.24xlarge", "ml.p5.48xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.g6.48xlarge"],
+    alternatives: ["ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
     storageGB: 200,
     estimatedMinutes: 45,
     awsAdvantage:
-      "LoRA fine-tunes the 8.33B Cosmos Reason VLM by training 40.4M adapter params (0.48%) while the base weights and the vision tower stay frozen — so a $8.34/hr ml.g6.24xlarge trains at NATIVE nuScenes resolution (measured: 11.28 GiB worst-GPU peak, 10.76 GiB spare). A full fine-tune of the same model would need ~123 GiB of weight+gradient+optimizer state, more than this box has in total. Targets are nuScenes HUMAN annotation (scene descriptions + category labels), never M2's own captions, so the loss is not self-referential.",
+      "LoRA fine-tunes the 8.33B Cosmos Reason VLM by training 40.4M adapter params (0.48%) while the base weights and the vision tower stay frozen — so an ml.g5.12xlarge ($7.09/hr in us-west-2, $8.72 in ap-northeast-2) trains at NATIVE nuScenes resolution (measured: 11.28 GiB worst-GPU peak, 10.76 GiB spare). A full fine-tune of the same model would need ~123 GiB of weight+gradient+optimizer state, more than this box has in total. Targets are nuScenes HUMAN annotation (scene descriptions + category labels), never M2's own captions, so the loss is not self-referential.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m1/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m8/",
     feedsModules: [],
@@ -290,16 +350,36 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     sourceUrl: "https://github.com/NVlabs/alpamayo1.5",
     // Stage 7 — Vision-Language-Action policy. Balanced-expert placement shards
     // the VLM across GPUs and pins the action stack to cuda:0, so 4× L4 fits.
-    recommendedInstance: "ml.g6.24xlarge",
+    // ml.g5.12xlarge, NOT ml.g6.24xlarge. The two are GEOMETRICALLY IDENTICAL to every
+    // gate in this module — `aws ec2 describe-instance-types` reports 4 GPUs of 22,888 MiB
+    // for both (A10G vs L4 is the only difference) — and the pre-flight branches only on
+    // per-GPU VRAM and GPU count. So the run, the resolution, the guardrail setting and the
+    // torchrun --nproc_per_node are byte-for-byte the same.
+    //
+    // g5.12xlarge is strictly better on everything else, in BOTH regions:
+    //   price   us-west-2 $7.090 vs $8.344 | ap-northeast-2 $8.718 vs $10.260
+    //   quota   us-west-2 5 vs 2           | ap-northeast-2 5 vs 0  <-- g6 cannot run there
+    // Recommending a quota-0 type is not a soft problem: nothing in the request path checks
+    // quota, so the change is accepted, the app never starts, and a failed instance change
+    // leaves the space pinned to an unlaunchable type.
+    //
+    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
+    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
+    // label used elsewhere is a misattribution of a g5 result.
+    //
+    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
+    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
+    // it takes the same branch; nobody has watched it finish.
+    recommendedInstance: "ml.g5.12xlarge",
     // Ordered by capability-per-dollar. g7e (96 GB/card) clears M9's 40 GB
     // single-device threshold and is CHEAPER than the default, so it leads;
     // p4d/p5 also clear it but cost more. The g5/g6 entries are 24 GB/GPU like
     // the default — capacity fallbacks, NOT upgrades (+22% cost, same tier).
-    alternatives: ["ml.g7e.2xlarge", "ml.g7e.24xlarge", "ml.p4d.24xlarge", "ml.p5.48xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.g6.48xlarge"],
+    alternatives: ["ml.g5.48xlarge", "ml.g5.24xlarge", "ml.p4d.24xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "ml.g6.24xlarge (4× L4, 24 GB/GPU, ~$8.34/hr) runs the 10B VLA policy via balanced-expert placement — the VLM shards across GPUs while the action stack is pinned to cuda:0; results feed closed-loop simulation. This is the VERIFIED path (docs/en/ALPAMAYO_M9.md: minADE 0.3779 m, Status: PASS). Any single GPU ≥40 GB takes the simpler single-device path instead: ml.g7e.2xlarge (1× RTX PRO 6000, 96 GB, ~$4.20/hr) is the cheapest such box — half the default's price, though not yet run in this lab and needing its own quota — and ml.p4d.24xlarge (~$25.25/hr) also qualifies. No g5/g6 size has a 40 GB card.",
+      "ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) runs the 10B VLA policy via balanced-expert placement — the VLM shards across GPUs while the action stack is pinned to cuda:0; results feed closed-loop simulation. The passing reference run was on g5/A10G hardware (docs/en/ALPAMAYO_M9.md: minADE 0.3779 m, Status: PASS) — at 8 GPUs (g5.48xlarge), so this 4-GPU size takes the same branch but has not itself been captured. Any single GPU ≥40 GB takes the simpler single-device path instead: ml.g7e.2xlarge (1× RTX PRO 6000, 96 GB, ~$4.20/hr) is the cheapest such box — half the default's price, though not yet run in this lab and needing its own quota — and ml.p4d.24xlarge (~$25.25/hr) also qualifies. No g5/g6 size has a 40 GB card.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m9/",
     feedsModules: ["m10-alpasim"],

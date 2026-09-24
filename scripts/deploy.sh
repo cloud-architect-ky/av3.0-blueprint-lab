@@ -341,6 +341,29 @@ echo "=== Deployment Complete ==="
 echo "Admin Dashboard: $ADMIN_URL"
 echo "API Endpoint:    $API_URL"
 echo ""
+# Staged-template check. The notebook cost cells in M3/M5/M6/M8/M9 read
+# scripts/av30_instance_rates.py out of the participant workspace to price THIS region. If
+# that file is not staged the conversion is INERT and nothing fails: four notebooks print
+# "[cost] rate table unavailable" and M3 silently falls back to a us-west-2 rate regardless
+# of box or region. Measured: absent from both regions' notebook-templates/scripts/ after
+# the file was added, because the staging sync predates it.
+if [ -n "${SHARED_BUCKET:-}" ]; then
+    echo ""
+    MISSING_STAGED=""
+    for f in notebook-templates/scripts/av30_instance_rates.py \
+             notebook-templates/scripts/av30_progress.py; do
+        aws s3api head-object --bucket "$SHARED_BUCKET" --key "$f" --region "$REGION" \
+            >/dev/null 2>&1 || MISSING_STAGED="$MISSING_STAGED $f"
+    done
+    if [ -n "$MISSING_STAGED" ]; then
+        echo ">>> WARNING: helper files missing from the shared bucket:$MISSING_STAGED"
+        echo "    Participant notebooks degrade SILENTLY without them (wrong prices, or no"
+        echo "    progress reporting). Re-run the scripts/ sync in Next steps below."
+    else
+        echo ">>> Staged helpers present (instance rates + progress)."
+    fi
+fi
+
 # Account-wide budget check. Every per-region budget is Region-filtered, so with only
 # those, NOTHING measures the account total: two regions at $199/day each never alarm, and
 # spend outside both is invisible. Budget names are account-global, so exactly ONE

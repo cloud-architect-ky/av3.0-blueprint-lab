@@ -18,6 +18,7 @@ from config import (
     SESSIONS_TABLE_NAME,
     SHARED_BUCKET_NAME,
     USER_BUCKET_NAME,
+    write_progress_env,
 )
 from errors import ApiError, api_handler
 
@@ -111,6 +112,29 @@ def handler(event, context):
     # Re-copy notebook templates
     copied_count = copy_notebook_templates(user_id)
     logger.info(f"Copied {copied_count} template files for user: {user_id}")
+
+    # Rewrite the progress credentials. delete_user_workspace above cleared the WHOLE
+    # users/<id>/ prefix, which includes .av30-progress.env — and re-copying templates does
+    # not restore it, because it lives under notebook-templates/ for nobody. Without this
+    # the reset participant's notebooks all still SUCCEED while every mark-complete cell
+    # silently no-ops, so their dashboard stays grey for the rest of the workshop and both
+    # sides debug the wrong thing.
+    #
+    # This is the same omission config.py's write_progress_env docstring records happening
+    # once already in bulk_provision, where bulk-provisioned participants had no progress
+    # tracking at all. Re-staging notebooks is exactly what Reset is for, so it has to
+    # restore everything provisioning wrote.
+    item = response["Item"]
+    token = item.get("participantToken", "")
+    if token and write_progress_env(
+        s3, USER_BUCKET_NAME, user_id, token, os.environ.get("API_URL", "")
+    ):
+        logger.info(f"Rewrote progress env for {user_id}")
+    else:
+        logger.warning(
+            f"No progress env rewritten for {user_id} "
+            f"(token present={bool(token)}); their dashboard will not update"
+        )
 
     # Reset module progress in DynamoDB
     table.update_item(

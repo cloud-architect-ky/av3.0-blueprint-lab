@@ -367,7 +367,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     sourceUrl: "https://aws.amazon.com/sagemaker/pipelines/",
     // Extension — orchestrates M1→M2→M3→M5 as one SageMaker Pipeline. Notebook + all 3
     // steps run on CPU (steps are pure Python over M1 metadata); the pipeline
-    // pattern is identical to a GPU production run. See docs/PIPELINE_M11.md.
+    // pattern is identical to a GPU production run. See docs/en/PIPELINE_M11.md.
     recommendedInstance: "ml.t3.medium",
     alternatives: ["ml.t3.large", "ml.m5.large"],
     storageGB: 20,
@@ -399,7 +399,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // DDP training job (ml.m5.xlarge x2, gloo) on M3's captions and visualizes the
     // measured metrics. True HyperPod (p4d cluster, Slurm/EKS/FSx/EFA) is separate
     // infrastructure a notebook can't provision — covered conceptually. See
-    // docs/HYPERPOD_M12.md.
+    // docs/en/HYPERPOD_M12.md.
     recommendedInstance: "ml.t3.medium",
     alternatives: ["ml.t3.large", "ml.m5.large"],
     storageGB: 20,
@@ -411,7 +411,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     feedsModules: [],
     errorHints: {
       ResourceLimitExceeded:
-        "The training job (ml.m5.xlarge x2) needs SageMaker training quota. CPU training quota is usually available; if not, ask the admin. GPU (g5) is optional — see docs/HYPERPOD_M12.md.",
+        "The training job (ml.m5.xlarge x2) needs SageMaker training quota. CPU training quota is usually available; if not, ask the admin. GPU (g5) is optional — see docs/en/HYPERPOD_M12.md.",
     },
   },
 ];

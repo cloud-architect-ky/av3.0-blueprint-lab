@@ -28,25 +28,34 @@ set -uo pipefail
 # apps, spaces, user profiles, AOSS collections and, with --destroy, the whole stack.
 # The old confirmation prompt could not catch it either, because it only asked for the
 # ACCOUNT id, which is identical for every region.
-REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null)}"
-if [ -z "$REGION" ]; then
-  echo "ERROR: no region. Set AWS_REGION (or a profile region) explicitly — this" >&2
-  echo "       script will not guess, because guessing deletes the wrong region." >&2
-  exit 2
-fi
 STACK_NAME="Av30BlueprintLabStack"
 TABLE="av30-sessions-v2"
 
-YES=false; DESTROY=false; ONLY_USER=""
+YES=false; DESTROY=false; ONLY_USER=""; REGION_CLI=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes) YES=true ;;
     --destroy) DESTROY=true; YES=true ;;   # --destroy implies --yes
     --user) shift; ONLY_USER="${1:-}" ;;
+    --region) shift; REGION_CLI="${1:-}" ;;
+    --region=*) REGION_CLI="${1#*=}" ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown flag: $1" >&2; exit 2 ;;
   esac; shift
 done
+
+# --region mirrors deploy.sh, so the two halves of an operation are spelled the same way
+# (the runbook used to document a --region flag this script did not have).
+# Precedence: --region > AWS_REGION > profile region. Flag parsing must run BEFORE this,
+# since the flag participates in resolution.
+REGION="${REGION_CLI:-${AWS_REGION:-$(aws configure get region 2>/dev/null)}}"
+if [ -z "$REGION" ]; then
+  echo "ERROR: no region. Pass --region <region> or set AWS_REGION explicitly — this" >&2
+  echo "       script will not guess, because guessing deletes the wrong region." >&2
+  exit 2
+fi
+# Exported so every nested `aws` call inherits it even where --region is not passed.
+export AWS_REGION="$REGION" AWS_DEFAULT_REGION="$REGION"
 
 warn() { echo "  WARN: $*" >&2; }
 act()  { if $YES; then "$@"; else echo "  [dry-run] $*"; fi; }

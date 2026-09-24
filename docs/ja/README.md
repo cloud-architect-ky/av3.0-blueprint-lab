@@ -21,16 +21,16 @@
 | **M2** | Cosmos Reason キャプション生成 — サンプリングしたクリップの VLM キャプション | `ml.g5.12xlarge`（GPU） |
 | **M3** | Cosmos Curator — **NeMo Curator** による動画キュレーション（分割、トランスコード、モーションフィルタ） | `ml.g5.12xlarge`（GPU） |
 | **M4** | OpenSearch セマンティック検索 — キャプション埋め込みに対する k-NN 検索 | `ml.t3.medium`（CPU） |
-| **M5** | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g6.24xlarge` で検証済み） |
-| **M6** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g6.24xlarge` で検証済み） |
+| **M5** | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g5.12xlarge`） |
+| **M6** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g5.12xlarge`） |
 | **M7** | Nerfstudio 3D 再構成 — NeRF / 3D Gaussian Splatting（オプション/デモ） | `ml.g5.xlarge`（GPU） |
-| **M8** | Cosmos Reason LoRA SFT — nuScenes の**人手ラベル**でパラメータ効率ファインチューニング | GPU（`ml.g6.24xlarge`、ネイティブ解像度で実測） |
-| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU（`ml.g6.24xlarge` で検証済み） |
+| **M8** | Cosmos Reason LoRA SFT — nuScenes の**人手ラベル**でパラメータ効率ファインチューニング | GPU（`ml.g5.12xlarge`、4× 24 GB でネイティブ解像度を実測） |
+| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU（`ml.g5.12xlarge`） |
 | **M10** | AlpaSim クローズドループ評価 — 本物のクローズドループポリシー評価を可視化 | `ml.t3.medium`（CPU）+ GPU EC2 |
 | **M11** | パイプライン自動化 — 本物の SageMaker Pipeline（Caption→Curate→Augment） | `ml.t3.medium`（CPU）+ 処理ジョブ |
 | **M12** | HyperPod 分散学習 — 本物の 2 ノード `torch.distributed` DDP ジョブ | `ml.t3.medium`（CPU）+ ジョブノード |
 
-推奨の進め方: **M0 → M1 → M2 → M3** の順に進み、その後は合成データ（M5/M6）、ポリシー + シミュレーション（M9/M10）、検索（M4）、本番パターン（M12/M11）へと分岐します。表示されているインスタンスはダッシュボードのデフォルト値であり、各 GPU モジュールには代替インスタンスも用意されています（例: `ml.g5.12xlarge` のキャパシティが不足している場合の `ml.g6.12xlarge`）。
+推奨の進め方: **M0 → M1 → M2 → M3** の順に進み、その後は合成データ（M5/M6）、ポリシー + シミュレーション（M9/M10）、検索（M4）、本番パターン（M12/M11）へと分岐します。表示されているインスタンスはダッシュボードのデフォルト値であり、各 GPU モジュールには代替インスタンスも用意されています（ダッシュボードはデプロイ先リージョンが販売するタイプのみを提示し、クォータ 0 のタイプは拒否します）。
 
 上記の AWS ブログ記事で説明されている **8 ステージのパイプライン**に各モジュールがどう対応するかは、[参加者向け事前学習ガイド § 2「8 ステージのパイプライン（とモジュールの対応関係）」](PRE_LEARNING_GUIDE.md#the-8-stage-pipeline)を参照してください。
 
@@ -219,11 +219,11 @@ av3.0-blueprint-lab/
 | シナリオ | コスト | 備考 |
 |---|---|---|
 | アイドル状態（インフラのみ） | **リージョンあたり約 $1/月** | KMS キー。S3 ゲートウェイエンドポイントは無料で、NAT Gateway はありません。DynamoDB（オンデマンド）・CloudFront・Cognito はアイドル時ほぼ $0。VPC インターフェースエンドポイント 6 種を有効にした場合のみ **リージョンあたり約 $87.60/月** が加算されます（ENI 12 個 × $0.01/AZ・時間）。モデルキャッシュの S3 保管料は別途（リージョンあたり約 $2/月）。 |
-| GPU モジュール | 時間課金 | `ml.g5.xlarge` 約 $1.41/時（M7）、`ml.g5.12xlarge` 約 $7.09/時（M2/M3）、`ml.g6.24xlarge` 約 $8.34/時（M5/M6/M9 のデフォルト）。フル解像度の出力には GPU あたり ≥38 GB が必要です: `ml.g7e.2xlarge` 約 $4.20/時 が最も安価な経路（96 GB 1 枚 — デフォルトより安価だが、クォータの初期値は 0 で、このラボでは未検証）、それ以外は `ml.p4d.24xlarge` 約 $25.25/時 |
+| GPU モジュール | 時間課金 | `ml.g5.xlarge` 約 $1.41/時（M7）、`ml.g5.12xlarge` 約 $7.09/時（M2/M3）、`ml.g5.12xlarge` は M5/M6/M8/M9 のデフォルトでもあります。フル解像度の出力には GPU あたり ≥38 GB が必要です: `ml.g7e.2xlarge` 約 $4.20/時 が最も安価な経路（96 GB 1 枚 — デフォルトより安価だが、クォータの初期値は 0 で、このラボでは未検証）、それ以外は `ml.p4d.24xlarge` 約 $25.25/時 |
 | M10 AlpaSim（EC2 上） | 約 $30 の一度きり（管理者） | `g6e.12xlarge` でのリファレンス評価。任意で参加者が自身で実行する場合は約 $10.5/時/ホスト |
 | 1 週間フル（混在） | 約 $400〜600+ | p4d モジュールとユーザー数が支配的 |
 
-**コスト管理:** 日次予算アラーム（SNS → `<admin-email>`）、Sessions タブからの管理者による強制終了、アイドル状態のアプリのライフサイクルによる自動停止（約 180 分）。**撤去:** `scripts/teardown.sh`（デフォルトはドライラン。`--yes`、`--user <id>`、`--destroy`）は、ユーザーごとのアプリ/スペース/プロファイルを削除し、孤立した OpenSearch Serverless コレクションを一掃し、タグ付けされた GPU EC2 ホストを終了します。イベント終了後は、**管理者の HF トークンを失効させ、NGC キーをローテーション**してください。詳細は [docs/ja/ADMIN_GUIDE.md](ADMIN_GUIDE.md) にあります。
+**コスト管理:** 日次予算アラーム（SNS → `<admin-email>`）、Sessions タブからの管理者による強制終了、JupyterLab アプリのアイドル自動停止（デフォルト 90 分。`-c idle_timeout_minutes=<60..180>`）。**撤去:** `scripts/teardown.sh`（デフォルトはドライラン。`--yes`、`--user <id>`、`--destroy`）は、ユーザーごとのアプリ/スペース/プロファイルを削除し、孤立した OpenSearch Serverless コレクションを一掃し、タグ付けされた GPU EC2 ホストを終了します。イベント終了後は、**管理者の HF トークンを失効させ、NGC キーをローテーション**してください。詳細は [docs/ja/ADMIN_GUIDE.md](ADMIN_GUIDE.md) にあります。
 
 ---
 
@@ -260,9 +260,10 @@ GPU タイプが使えるかは**異なる 2 つの事実**で決まりますが
    ```
 
    料金表・ライブクォータ・各モジュールの推奨インスタンスを相互照合します。このアカウントの実測:
-   us-west-2 は推奨タイプすべてを実行できますが `ml.g6.24xlarge` は**同時 2 個**のみ（4 モジュールが
-   使用）、ap-northeast-2 は `ml.g6` ファミリー全体がクォータ **0** で、`ml.g5` と
-   `ml.p4d.24xlarge` は利用可能です。
+   us-west-2 と ap-northeast-2 はどちらも推奨タイプすべてを**同時 5 名**まで実行でき、10 名では
+   どちらも通りません — 両リージョンの上限が同じく `ml.g5.12xlarge`/`ml.g5.xlarge` のクォータ 5 だからです。
+   ap-northeast-2 は `ml.g6` ファミリー全体がクォータ **0** で、`ml.g7e.*`/`ml.p5.*` はそもそも
+   販売されていません — ダッシュボードの推奨値に `g6` タイプが 1 つもないのはこのためです。
 
 S3 モデルキャッシュのパスはリージョンローカルです — デプロイしたリージョンにデータを配置してください
 （`AWS_REGION=<region> ./scripts/cache_models.sh`; スクリプトはリージョンを推測しません）。

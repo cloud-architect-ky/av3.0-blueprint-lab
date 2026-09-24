@@ -32,11 +32,11 @@
 | **M2** | Cosmos Reason 캡셔닝 — 샘플링된 클립의 VLM 캡션 생성 | `ml.g5.12xlarge` (GPU) |
 | **M3** | Cosmos Curator — **NeMo Curator** 비디오 큐레이션(분할, 트랜스코딩, 모션 필터링) | `ml.g5.12xlarge` (GPU) |
 | **M4** | OpenSearch 시맨틱 검색 — 캡션 임베딩에 대한 k-NN 검색 | `ml.t3.medium` (CPU) |
-| **M5** | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g6.24xlarge` 검증됨) |
-| **M6** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g6.24xlarge` 검증됨) |
+| **M5** | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g5.12xlarge`) |
+| **M6** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g5.12xlarge`) |
 | **M7** | Nerfstudio 3D 재구성 — NeRF / 3D Gaussian Splatting(선택/데모) | `ml.g5.xlarge` (GPU) |
-| **M8** | Cosmos Reason LoRA SFT — nuScenes **사람 라벨**로 파라미터 효율 파인튜닝 | GPU (`ml.g6.24xlarge`, 네이티브 해상도 실측) |
-| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU (`ml.g6.24xlarge` 검증됨) |
+| **M8** | Cosmos Reason LoRA SFT — nuScenes **사람 라벨**로 파라미터 효율 파인튜닝 | GPU (`ml.g5.12xlarge`, 4× 24 GB에서 네이티브 해상도 실측) |
+| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU (`ml.g5.12xlarge`) |
 | **M10** | AlpaSim 폐루프 평가 — 진정한 폐루프 정책 평가 시각화 | `ml.t3.medium` (CPU) + GPU EC2 |
 | **M11** | 파이프라인 자동화 — 실제 SageMaker Pipeline(Caption→Curate→Augment) | `ml.t3.medium` (CPU) + 프로세싱 작업 |
 | **M12** | HyperPod 분산 학습 — 실제 2노드 `torch.distributed` DDP 작업 | `ml.t3.medium` (CPU) + 작업 노드 |
@@ -44,7 +44,7 @@
 권장 경로: **M0 → M1 → M2 → M3**, 이후 합성 데이터(M5/M6), 정책 + 시뮬레이션
 (M9/M10), 검색(M4), 프로덕션 패턴(M12/M11)으로 분기합니다. 표시된 인스턴스는
 대시보드 기본값이며, 각 GPU 모듈은 대안도 제공합니다(예: `ml.g5.12xlarge` 용량이
-부족할 때 `ml.g6.12xlarge`).
+대시보드는 배포 리전이 판매하는 타입만 제시하며, 쿼터가 0인 타입은 거부합니다).
 
 위 AWS 블로그 글에서 설명하는 **8단계 파이프라인**에 각 모듈이 어떻게 매핑되는지는
 [참가자 사전 학습 가이드 § 2 "8단계 파이프라인 (그리고 모듈이 어떻게 매핑되는가)"](PRE_LEARNING_GUIDE.md#the-8-stage-pipeline)를
@@ -256,12 +256,13 @@ av3.0-blueprint-lab/
 | 시나리오 | 비용 | 비고 |
 |---|---|---|
 | 유휴(인프라만) | **리전당 ~$1/월** | KMS 키. S3 게이트웨이 엔드포인트는 무료이고 NAT Gateway는 없습니다. DynamoDB(온디맨드)·CloudFront·Cognito는 유휴 시 ~$0. VPC 인터페이스 엔드포인트 6종을 켤 때만 **리전당 ~$87.60/월**이 추가됩니다(ENI 12개 × $0.01/AZ·시간). 모델 캐시 S3 저장료는 별도(리전당 ~$2/월). |
-| GPU 모듈 | 시간당 | `ml.g5.xlarge` ~$1.41/hr (M7), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M5/M6/M9 기본값). 최대 해상도 출력은 GPU당 ≥38 GB가 필요합니다: `ml.g7e.2xlarge` ~$4.20/hr이 가장 저렴한 경로(96 GB 1장 — 기본값보다 저렴하지만 쿼터 기본값 0이며 이 랩에서 미검증), 그 외에는 `ml.p4d.24xlarge` ~$25.25/hr |
+| GPU 모듈 | 시간당 | `ml.g5.xlarge` ~$1.41/hr (M7), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g5.12xlarge`는 M5/M6/M8/M9의 기본값이기도 합니다. 최대 해상도 출력은 GPU당 ≥38 GB가 필요합니다: `ml.g7e.2xlarge` ~$4.20/hr이 가장 저렴한 경로(96 GB 1장 — 기본값보다 저렴하지만 쿼터 기본값 0이며 이 랩에서 미검증), 그 외에는 `ml.p4d.24xlarge` ~$25.25/hr |
 | EC2의 M10 AlpaSim | ~$30 일회성(관리자) | `g6e.12xlarge`에서 레퍼런스 평가; 선택적 참가자 자체 실행 시 ~$10.5/hr/호스트 |
 | 전체 1주(혼합) | ~$400–600+ | p4d 모듈과 사용자 수가 비용의 대부분을 차지 |
 
 **비용 제어:** 일일 예산 알람(SNS → `<admin-email>`), Sessions 탭에서 관리자
-강제 종료, 유휴 앱의 라이프사이클 자동 중지(~180분). **정리:**
+강제 종료, JupyterLab 앱 유휴 자동 중지(기본 90분;
+`-c idle_timeout_minutes=<60..180>`). **정리:**
 `scripts/teardown.sh`(기본은 드라이런; `--yes`, `--user <id>`, `--destroy`)는
 사용자별 앱/스페이스/프로필을 제거하고, 고아 상태의 OpenSearch Serverless
 컬렉션을 정리하며, 태그된 GPU EC2 호스트를 종료합니다. 이벤트 후에는 **관리자
@@ -300,9 +301,11 @@ GPU 타입을 쓸 수 있는지는 **서로 다른 두 사실**이 결정하는�
    ./scripts/check_quotas.py --region <region> --participants 10
    ```
 
-   요금표·라이브 쿼터·모듈 권장 인스턴스를 교차 확인합니다. 이 계정 실측: us-west-2 는 권장
-   타입을 모두 실행할 수 있지만 `ml.g6.24xlarge` 가 **동시 2개**뿐이고(4개 모듈이 이걸 사용),
-   ap-northeast-2 는 `ml.g6` 패밀리 전체가 쿼터 **0** 이며 `ml.g5` 와 `ml.p4d.24xlarge` 는 사용 가능합니다.
+   요금표·라이브 쿼터·모듈 권장 인스턴스를 교차 확인합니다. 이 계정 실측: us-west-2 와
+   ap-northeast-2 모두 권장 타입 전체를 **동시 5명**까지 실행할 수 있고, 10명에서는 양쪽 다
+   통과하지 못합니다 — 두 리전의 한계가 똑같이 `ml.g5.12xlarge`/`ml.g5.xlarge`의 쿼터 5입니다.
+   ap-northeast-2 는 `ml.g6` 패밀리 전체가 쿼터 **0** 이고 `ml.g7e.*`/`ml.p5.*` 는 아예 판매하지
+   않습니다 — 그래서 대시보드 권장값에 `g6` 타입이 하나도 없습니다.
 
 S3 모델 캐시 경로는 리전 로컬입니다 — 배포한 리전에 데이터를 적재하세요
 (`AWS_REGION=<region> ./scripts/cache_models.sh`; 스크립트는 리전을 추측하지 않습니다).

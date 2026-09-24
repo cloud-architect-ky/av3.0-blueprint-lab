@@ -42,6 +42,12 @@ first_party_image_arn = _smd_images.first_party_image_arn
 supported_regions = _smd_images.supported_regions
 
 
+# NOT the idle control that actually applies to participants. This LCC is registered for
+# app type JupyterServer (see studio_lifecycle_config_app_type below), and participants
+# launch JupyterLab apps, so this script never runs for them. The effective setting is the
+# domain's AppLifecycleManagement.IdleSettings — see SageMakerConstruct._idle_timeout_minutes.
+# Lowering the 10800 below would change nothing; it is kept only so a JupyterServer app,
+# if one is ever created, is not left with no idle handling at all.
 _IDLE_SHUTDOWN_SCRIPT = """\
 #!/bin/bash
 set -eu
@@ -664,8 +670,9 @@ class SageMakerConstruct(Construct):
             ),
             # JupyterLab is the app type participants actually launch. Attach the
             # notebook-sync LCC as the default (and allowlist it) so notebooks
-            # appear automatically, and enable idle shutdown after 3h — the
-            # JupyterServer LCC above never runs on these apps. Pin the CPU
+            # appear automatically, and enable idle shutdown (see
+            # _idle_timeout_minutes) — the JupyterServer LCC above never runs on
+            # these apps. Pin the CPU
             # SageMaker Distribution image as the default (initial spaces are
             # t3.medium); the Lambdas swap to the GPU image when a participant
             # picks a GPU instance. The Distribution images' OWNING ACCOUNT differs
@@ -685,7 +692,7 @@ class SageMakerConstruct(Construct):
                 app_lifecycle_management=sagemaker.CfnDomain.AppLifecycleManagementProperty(
                     idle_settings=sagemaker.CfnDomain.IdleSettingsProperty(
                         lifecycle_management="ENABLED",
-                        idle_timeout_in_minutes=180,
+                        idle_timeout_in_minutes=self._idle_timeout_minutes(),
                         min_idle_timeout_in_minutes=60,
                         max_idle_timeout_in_minutes=180,
                     ),
@@ -708,6 +715,60 @@ class SageMakerConstruct(Construct):
             app_network_access_type="PublicInternetOnly",
             default_user_settings=default_user_settings,
         )
+
+    _IDLE_TIMEOUT_DEFAULT_MINUTES = 90
+    _IDLE_TIMEOUT_MIN_MINUTES = 60
+    _IDLE_TIMEOUT_MAX_MINUTES = 180
+
+    def _idle_timeout_minutes(self) -> int:
+        """Minutes of idleness before a JupyterLab app is shut down.
+
+        Override per deployment with `-c idle_timeout_minutes=<60..180>`.
+
+        Lowered from the 180-minute MAXIMUM to 90. An abandoned app is billed the whole
+        time, and the amount is not small on the types the heavy modules recommend:
+        ml.g5.12xlarge is $8.718/hr in ap-northeast-2, so 180 idle minutes is $26.15 per
+        participant versus $13.08 at 90. It also holds one of the region's quota slots
+        (5 for that type in ap-northeast-2, 2 for ml.g5.24xlarge/48xlarge), so one
+        forgotten app can block another participant for three hours.
+
+        Shutting down does NOT interrupt work in progress. Per the Idle shutdown
+        documentation, the timer "doesn't start until the instance becomes idle", and a
+        JupyterLab app only counts as idle when there are no active Jupyter kernel
+        sessions AND no active terminal sessions — so a training cell or a shell job keeps
+        the app alive for as long as it runs. M8's LoRA SFT cannot be killed by this.
+        The home directory is on EFS and survives shutdown; relaunching is one click.
+
+        Not lowered further than 90 on purpose: relaunching a GPU app takes minutes and,
+        in a region where the heavy types have a quota of 2, the freed slot may be taken
+        by another participant in the meantime. Shutting someone down aggressively can
+        lock them out mid-module, which is worse than the idle cost it saves.
+
+        min/max stay 60/180: those bound what a USER PROFILE may override to (user-profile
+        idle settings take precedence over the domain's), not what the domain uses.
+        """
+        raw = self.node.try_get_context("idle_timeout_minutes")
+        if raw is None or raw == "":
+            return self._IDLE_TIMEOUT_DEFAULT_MINUTES
+        # CDK context arrives as a STRING even when written as a number on the command
+        # line, and CfnDomain type-checks this field as an int — passing the string
+        # through fails synth with a confusing jsii error rather than a clear one.
+        try:
+            minutes = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"idle_timeout_minutes must be an integer, got {raw!r}"
+            ) from None
+        if not (self._IDLE_TIMEOUT_MIN_MINUTES <= minutes
+                <= self._IDLE_TIMEOUT_MAX_MINUTES):
+            # SageMaker rejects this at deploy time; failing at synth costs nothing and
+            # names the bound, instead of surfacing as a CloudFormation rollback.
+            raise ValueError(
+                f"idle_timeout_minutes must be between {self._IDLE_TIMEOUT_MIN_MINUTES} "
+                f"and {self._IDLE_TIMEOUT_MAX_MINUTES} minutes (SageMaker's own limits "
+                f"for this domain), got {minutes}"
+            )
+        return minutes
 
     @property
     def domain_id(self) -> str:

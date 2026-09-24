@@ -112,18 +112,29 @@ Two families of quota matter. The README's quota table covers the first; the
 Search "**Studio JupyterLab Apps running on**" in the Service Quotas console. These
 are the instance types the **user dashboard's Instance Options** actually offers
 (recommended + alternatives), so a participant can only pick from this set — the
-quotas below cover every one of them. Quota **codes are region-independent**; the
-"Current" column is what account `<aws-account-id>` had in `us-west-2` (yours may
-differ — always verify with the command below).
+quotas below cover every one of them. Quota **codes are region-independent** (verified
+identical across us-west-2 / ap-northeast-2 / eu-west-1); the **values are not**, and
+neither is which types have a quota at all.
 
-**GPU verified this cycle:** every GPU module ran successfully on the g6 family —
-in particular **ml.g6.24xlarge (4× L4, 96 GB)** completed M2/M3 (captioning,
-curation) and M5/M6/M9 (Cosmos Transfer/Predict, Alpamayo). g6 is the current-gen
-L4 family and is usually far easier to get capacity for than p4d/p5, so it is the
-recommended workhorse for a real room; p4d/p5 remain the "native-resolution / full
-720p" path if you have the quota.
+**GPU workhorse: `ml.g5.12xlarge` (4× A10G, 96 GB).** It is what the dashboard now
+recommends for M2, M3 and the four heavy modules (M5, M6, M8, M9), for reasons that are
+all measured: it has the *identical* geometry to `ml.g6.24xlarge` (`describe-instance-types`
+reports 4 GPUs × 22,888 MiB for both, so every per-GPU module gate takes the same branch),
+it is cheaper in both regions ($7.09 vs $8.34 in us-west-2; $8.72 vs $10.26 in
+ap-northeast-2), it has a higher quota (5 vs 2 in us-west-2, 5 vs **0** in ap-northeast-2),
+and it is the family the lab has actually verified — M9's passing run (minADE 0.3779,
+`Status: PASS`) was on g5, i.e. A10G. An earlier version of this guide called
+`ml.g6.24xlarge` "verified this cycle"; that was a misattribution of an A10G result.
+p4d/p5 remain the native-resolution / full-720p path if you have the quota.
 
-| Instance | Quota code | Current | Min for a 10-person room | Role in the dashboard |
+> **The `us-west-2` column below is not your region.** Quota is a per-(account × region)
+> fact: the entire `ml.g6.*` family is sold in ap-northeast-2 with a quota of **0**, and
+> `ml.g7e.*`/`ml.p5.*` are not sold there at all. Run
+> `./scripts/check_quotas.py --region <target>` for the real numbers — it prints the exact
+> `request-service-quota-increase` command for each shortfall. (A quota-0 type is now
+> rejected by the dashboard up front rather than accepted and then failing to start.)
+
+| Instance | Quota code | us-west-2 (2026-09) | Min for a 10-person room | Role in the dashboard |
 |---|---|---|---|---|
 | ml.t3.medium | L-71FAF417 | 2500 | ≥20 | **Recommended** for all CPU notebooks (M0, M1, M10, M4, M12, M11) |
 | ml.t3.large | L-2733D4D5 | 30 | ≥0 | CPU alternative |
@@ -133,19 +144,19 @@ recommended workhorse for a real room; p4d/p5 remain the "native-resolution / fu
 | ml.g5.xlarge | L-988CE6C5 | 5 | ≥5 | **Recommended** for M7 (Nerfstudio) |
 | ml.g5.2xlarge | L-F73C7DB9 | 5 | ≥0 | M7 alternative |
 | ml.g5.4xlarge | L-81940D85 | 5 | ≥0 | M7 alternative |
-| ml.g5.12xlarge | L-8D2ED7BF | 5 | ≥5 | **Recommended** for M2, M3 (4× A10G, 96 GB) |
+| **ml.g5.12xlarge** | **L-8D2ED7BF** | **5** | **≥5** | **Recommended workhorse — M2, M3, M5, M6, M8, M9 (4× A10G, 96 GB)** |
 | ml.g5.24xlarge | L-F087CCFC | 2 | ≥1 | M2/M3/M5–M9 alternative |
 | ml.g5.48xlarge | L-83AB5D73 | 2 | ≥1 | M2/M3/M5–M9 alternative / OOM fallback |
-| ml.g6.xlarge | L-AABA5942 | 5 | ≥0 | M7 alternative (L4) |
-| ml.g6.2xlarge | L-92D1521D | 5 | ≥0 | M7 alternative (L4) |
-| ml.g6.4xlarge | L-692B8304 | 5 | ≥0 | M7 alternative (L4) |
-| ml.g6.12xlarge | L-962247BA | 2 | ≥2 | M2/M3 capacity fallback (4× L4, 96 GB) |
-| **ml.g6.24xlarge** | **L-8ACE1754** | **2** | **≥2** | **M2/M3/M5–M9 workhorse (4× L4, 96 GB) — verified this cycle** |
-| ml.g6.48xlarge | L-125B7142 | 2 | ≥0 | M5/M6/M9 alternative (8× L4) |
+| ml.g6.xlarge | L-AABA5942 | 5 | ≥0 | M7 alternative (L4) — **0 in ap-northeast-2** |
+| ml.g6.2xlarge | L-92D1521D | 5 | ≥0 | M7 alternative (L4) — **0 in ap-northeast-2** |
+| ml.g6.4xlarge | L-692B8304 | 5 | ≥0 | M7 alternative (L4) — **0 in ap-northeast-2** |
+| ml.g6.12xlarge | L-962247BA | 2 | ≥0 | M2/M3 capacity fallback (4× L4, 96 GB) — **0 in ap-northeast-2** |
+| ml.g6.24xlarge | L-8ACE1754 | 2 | ≥0 | M2/M3/M5–M9 alternative (4× L4, 96 GB) — same geometry as g5.12xlarge but dearer; **0 in ap-northeast-2** |
+| ml.g6.48xlarge | L-125B7142 | 2 | ≥0 | M5/M6/M9 alternative (8× L4) — **0 in ap-northeast-2** |
 | ml.g7e.2xlarge | L-7A3E0A2C | **0** | ≥0 | M2/M3/M5–M9 **cheapest native-res path** (1× RTX PRO 6000, 96 GB; **defaults to 0 — must request**) |
 | ml.g7e.24xlarge | L-E481E4F8 | **0** | ≥0 | M5/M6/M9 alternative (4× RTX PRO 6000; **defaults to 0**) |
 | ml.p4d.24xlarge | L-AD63F1D2 | 2 | ≥2 | M5, M6, M9 native-res path (8× A100; **defaults to 0 — must request**) |
-| ml.p5.48xlarge | L-B41FBF28 | 1 | ≥1 | Heavy-model fallback (8× H100; us-west-2 / us-east-1 only) |
+| ml.p5.48xlarge | L-B41FBF28 | 1 | ≥0 | Heavy-model fallback (8× H100; **not sold in ap-northeast-2**) |
 
 > **g7e is optional and unverified here.** All six `ml.g7e.*` Studio quotas read
 > **0** in `us-west-2` for this account (verified via `list-service-quotas`), so
@@ -162,8 +173,9 @@ number of concurrent participants, and at least the minimum shown for the one or
 two fallbacks you intend to steer people to (capacity errors surface an
 alternative in the dashboard). You do **not** need quota for every alternative —
 only the ones you'll actually direct the room to use. If you standardise the GPU
-modules on **g6.24xlarge** (recommended), request that one to ≥ your headcount and
-you can leave p4d/p5 at their defaults.
+modules on **g5.12xlarge** (recommended — and the only heavy-module recommendation that
+is non-zero in both us-west-2 and ap-northeast-2), request that one to ≥ your headcount
+and you can leave p4d/p5 at their defaults.
 
 ### 2b. SageMaker **job** quotas (M12 and M11 — the ones people forget)
 M12 submits a real **training job** and M11 runs real **processing jobs** on
@@ -454,12 +466,22 @@ seeded with the notebook templates, and a personal dashboard link.
 ## 10. During the workshop — monitor & control
 
 - **Sessions tab** — live view of who's running what, on which instance, and cost.
-- **Capacity errors** (`EC2InsufficientCapacityError`): tell participants to pick
-  the alternative in Instance Options (`ml.g6.12xlarge` for M2/M3). It's a capacity
-  shortage, not a quota problem.
-- **Cost control** — a daily budget alarm emails `ADMIN_EMAIL` via SNS; the
-  lifecycle config auto-stops idle apps after ~3 h; you can **force-terminate** any
-  session from the Sessions tab. Watch for idle p4d boxes (~$25.25/hr).
+- **Capacity errors** (`EC2InsufficientCapacityError`): tell participants to pick any
+  alternative Instance Options offers for that module — the list is already filtered to
+  types this region sells, and a type whose quota is 0 is refused with an explanation
+  rather than accepted. Don't name a specific fallback from memory: `ml.g6.12xlarge` was
+  the old advice and is quota 0 in ap-northeast-2. It's a capacity shortage, not a quota
+  problem.
+- **A change that silently didn't happen.** If a participant says their instance change
+  did nothing, the app failed to launch on the new type (most often
+  `ResourceLimitExceeded` — quota exists but every slot is in use) and was rolled back to
+  the previous type so they still have a workspace. The reason is on
+  `GET /sessions/{id}/app-status` as `lastInstanceChangeError`. Free a slot (force-terminate
+  an idle session) and have them retry.
+- **Cost control** — a daily budget alarm emails `ADMIN_EMAIL` via SNS; idle
+  JupyterLab apps auto-stop after 90 min (`-c idle_timeout_minutes=<60..180>` to
+  change). A running cell or terminal job counts as active, so this never kills work
+  in progress. You can **force-terminate** any session from the Sessions tab. Watch for idle p4d boxes (~$25.25/hr).
 - **GPU image reminder** — if a participant reports "No GPU detected" on a GPU
   instance, they launched the CPU image; Instance Options → GPU instance → Apply
   re-selects the GPU image.

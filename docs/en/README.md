@@ -32,11 +32,11 @@ Anyone can deploy it into **their own AWS account**.
 | **M2** | Cosmos Reason Captioning — VLM captions of sampled clips | `ml.g5.12xlarge` (GPU) |
 | **M3** | Cosmos Curator — **NeMo Curator** video curation (split, transcode, motion-filter) | `ml.g5.12xlarge` (GPU) |
 | **M4** | OpenSearch Semantic Search — k-NN retrieval over caption embeddings | `ml.t3.medium` (CPU) |
-| **M5** | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g6.24xlarge` verified) |
-| **M6** | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g6.24xlarge` verified) |
+| **M5** | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g5.12xlarge`) |
+| **M6** | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g5.12xlarge`) |
 | **M7** | Nerfstudio 3D Reconstruction — NeRF / 3D Gaussian Splatting (optional/demo) | `ml.g5.xlarge` (GPU) |
-| **M8** | Cosmos Reason LoRA SFT — parameter-efficient fine-tune on nuScenes **human** labels | GPU (`ml.g6.24xlarge`, native-res measured) |
-| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU (`ml.g6.24xlarge` verified) |
+| **M8** | Cosmos Reason LoRA SFT — parameter-efficient fine-tune on nuScenes **human** labels | GPU (`ml.g5.12xlarge`, native-res measured on 4× 24 GB) |
+| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU (`ml.g5.12xlarge`) |
 | **M10** | AlpaSim Closed-Loop Eval — visualize genuine closed-loop policy evaluation | `ml.t3.medium` (CPU) + GPU EC2 |
 | **M11** | Pipeline Automation — a real SageMaker Pipeline (Caption→Curate→Augment) | `ml.t3.medium` (CPU) + processing job |
 | **M12** | HyperPod Distributed Training — a real 2-node `torch.distributed` DDP job | `ml.t3.medium` (CPU) + job nodes |
@@ -44,7 +44,8 @@ Anyone can deploy it into **their own AWS account**.
 Recommended path: **M0 → M1 → M2 → M3**, then branch to synthetic data (M5/M6),
 policy + simulation (M9/M10), search (M4), or production patterns (M12/M11).
 Instances shown are the dashboard defaults; each GPU module also offers
-alternatives (e.g. `ml.g6.12xlarge` when `ml.g5.12xlarge` capacity is short).
+alternatives (the dashboard only offers types the deploy region sells, and refuses one
+whose quota is 0).
 
 For how these modules map to the **8-stage pipeline** described in the AWS blog
 post above, see [Participant Pre-Learning Guide § 2 "The 8-stage pipeline (and how
@@ -126,10 +127,10 @@ Check what YOUR account has in the region you intend to deploy to — quota is s
 ```
 
 It cross-references live quota, what the region actually sells for Studio-JupyterLab, and the
-instance each module recommends — and names the modules blocked by any shortfall. Measured in
-the reference account at 10 participants, **neither** region passes as configured:
-`ml.g6.24xlarge` (wanted by four modules) allows 2 concurrent in us-west-2 and 0 in
-ap-northeast-2. `deploy.sh` runs this for you at the end of a deployment.
+instance each module recommends — and names the modules blocked by any shortfall. Measured in the reference
+account: both us-west-2 and ap-northeast-2 pass at **5** concurrent participants and
+neither passes at 10 — `ml.g5.12xlarge` and `ml.g5.xlarge` are quota 5 in both. Raise
+those two to your headcount for a bigger room. `deploy.sh` runs this for you at the end of a deployment.
 
 
 ---
@@ -265,13 +266,13 @@ av3.0-blueprint-lab/
 | Scenario | Cost | Notes |
 |---|---|---|
 | Idle (infra only) | **~$1/mo per region** | KMS key. The S3 gateway endpoint is free and there is no NAT Gateway; DynamoDB (on-demand), CloudFront and Cognito are ~$0 at idle. Add **~$87.60/mo per region** only if you enable the 6 VPC interface endpoints (12 ENIs x $0.01/AZ-hour). S3 storage for the model cache is extra (~$2/mo per region). |
-| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M7), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g6.24xlarge` ~$8.34/hr (M5/M6/M9 default). Full-resolution output needs ≥38 GB/GPU: `ml.g7e.2xlarge` ~$4.20/hr is the cheapest route (1× 96 GB — cheaper than the default, but quota defaults to 0 and it is unverified here), `ml.p4d.24xlarge` ~$25.25/hr otherwise |
+| GPU modules | per-hour | `ml.g5.xlarge` ~$1.41/hr (M7), `ml.g5.12xlarge` ~$7.09/hr (M2/M3), `ml.g5.12xlarge` is also the M5/M6/M8/M9 default. Full-resolution output needs ≥38 GB/GPU: `ml.g7e.2xlarge` ~$4.20/hr is the cheapest route (1× 96 GB — cheaper than the default, but quota defaults to 0 and it is unverified here), `ml.p4d.24xlarge` ~$25.25/hr otherwise |
 | M10 AlpaSim on EC2 | ~$30 one-time (admin) | reference eval on `g6e.12xlarge`; optional participant self-run ~$10.5/hr/host |
 | Full week (mixed) | ~$400–600+ | dominated by the p4d modules and user count |
 
 **Cost controls:** daily budget alarm (SNS → `<admin-email>`), admin
-force-terminate from the Sessions tab, and lifecycle auto-stop of idle apps
-(~180 min). **Teardown:** `scripts/teardown.sh` (dry-run by default; `--yes`,
+force-terminate from the Sessions tab, and idle auto-stop of
+JupyterLab apps (90 min default; `-c idle_timeout_minutes=<60..180>`). **Teardown:** `scripts/teardown.sh` (dry-run by default; `--yes`,
 `--user <id>`, `--destroy`) removes per-user apps/spaces/profiles, sweeps orphaned
 OpenSearch Serverless collections, and terminates tagged GPU EC2 hosts. After the
 event, **revoke the admin HF token and rotate the NGC key**. Details in
@@ -313,9 +314,11 @@ and implied only three regions were possible when the p5 quota actually exists i
    ```
 
    It cross-references the rate table, live quotas, and the modules' recommended instances.
-   Measured for this account: us-west-2 can run every recommended type but only **2**
-   `ml.g6.24xlarge` concurrently (four modules want it), and ap-northeast-2 has quota **0**
-   for the whole `ml.g6` family while `ml.g5` and `ml.p4d.24xlarge` are available.
+   Measured for this account: both us-west-2 and ap-northeast-2 run every recommended
+   type for **5** concurrent participants, the cap in both being quota 5 on
+   `ml.g5.12xlarge`/`ml.g5.xlarge`. ap-northeast-2 has quota **0** for the whole `ml.g6`
+   family and does not sell `ml.g7e.*`/`ml.p5.*` at all, which is why nothing the
+   dashboard recommends is a `g6` type.
 
 S3 model-cache paths are region-local — stage data into the region you deploy to
 (`AWS_REGION=<region> ./scripts/cache_models.sh`; the script refuses to guess).

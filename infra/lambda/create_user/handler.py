@@ -31,6 +31,7 @@ from config import (
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
     wait_for_user_profile_in_service,
+    write_progress_env,
 )
 from errors import ApiError, api_handler
 
@@ -178,22 +179,13 @@ def handler(event, context):
     # ~/.av30-progress.env with NO new IAM grant (the file holds only this
     # participant's own token — same trust boundary as their browser session).
     # The notebook mark-complete cells source AV30_API_URL + AV30_PROGRESS_TOKEN.
-    api_url = os.environ.get("API_URL", "").rstrip("/")
-    if api_url:
-        progress_env = (
-            f'export AV30_API_URL="{api_url}"\n'
-            f'export AV30_PROGRESS_TOKEN="{participant_token}"\n'
-        )
-        try:
-            s3.put_object(
-                Bucket=USER_BUCKET_NAME,
-                Key=f"users/{user_id}/.av30-progress.env",
-                Body=progress_env.encode("utf-8"),
-                ContentType="text/plain",
-            )
-            logger.info(f"Wrote progress env for {user_id}")
-        except Exception as e:  # noqa: BLE001 — non-fatal; progress ping is best-effort
-            logger.warning(f"Could not write progress env for {user_id}: {e}")
+    if write_progress_env(
+        s3, USER_BUCKET_NAME, user_id, participant_token,
+        os.environ.get("API_URL", ""),
+    ):
+        logger.info(f"Wrote progress env for {user_id}")
+    else:
+        logger.warning(f"No progress env written for {user_id}")
 
     # Generate presigned URL (8 hours)
     presigned_url_response = sagemaker.create_presigned_domain_url(

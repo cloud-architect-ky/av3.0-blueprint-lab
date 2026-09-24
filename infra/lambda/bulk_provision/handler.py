@@ -34,6 +34,7 @@ from config import (
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
     wait_for_user_profile_in_service,
+    write_progress_env,
 )
 from errors import ApiError, api_handler
 
@@ -146,6 +147,14 @@ def provision_single_user(user_data: dict) -> dict:
 
         # Copy notebook templates
         copy_notebook_templates(user_id)
+
+        # Progress tracking. create_user wrote this and bulk_provision did not, so
+        # bulk-provisioned participants had 27 workspace objects instead of 28 and no
+        # progress reporting at all — their dashboard never lit up.
+        write_progress_env(
+            s3, USER_BUCKET_NAME, user_id, participant_token,
+            os.environ.get("API_URL", ""),
+        )
 
         # Generate presigned URL
         presigned_url_response = sagemaker.create_presigned_domain_url(

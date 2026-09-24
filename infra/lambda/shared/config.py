@@ -328,6 +328,38 @@ def wait_for_app_deleted(sagemaker_client, domain_id: str, space_name: str,
     raise TimeoutError(f"Timed out waiting for app to delete on space {space_name}")
 
 
+def write_progress_env(s3_client, bucket: str, user_id: str,
+                      participant_token: str, api_url: str) -> bool:
+    """Write users/<id>/.av30-progress.env so the notebooks can report progress.
+
+    The notebook-sync LCC `aws s3 sync`s users/<id>/ into the home dir at app launch,
+    so this lands as ~/.av30-progress.env and the mark-complete cells source
+    AV30_API_URL + AV30_PROGRESS_TOKEN from it. No new IAM grant is needed: the file
+    holds only this participant's own token — the same trust boundary as their browser
+    session.
+
+    Shared because create_user wrote it and bulk_provision did not, so every
+    bulk-provisioned participant silently had no progress tracking and their dashboard
+    never lit up as they finished modules. Best-effort by design (a failed progress
+    ping must not fail provisioning); returns True if written.
+    """
+    if not api_url:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=f"users/{user_id}/.av30-progress.env",
+            Body=(
+                f'export AV30_API_URL="{api_url.rstrip("/")}"\n'
+                f'export AV30_PROGRESS_TOKEN="{participant_token}"\n'
+            ).encode("utf-8"),
+            ContentType="text/plain",
+        )
+        return True
+    except Exception:  # noqa: BLE001 — non-fatal; progress ping is best-effort
+        return False
+
+
 def wait_for_user_profile_in_service(sagemaker_client, domain_id: str,
                                      user_profile_name: str,
                                      max_wait: int = 120) -> None:

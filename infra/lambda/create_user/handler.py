@@ -30,6 +30,7 @@ from config import (
     TARGET_REGIONS,
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
+    wait_for_user_profile_in_service,
 )
 from errors import ApiError, api_handler
 
@@ -135,21 +136,15 @@ def handler(event, context):
     )
     logger.info(f"Created SageMaker user profile: {user_id}")
 
-    # UserProfile creation is asynchronous — wait until it is InService
-    # before creating the space (CreateSpace fails otherwise).
-    deadline = time.time() + 120
-    while time.time() < deadline:
-        profile = sagemaker.describe_user_profile(
-            DomainId=SAGEMAKER_DOMAIN_ID, UserProfileName=user_id
-        )
-        status = profile.get("Status")
-        if status == "InService":
-            break
-        if status in ("Failed", "Delete_Failed", "Update_Failed"):
-            raise ApiError(502, f"UserProfile creation failed with status: {status}")
-        time.sleep(3)
-    else:
-        raise ApiError(504, "Timed out waiting for UserProfile to become InService")
+    # UserProfile creation is asynchronous — wait until it is InService before
+    # creating the space (CreateSpace fails otherwise). Shared with bulk_provision,
+    # which was missing this wait entirely.
+    try:
+        wait_for_user_profile_in_service(sagemaker, SAGEMAKER_DOMAIN_ID, user_id)
+    except TimeoutError as e:
+        raise ApiError(504, str(e))
+    except RuntimeError as e:
+        raise ApiError(502, str(e))
     logger.info(f"UserProfile {user_id} is InService")
 
     # Create SageMaker space for the user

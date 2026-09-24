@@ -328,6 +328,38 @@ def wait_for_app_deleted(sagemaker_client, domain_id: str, space_name: str,
     raise TimeoutError(f"Timed out waiting for app to delete on space {space_name}")
 
 
+def wait_for_user_profile_in_service(sagemaker_client, domain_id: str,
+                                     user_profile_name: str,
+                                     max_wait: int = 120) -> None:
+    """Poll DescribeUserProfile until the profile is InService.
+
+    CreateUserProfile is asynchronous and CreateSpace rejects a profile that has not
+    settled ("Unable to create Space ... because UserProfile ... is not in
+    InService"). create_user waited for this inline; bulk_provision did not, so every
+    bulk row failed on CreateSpace once the request/response shapes were fixed.
+    Shared so the two provisioning paths cannot drift apart again.
+
+    Raises RuntimeError on a terminal profile status and TimeoutError if it never
+    settles — both surface as that row's `error` in the bulk response rather than
+    failing the whole batch.
+    """
+    deadline = time.time() + max_wait
+    while time.time() < deadline:
+        status = sagemaker_client.describe_user_profile(
+            DomainId=domain_id, UserProfileName=user_profile_name
+        ).get("Status")
+        if status == "InService":
+            return
+        if status in ("Failed", "Delete_Failed", "Update_Failed"):
+            raise RuntimeError(
+                f"UserProfile {user_profile_name} creation failed with status: {status}"
+            )
+        time.sleep(3)
+    raise TimeoutError(
+        f"Timed out waiting for UserProfile {user_profile_name} to become InService"
+    )
+
+
 def wait_for_space_in_service(sagemaker_client, domain_id: str, space_name: str,
                               max_wait: int = 180) -> None:
     """Poll DescribeSpace until the space returns to InService.

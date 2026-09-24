@@ -95,13 +95,13 @@ search hits for "g6.24xlarge").
 | Quota (Studio JupyterLab apps) | Code | us-west-2 | ap-northeast-2 | Used by |
 |---|---|---|---|---|
 | `ml.t3.medium` | `L-71FAF417` | 2500 | 2500 | default workspace |
-| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M10 |
-| `ml.g5.12xlarge` | `L-8D2ED7BF` | 5 | 5 | M2/M3 |
-| `ml.g5.24xlarge` | `L-F087CCFC` | 2 | 2 | M4/M5/M6 (24 GB tier) |
-| `ml.g5.48xlarge` | `L-83AB5D73` | 2 | 2 | M6 sharded |
+| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M7 (Nerfstudio) |
+| `ml.g5.12xlarge` | `L-8D2ED7BF` | 5 | 5 | M2, M3 |
+| `ml.g5.24xlarge` | `L-F087CCFC` | 2 | 2 | M5, M6, M8, M9 (24 GB tier) |
+| `ml.g5.48xlarge` | `L-83AB5D73` | 2 | 2 | M6/M9 sharded |
 | `ml.p4d.24xlarge` | `L-AD63F1D2` | 2 | **2** | 40 GB tier — 720p, guardrails ON |
 | **`ml.g6.12xlarge`** | `L-962247BA` | 2 | **0** ⚠ | M2/M3 alternative |
-| **`ml.g6.24xlarge`** | `L-8ACE1754` | 2 | **0** ⚠ | documented default for M4–M9 |
+| **`ml.g6.24xlarge`** | `L-8ACE1754` | 2 | **0** ⚠ | dashboard default for M5, M6, M8, M9 |
 | `ml.p5.48xlarge` | `L-B41FBF28` | 1 | **0** | 80 GB tier |
 | `ml.m5.xlarge` *training* | `L-CCE2AFA6` | 30 | 30 | M12 |
 | `ml.m5.xlarge` *processing* | `L-0307F515` | 16 | 16 | M11 |
@@ -111,9 +111,24 @@ is 0 in *both* regions.
 
 **But Seoul is not GPU-blocked.** `g5` is available across the full range and
 `p4d.24xlarge` is already approved at 2, so the lab runs there today with **no quota
-request at all**: use `ml.g5.12xlarge` for M2/M3 and `ml.g5.24xlarge` for M4/M5/M6 (same
-~22.5 GB-per-GPU tier as the g6 default, ~22% dearer), with `ml.p4d.24xlarge` as the
-quality option. Request `g6` only if you want the documented default — and note the price
+request at all**. The module-to-instance mapping, read from
+`web/user/src/data/pipeline-config.ts` rather than from module numbers:
+
+| Instance | Seoul quota | Modules |
+|---|---|---|
+| `ml.t3.medium` | 2500 | M1, **M4** (OpenSearch is CPU-only), M10 viz, M11, M12 |
+| `ml.g5.xlarge` | 5 | M7 |
+| `ml.g5.12xlarge` | 5 | M2, M3 |
+| `ml.g5.24xlarge` | **2** | M5, M6, M8, M9 — the four that default to the quota-0 g6.24xlarge |
+| `ml.p4d.24xlarge` | 2 | same four, at the 40 GB tier |
+
+So only the `ml.g5.24xlarge` row is contended: **2 concurrent participants** on M5/M6/M8/M9
+(6 if you also steer people onto `g5.48xlarge` and `p4d.24xlarge`). `ml.g5.24xlarge` is the
+same ~22.5 GB-per-GPU tier as the g6 default and ~22% dearer; `ml.p4d.24xlarge` is the
+quality option.
+
+An earlier version of this table put CPU-only M4 on the 24 GB tier and M10 on `g5.xlarge`,
+because it used pre-renumbering module numbers. Request `g6` only if you want the documented default — and note the price
 there is ~23% above us-west-2 either way.
 
 Rather than reading that table, run the pre-flight — it resolves live quota, cross-checks
@@ -217,31 +232,58 @@ participants an empty workspace:
 SHARED=av30lab-shared-data-$ACCOUNT-$R
 aws s3 sync notebooks/ "s3://$SHARED/notebook-templates/"        --region $R
 aws s3 sync scripts/   "s3://$SHARED/notebook-templates/scripts/" --region $R
+```
 
-AWS_REGION=$R ./scripts/stage_nuscenes.sh
-AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh
+### Then the data — BUCKET-TO-BUCKET, not by re-downloading
+
+`cache_models.sh` pulls from Hugging Face (needs `HF_TOKEN` plus accepted licences on every
+gated repo) and only then uploads. For a SECOND region that is the wrong direction: the
+bytes already exist in the first region's bucket. Copy them across instead — no token, no
+licence step, and S3-to-S3 rather than internet-to-you-to-S3:
+
+```bash
+SRC=av30lab-shared-data-$ACCOUNT-us-west-2     # the region that is already seeded
+DST=av30lab-shared-data-$ACCOUNT-$R
+
+# Largest first, so the long pole starts immediately. Each is resumable — re-run to finish.
+aws s3 sync "s3://$SRC/model-cache/"   "s3://$DST/model-cache/"   --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/hf-cache/"      "s3://$DST/hf-cache/"      --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/datasets/"      "s3://$DST/datasets/"      --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/m10-reference/" "s3://$DST/m10-reference/" --source-region us-west-2 --region $R
+```
+
+Only use `stage_nuscenes.sh` / `cache_models.sh` when there is no seeded region to copy from:
+
+```bash
+AWS_REGION=$R ./scripts/stage_nuscenes.sh                      # public mirror, no token
+AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh        # re-downloads ~157 GiB
 ```
 
 Measured from the us-west-2 source bucket:
 
-| Prefix | Size | Objects | Needed by |
+| Prefix | Size | Objects | Modules that break without it |
 |---|---|---|---|
-| `notebook-templates/` | 0.55 MiB | 31 | **everything** |
-| `datasets/` (nuScenes-mini) | 5.01 GiB | 31,225 | M1 |
+| `notebook-templates/` | 0.55 MiB | 31 | **all** — provisioning hard-fails |
+| `datasets/` (nuScenes-mini) | 5.01 GiB | 31,225 | M1, M2, M3, M5, M6, M7, M8, M9 |
+| `model-cache/` | 157.45 GiB | 1,707 | M2, M8, M9 |
+| `hf-cache/` | 115.00 GiB | 481 | M5, M6, M9 |
 | `m10-reference/` | 0.03 GiB | 16 | M10 visualisation |
-| `m8-lora-probe/` | 3 KiB | 1 | M8 |
-| `hf-cache/` | 115.00 GiB | 481 | M5/M6/M9 offline |
-| `model-cache/` | 157.45 GiB | 1,707 | M2/M3 |
+| `m8-lora-probe/` | 3 KiB | 1 | no notebook reads it — staged for completeness |
 | **total** | **277.49 GiB** | **33,457** | |
+
+Verified by reading the notebooks, not assumed: M5 and M6 reach `hf-cache/hub/` indirectly
+through `scripts/setup_cosmos_env.sh`, so a grep for the prefix in those two notebooks finds
+nothing. **Their failure mode without it is not an error** — `setup_cosmos_env.sh` logs
+`WARNING: restore failed; will fall back to online/token download`, and that fallback needs an
+`HF_TOKEN` and accepted gated licences which participants do not have. So an unseeded
+`hf-cache/` turns M5/M6/M9 into a per-participant token hunt, not a clean failure.
 
 Cost: roughly **$5.73 one-time** (transfer + requests) and **$6.94/month** storage in
 ap-northeast-2 *(transfer/request unit prices are list price; the $0.025/GB-mo Seoul
 storage rate is API-verified)*.
 
-Bucket-to-bucket `aws s3 sync` for `hf-cache/` and `model-cache/` is much cheaper and
-faster than re-downloading from Hugging Face. Note `stage_nuscenes.sh` pulls from the
-public `s3://motional-nuscenes` in `ap-northeast-1` with `--no-sign-request`; that is
-correct and region-independent.
+`stage_nuscenes.sh` pulls from the public `s3://motional-nuscenes` in `ap-northeast-1` with
+`--no-sign-request`; that is correct and region-independent.
 
 > `aws s3 ls` reports **current objects only**. If the new buckets have versioning, the
 > real billed footprint is larger — this account has already seen 298 GB reported

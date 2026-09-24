@@ -151,6 +151,21 @@ if [ -f "$PROGRESS_ENV" ]; then
 os.environ.setdefault("AV30_API_URL", "${AV30_API_URL}")
 os.environ.setdefault("AV30_PROGRESS_TOKEN", "${AV30_PROGRESS_TOKEN}")
 PROGEOF
+    # Shrink the token's exposure window from "the whole workshop" to "until first app
+    # launch". Every participant shares one execution role with
+    # s3:GetObject on .../users/* and no condition (object actions have no s3:prefix
+    # condition key, so it cannot be scoped without per-participant roles), which means a
+    # peer could read this file — and the token it holds is a full impersonation
+    # credential: it authorizes the presigned-URL, instance-type and storage routes AS
+    # its owner.
+    #
+    # Safe to delete because it is no longer needed from S3: it has just been injected
+    # into this app's IPython startup file, the copy in the home directory lives on EFS
+    # and survives app restarts, and the sync above runs WITHOUT --delete so a later
+    # launch will not remove the local copy. reset_workspace already clears this prefix
+    # without recreating the file, so "no S3 copy" is an existing, working state.
+    aws s3 rm "s3://${USER_BUCKET}/users/${USER_PROFILE}/.av30-progress.env" \\
+      >/dev/null 2>&1 || true
   fi
 fi
 set -x
@@ -282,32 +297,67 @@ class SageMakerConstruct(Construct):
             )
         )
 
-        # Scoped SageMaker permissions (not full AmazonSageMakerFullAccess)
+        # Scoped SageMaker permissions (not full AmazonSageMakerFullAccess).
+        #
+        # EVERY participant shares THIS ONE ROLE — it is the domain's
+        # default_user_settings.execution_role and create_user does not override it per
+        # profile. So at run time participant A's notebook and participant B's notebook
+        # present an IDENTICAL IAM identity, and nothing in the request context
+        # distinguishes them. That is why `resources=["*"]` below cannot be narrowed by a
+        # condition: isolating peers needs a per-participant PRINCIPAL, and the two
+        # candidate levers do not exist here —
+        #   * sagemaker:ResourceTag/UserId compares a tag on the TARGET resource; there is
+        #     no caller-side value meaning "my id" to compare it against.
+        #   * aws:PrincipalTag/UserId would supply one, but Studio execution roles carry
+        #     no session tags.
+        # Full isolation therefore requires one IAM role per user profile
+        # (CreateUserProfile accepts UserSettings.ExecutionRole) with the userId baked
+        # into the resource ARNs as a literal. That is a deliberate, separate change: it
+        # gives the provisioning Lambda iam:CreateRole/PutRolePolicy/PassRole, which needs
+        # a permissions boundary and adds orphan-role cleanup.
+        #
+        # REMOVED here — everything that let one participant ACT ON or IMPERSONATE another:
+        #   CreatePresignedDomainUrl  opened ANY participant's Studio session. The worst of
+        #                             the set; the dashboard's presigned_url Lambda does
+        #                             this with its own role, so participants never need it.
+        #   DeleteSpace               destroyed any participant's workspace. delete_user's
+        #                             Lambda owns teardown.
+        #   CreateSpace               create_user's Lambda owns provisioning.
+        #   UpdateSpace               change_instance's Lambda owns instance changes. (If
+        #                             the Studio UI is ever seen to need this for a
+        #                             participant's own space, restore it and say so.)
+        #   ListUserProfiles          the cohort roster — pure targeting value.
+        #   ListDomains               enumeration; only the admin rescue tool used it.
+        #   DeleteTags                unused by any participant path.
+        #
+        # KEPT because a participant genuinely needs them to use their OWN Studio app:
+        #   CreateApp / DeleteApp / DescribeApp / ListApps — launching and stopping the
+        #     JupyterLab app from the Studio UI.
+        #   AddTags — measured: SageMaker auto-tags the App resource on launch, and
+        #     without this CreateApp fails with AccessDenied on AddTags.
+        #   DescribeDomain / DescribeUserProfile / DescribeSpace — sagemaker.get_execution_role()
+        #     resolves the role ARN through these (used by M11 and M12), reading
+        #     /opt/ml/metadata/resource-metadata.json for the domain + space first.
+        #   ListSpaces / ListTags — read paths the SDK and UI use.
+        #
+        # RESIDUAL RISK, accepted deliberately for a trusted cohort: the kept Describe*
+        # and List* still see PEER resources, and CreateApp/DeleteApp are not restricted
+        # to the caller's own space. Removing that needs per-participant roles.
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="SageMakerStudioAccess",
                 effect=iam.Effect.ALLOW,
                 actions=[
-                    "sagemaker:CreatePresignedDomainUrl",
                     "sagemaker:DescribeDomain",
                     "sagemaker:DescribeUserProfile",
+                    "sagemaker:DescribeSpace",
+                    "sagemaker:DescribeApp",
                     "sagemaker:ListApps",
+                    "sagemaker:ListSpaces",
+                    "sagemaker:ListTags",
                     "sagemaker:CreateApp",
                     "sagemaker:DeleteApp",
-                    "sagemaker:DescribeApp",
-                    "sagemaker:ListDomains",
-                    "sagemaker:ListUserProfiles",
-                    "sagemaker:DescribeSpace",
-                    "sagemaker:ListSpaces",
-                    "sagemaker:CreateSpace",
-                    "sagemaker:DeleteSpace",
-                    "sagemaker:UpdateSpace",
-                    # AddTags is required because SageMaker auto-tags the App
-                    # resource when a user launches their JupyterLab space;
-                    # without it CreateApp fails with AccessDenied on AddTags.
                     "sagemaker:AddTags",
-                    "sagemaker:DeleteTags",
-                    "sagemaker:ListTags",
                 ],
                 resources=["*"],
             )

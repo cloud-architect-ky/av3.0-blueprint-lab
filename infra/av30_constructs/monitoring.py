@@ -150,6 +150,66 @@ class MonitoringConstruct(Construct):
             ],
         )
 
+        # ACCOUNT-WIDE ceiling, opt-in via `-c account_budget=true`.
+        #
+        # Region-scoping the budget above closed one hole and opened another: with every
+        # budget filtered to its own region, NOTHING measures the account total any more.
+        # Two regions at $199/day each never alarm, and spend outside both regions — a
+        # third region, or a non-lab service — is invisible to all of them.
+        #
+        # This is also a SEQUENCING TRAP on the first redeploy of an existing stack. The
+        # live us-west-2 budget is still the pre-rename `av30lab-daily-budget` with
+        # CostFilters null, i.e. the account's ONLY account-wide ceiling. Renaming a
+        # Budget REPLACES it, so that redeploy deletes the last aggregate guardrail — the
+        # exact class of gap that let ~$269/day run unnoticed here for ~85 days. Create
+        # this one FIRST (or in the same change), not afterwards.
+        #
+        # Opt-in rather than automatic because budget names are ACCOUNT-GLOBAL: if every
+        # regional deployment declared it, the second one would hard-fail with
+        # DuplicateRecordException. Exactly ONE deployment in the account owns it — set the
+        # flag there and leave it unset everywhere else. scripts/deploy.sh reports whether
+        # an account-wide budget exists so this is a decision, not an accident.
+        #
+        # The subscriber is THIS region's topic, so the owning deployment's admin email is
+        # where account-wide breaches land. That is deliberate: one owner, one inbox.
+        if self.node.try_get_context("account_budget"):
+            budgets.CfnBudget(
+                self,
+                "AccountBudget",
+                budget=budgets.CfnBudget.BudgetDataProperty(
+                    budget_name="av30lab-daily-budget-account",
+                    budget_type="COST",
+                    time_unit="DAILY",
+                    # No CostFilters ON PURPOSE — this one must see everything.
+                    budget_limit=budgets.CfnBudget.SpendProperty(
+                        # int() is required: every -c value arrives as a STRING, and
+                        # SpendProperty type-checks amount as int|float, so passing it
+                        # through raw fails synth with
+                        # "type of argument amount must be one of (int, float); got str".
+                        amount=int(
+                            self.node.try_get_context("account_budget_limit") or 400
+                        ),
+                        unit="USD",
+                    ),
+                ),
+                notifications_with_subscribers=[
+                    budgets.CfnBudget.NotificationWithSubscribersProperty(
+                        notification=budgets.CfnBudget.NotificationProperty(
+                            comparison_operator="GREATER_THAN",
+                            notification_type="ACTUAL",
+                            threshold=100,
+                            threshold_type="PERCENTAGE",
+                        ),
+                        subscribers=[
+                            budgets.CfnBudget.SubscriberProperty(
+                                address=self._sns_topic.topic_arn,
+                                subscription_type="SNS",
+                            ),
+                        ],
+                    ),
+                ],
+            )
+
     @property
     def sns_topic(self) -> sns.Topic:
         """SNS topic for admin alert delivery."""

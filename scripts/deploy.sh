@@ -146,6 +146,14 @@ else
     echo "    (creating the API Gateway account-level CloudWatch role)"
     CDK_CONTEXT+=(--context apigw_account_role="$APIGW_ACCOUNT_ROLE")
 fi
+# ACCOUNT_BUDGET: set on exactly ONE deployment in the account. Budget names are
+# account-global, so a second deployment declaring it hard-fails DuplicateRecordException.
+if [ -n "${ACCOUNT_BUDGET:-}" ]; then
+    echo "    (declaring the account-wide budget — only ONE deployment may own it)"
+    CDK_CONTEXT+=(--context account_budget="$ACCOUNT_BUDGET")
+    [ -n "${ACCOUNT_BUDGET_LIMIT:-}" ] \
+        && CDK_CONTEXT+=(--context account_budget_limit="$ACCOUNT_BUDGET_LIMIT")
+fi
 if [ -n "${HOSTED_UI_DOMAIN_EXISTS:-}" ]; then
     echo "    (hosted-UI domain assumed to exist and stay unmanaged)"
     CDK_CONTEXT+=(--context hosted_ui_domain_exists="$HOSTED_UI_DOMAIN_EXISTS")
@@ -249,6 +257,29 @@ echo "=== Deployment Complete ==="
 echo "Admin Dashboard: $ADMIN_URL"
 echo "API Endpoint:    $API_URL"
 echo ""
+# Account-wide budget check. Every per-region budget is Region-filtered, so with only
+# those, NOTHING measures the account total: two regions at $199/day each never alarm, and
+# spend outside both is invisible. Budget names are account-global, so exactly ONE
+# deployment may declare it (-c account_budget=true) — report the state rather than guess.
+# `!CostFilters`, not `CostFilters==\`{}\``: for an UNFILTERED budget the API omits the
+# CostFilters key entirely rather than returning an empty object, so the equality form
+# matches nothing and would report "no account-wide budget" while one exists. Measured
+# against this account: `==\`{}\`` -> 0, `!CostFilters` -> 1. Single-quoted so bash leaves
+# the `!` alone.
+ACCT_WIDE=$(aws budgets describe-budgets --account-id "$ACCOUNT_ID" \
+    --query 'length(Budgets[?!CostFilters])' --output text 2>/dev/null || echo "?")
+echo ""
+if [ "$ACCT_WIDE" = "0" ]; then
+    echo ">>> WARNING: this account has NO account-wide budget."
+    echo "    Every av30lab budget is Region-filtered, so the account total is unmonitored."
+    echo "    Own it from ONE deployment:  ACCOUNT_BUDGET=true ./scripts/deploy.sh --region $REGION"
+elif [ "$ACCT_WIDE" = "?" ]; then
+    echo ">>> NOTE: could not read budgets (needs budgets:DescribeBudgets); account-wide"
+    echo "    coverage unverified."
+else
+    echo ">>> Account-wide budget(s): $ACCT_WIDE — account total is monitored."
+fi
+
 # Quota pre-flight. A price existing in this region does NOT mean the account can launch
 # it: ap-northeast-2 sells ml.g6.24xlarge and has Studio quota 0 for it, and four modules
 # recommend that type. Surfacing it here means the admin learns it now, not from a

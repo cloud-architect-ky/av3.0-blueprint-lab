@@ -115,3 +115,40 @@ def api_handler(func):
             }
 
     return wrapper
+
+
+def require_own_user(event: dict, user_id: str) -> None:
+    """Reject a participant token used against a DIFFERENT participant's userId.
+
+    The TokenAuthorizer deliberately returns a STAGE-WIDE resource
+    (`.../prod/*`) so API Gateway can cache one policy across methods. The
+    consequence is that ANY valid participant token authorizes EVERY token route
+    for EVERY {userId} — authorization at the gateway proves only "this is a
+    participant", never "this is THAT participant". The per-route ownership check
+    is therefore the only thing standing between participants.
+
+    Three routes shipped without it while two had it inline:
+        POST  /presigned-url/{userId}      -> a working Studio URL into someone
+                                             else's workspace
+        PATCH /sessions/{id}/instance-type -> deletes their running app and
+                                             rebuilds it on a chosen instance
+        PATCH /sessions/{id}/storage       -> resizes their EBS volume
+    All three are token-auth ONLY (no admin path goes through them), so this can
+    be applied unconditionally.
+
+    FAILS CLOSED, unlike the original inline guard (`if caller_id and caller_id
+    != user_id`), which passed when the context was missing. On a token-auth
+    route the authorizer always sets context.userId on its Allow policy, so an
+    absent value means the request did not come through the authorizer — which is
+    exactly when denying is right.
+    """
+    ctx = (event.get("requestContext") or {}).get("authorizer") or {}
+    caller_id = ctx.get("userId")
+    if not caller_id:
+        raise ApiError(
+            403,
+            "Request did not carry an authorized participant identity",
+            details="Expected requestContext.authorizer.userId from the TokenAuthorizer.",
+        )
+    if caller_id != user_id:
+        raise ApiError(403, "Token not authorized for this userId")

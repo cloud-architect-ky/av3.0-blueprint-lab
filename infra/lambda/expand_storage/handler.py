@@ -29,7 +29,7 @@ from config import (
     wait_for_app_deleted,
     wait_for_space_in_service,
 )
-from errors import ApiError, api_handler
+from errors import ApiError, api_handler, require_own_user
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -65,6 +65,11 @@ def _http_handler(event, context):
 
     if not user_id:
         raise ApiError(400, "Missing userId in path")
+
+    # The TokenAuthorizer grants a stage-wide resource, so a valid token reaches this
+    # route for ANY userId. Without this, a participant could act on someone else's
+    # workspace by editing the path. See require_own_user for the full reasoning.
+    require_own_user(event, user_id)
 
     # Parse request body
     body = event.get("body")

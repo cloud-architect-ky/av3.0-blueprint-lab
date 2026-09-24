@@ -16,7 +16,7 @@ import boto3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
 
 from config import PRESIGNED_URL_EXPIRY, SAGEMAKER_DOMAIN_ID, SESSIONS_TABLE_NAME
-from errors import ApiError, api_handler
+from errors import ApiError, api_handler, require_own_user
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -35,6 +35,11 @@ def handler(event, context):
 
     if not user_id:
         raise ApiError(400, "userId path parameter is required")
+
+    # The TokenAuthorizer grants a stage-wide resource, so a valid token reaches this
+    # route for ANY userId. Without this, a participant could act on someone else's
+    # workspace by editing the path. See require_own_user for the full reasoning.
+    require_own_user(event, user_id)
 
     logger.info(f"Generating presigned URL for user: {user_id}")
 

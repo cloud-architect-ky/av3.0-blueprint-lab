@@ -128,6 +128,20 @@ PYEOF
 # Parse those two exports into the SAME IPython startup file so the notebook
 # mark-complete cells can POST progress. No DDB read / no new IAM — it is just a
 # file already in the participant's own workspace. Best-effort (non-fatal).
+#
+# `set +x` IS THE SECURITY CONTROL HERE — do not remove it, and do not move the
+# token handling outside it. This script runs under `set -eux` (top of file), and
+# xtrace leaks the token to CloudWatch by TWO separate routes, both measured:
+#   1. sourcing the env file traces the expanded assignment
+#        ++ export AV30_PROGRESS_TOKEN=<the participant's token>
+#   2. the heredoc below traces its expanded body as well
+# Those traces land in /aws/sagemaker/<...>/LifecycleConfigOnStart — ONE log group
+# shared by every participant — and the single shared execution role grants
+# logs:GetLogEvents + logs:DescribeLogStreams on /aws/sagemaker/*. So any
+# participant could read any other participant's API token out of the log, and the
+# token does not expire. Verified end to end: role
+# av30lab-sagemaker-execution-role-us-west-2, Sid CloudWatchLogsAccess.
+set +x
 PROGRESS_ENV=/home/sagemaker-user/.av30-progress.env
 if [ -f "$PROGRESS_ENV" ]; then
   # shellcheck disable=SC1090
@@ -139,6 +153,7 @@ os.environ.setdefault("AV30_PROGRESS_TOKEN", "${AV30_PROGRESS_TOKEN}")
 PROGEOF
   fi
 fi
+set -x
 
 # Terminal convenience: write the same vars to a home env file and source it
 # from .bashrc for interactive shells (independent of the kernel path above).
@@ -392,7 +407,25 @@ class SageMakerConstruct(Construct):
             )
         )
 
-        # CloudWatch Logs permissions for kernel and notebook logs
+        # CloudWatch Logs permissions for kernel and notebook logs.
+        #
+        # WRITE-ONLY ON PURPOSE. `logs:GetLogEvents` used to be here, and combined with
+        # the resource wildcard below it was a cross-participant credential-read path:
+        # EVERY participant shares this one role, /aws/sagemaker/* is ONE log group set
+        # shared by the whole cohort, and the notebook-sync lifecycle script runs under
+        # `set -eux`, which traced each participant's AV30_PROGRESS_TOKEN into
+        # .../LifecycleConfigOnStart. Any participant could therefore read any other
+        # participant's non-expiring API token straight out of the log.
+        #
+        # The lifecycle script now wraps the token handling in `set +x` (see
+        # _NOTEBOOK_SYNC_SCRIPT_TEMPLATE), which stops the leak at the source — measured:
+        # 3 occurrences in the trace before, 0 after. Dropping the read action is defence
+        # in depth, so the next script that echoes something sensitive is not instantly a
+        # cohort-wide disclosure.
+        #
+        # DescribeLogStreams is kept: it returns stream NAMES only, not contents, and the
+        # platform uses it. Nothing in this lab reads log CONTENT with the participant
+        # role — the admin dashboard reads logs with its own Lambda roles.
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="CloudWatchLogsAccess",
@@ -402,7 +435,6 @@ class SageMakerConstruct(Construct):
                     "logs:CreateLogStream",
                     "logs:PutLogEvents",
                     "logs:DescribeLogStreams",
-                    "logs:GetLogEvents",
                 ],
                 resources=[
                     cdk.Arn.format(

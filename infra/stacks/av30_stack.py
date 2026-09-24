@@ -82,8 +82,28 @@ class Av30BlueprintLabStack(cdk.Stack):
             or first_party_image_arn(self.region, "jupyter-server-3"),
         )
 
-        # Auth layer: Cognito User Pool + WAF WebACL with IP allowlist
-        auth = AuthConstruct(self, "Auth")
+        admin_dashboard = DashboardConstruct(
+            self,
+            "AdminDashboard",
+            bucket_name=f"av30lab-admin-dashboard-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}",
+        )
+
+        user_dashboard = DashboardConstruct(
+            self,
+            "UserDashboard",
+            bucket_name=f"av30lab-user-dashboard-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}",
+        )
+
+        # Auth layer: Cognito User Pool + hosted UI + WAF WebACL with IP allowlist.
+        # Declared AFTER the dashboards because the user-pool client's callback and
+        # logout URLs must be the admin SPA's own origin. The dependency is one-way —
+        # DashboardConstruct takes only a bucket name and never references Cognito — so
+        # there is no cycle; CloudFormation resolves the CloudFront domain at deploy.
+        auth = AuthConstruct(
+            self,
+            "Auth",
+            dashboard_url=admin_dashboard.url,
+        )
 
         # Monitoring layer: SNS notifications + daily budget alarm
         monitoring = MonitoringConstruct(self, "Monitoring")
@@ -119,17 +139,6 @@ class Av30BlueprintLabStack(cdk.Stack):
         # prevents a collision during the transition. scripts/deploy.sh reads both
         # names from the AdminBucketName / UserBucketName stack outputs, so nothing
         # hardcodes them.
-        admin_dashboard = DashboardConstruct(
-            self,
-            "AdminDashboard",
-            bucket_name=f"av30lab-admin-dashboard-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}",
-        )
-
-        user_dashboard = DashboardConstruct(
-            self,
-            "UserDashboard",
-            bucket_name=f"av30lab-user-dashboard-{cdk.Aws.ACCOUNT_ID}-{cdk.Aws.REGION}",
-        )
 
         # Stack outputs for cross-stack references and operational visibility
         cdk.CfnOutput(self, "VpcId", value=network.vpc.vpc_id)
@@ -200,4 +209,9 @@ class Av30BlueprintLabStack(cdk.Stack):
             value=user_dashboard.distribution.distribution_id,
         )
         cdk.CfnOutput(self, "AdminUrl", value=admin_dashboard.url)
+        # Hosted-UI base URL. scripts/deploy.sh used to hardcode
+        # "https://av30lab-admin.auth.${REGION}.amazoncognito.com" — which is why the
+        # domain being absent from the CDK went unnoticed for so long: the generated
+        # config.json always looked right, and only the redirect failed at runtime.
+        cdk.CfnOutput(self, "CognitoHostedUiUrl", value=auth.hosted_ui_url)
         cdk.CfnOutput(self, "UserUrl", value=user_dashboard.url)

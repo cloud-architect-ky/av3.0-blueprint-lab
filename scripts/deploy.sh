@@ -72,6 +72,13 @@ if [ -n "${OWNER_TAG:-}" ]; then
     echo "    (preserving Owner tag: $OWNER_TAG)"
     CDK_CONTEXT+=(--context owner_tag="$OWNER_TAG")
 fi
+# HOSTED_UI_DOMAIN_EXISTS: set ONLY for a deployment that already has an unmanaged
+# Cognito hosted-UI domain with this prefix (see AuthConstruct for why adoption needs
+# a delete). Leave unset for a new account so CloudFormation creates the domain.
+if [ -n "${HOSTED_UI_DOMAIN_EXISTS:-}" ]; then
+    echo "    (hosted-UI domain assumed to exist and stay unmanaged)"
+    CDK_CONTEXT+=(--context hosted_ui_domain_exists="$HOSTED_UI_DOMAIN_EXISTS")
+fi
 npx cdk deploy --require-approval never "${CDK_CONTEXT[@]}"
 cd ..
 
@@ -89,7 +96,17 @@ USER_URL=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="UserUrl") | .Outpu
 
 echo ">>> Step 3/6: Generating frontend config..."
 mkdir -p web/admin/public web/user/public
-COGNITO_DOMAIN="https://av30lab-admin.auth.${REGION}.amazoncognito.com"
+# Read the hosted-UI URL from the stack rather than assuming the prefix exists. The
+# old hardcoded value made config.json look correct even while the UserPoolDomain was
+# not declared in the CDK at all, so a fresh account got a config pointing at a
+# hostname that does not resolve.
+COGNITO_DOMAIN=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="CognitoHostedUiUrl") | .OutputValue')
+if [ -z "$COGNITO_DOMAIN" ] || [ "$COGNITO_DOMAIN" = "null" ]; then
+    echo "ERROR: stack output CognitoHostedUiUrl is missing — the Cognito hosted-UI" >&2
+    echo "       domain is not deployed, so admin sign-in cannot work. Refusing to" >&2
+    echo "       write a config.json that points at a nonexistent host." >&2
+    exit 1
+fi
 ADMIN_CONFIG="{\"apiBaseUrl\":\"$API_URL\",\"cognitoPoolId\":\"$POOL_ID\",\"cognitoClientId\":\"$CLIENT_ID\",\"region\":\"$REGION\",\"cognitoDomain\":\"$COGNITO_DOMAIN\",\"cognitoRedirectUri\":\"$ADMIN_URL\",\"userDashboardUrl\":\"$USER_URL\"}"
 echo "$ADMIN_CONFIG" > web/admin/public/config.json
 USER_CONFIG="{\"apiBaseUrl\":\"$API_URL\",\"region\":\"$REGION\"}"

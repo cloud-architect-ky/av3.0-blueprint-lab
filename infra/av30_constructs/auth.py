@@ -21,7 +21,24 @@ class AuthConstruct(Construct):
         web_acl_arn: ARN of the WAF WebACL (CLOUDFRONT scope) with IP allowlist.
     """
 
-    def __init__(self, scope: Construct, construct_id: str) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        dashboard_url: str,
+        hosted_ui_prefix: str = "av30lab-admin",
+    ) -> None:
+        """
+        Args:
+            dashboard_url: Origin of the admin SPA (the admin CloudFront URL). Becomes
+                the client's callback/logout URL. REQUIRED: without it Cognito rejects
+                every /oauth2/authorize request, and it is the single reason a fresh
+                account could not sign in — the live pool had these URLs set BY HAND
+                and the CDK never knew about them.
+            hosted_ui_prefix: Cognito hosted-UI domain prefix. Globally unique across
+                AWS. The SPA builds ${cognitoDomain}/oauth2/authorize from it.
+        """
         super().__init__(scope, construct_id)
 
         # Cognito User Pool — admin-only with strict password policy
@@ -54,14 +71,52 @@ class AuthConstruct(Construct):
                 user_password=False,
             ),
             o_auth=cognito.OAuthSettings(
+                # Authorization code + PKCE, NOT implicit. The client has no secret,
+                # so PKCE is the correct SPA flow; implicit returns the access token in
+                # the URL fragment (browser history, extensions, Referer) and is removed
+                # in OAuth 2.1. The live pool had drifted to implicit-only because the
+                # SPA was written against it; the SPA now does the code exchange.
                 flows=cognito.OAuthFlows(
                     authorization_code_grant=True,
                     implicit_code_grant=False,
                 ),
-                scopes=[cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL],
+                # PROFILE is required: CognitoProvider requests "openid email profile",
+                # and Cognito rejects the authorize call outright if a requested scope
+                # is not allowed on the client. It was allowed live but missing here.
+                scopes=[
+                    cognito.OAuthScope.OPENID,
+                    cognito.OAuthScope.EMAIL,
+                    cognito.OAuthScope.PROFILE,
+                ],
+                callback_urls=[dashboard_url],
+                logout_urls=[dashboard_url],
             ),
             prevent_user_existence_errors=True,
         )
+
+        # Hosted UI domain. Absent from the CDK entirely until now — it existed only as
+        # a hand-created resource, so `cdk deploy` into a fresh account produced a pool
+        # with no sign-in endpoint and the SPA redirected to a host that does not
+        # resolve. That was the single reason a new account could not sign in.
+        #
+        # `-c hosted_ui_domain_exists=true` skips declaring it, for the one deployment
+        # that already has an UNMANAGED domain with this prefix. Adopting that one is
+        # not possible without deleting it first: a CloudFormation IMPORT change set may
+        # contain no other create/update/delete, and CFN reports ~60 unchanged resources
+        # in this stack as "modified" during import validation (verified — plain
+        # `cdk diff --method=template` reports 0 changes for the same template), so a
+        # clean import change set cannot be produced. Deleting the domain releases a
+        # GLOBALLY-unique prefix, so that is a deliberate, separately-approved step.
+        # Leave this flag unset for any new deployment.
+        self._hosted_ui_prefix = hosted_ui_prefix
+        self._user_pool_domain = None
+        if not self.node.try_get_context("hosted_ui_domain_exists"):
+            self._user_pool_domain = self._user_pool.add_domain(
+                "HostedUiDomain",
+                cognito_domain=cognito.CognitoDomainOptions(
+                    domain_prefix=hosted_ui_prefix,
+                ),
+            )
 
         # WAF IP allowlist from context parameter (comma-separated CIDRs)
         # Scope is REGIONAL — attached to API Gateway (not CloudFront).
@@ -120,6 +175,24 @@ class AuthConstruct(Construct):
     def user_pool_client(self) -> cognito.UserPoolClient:
         """App client for admin dashboard SPA."""
         return self._user_pool_client
+
+    @property
+    def hosted_ui_url(self) -> str:
+        """Hosted-UI base URL, e.g. https://av30lab-admin.auth.us-west-2.amazoncognito.com.
+
+        Exported so deploy.sh writes it into config.json as `cognitoDomain` instead of
+        assuming the prefix exists — that assumption is what let the domain stay
+        undeclared while the SPA kept building /oauth2/authorize against it.
+        """
+        if self._user_pool_domain is not None:
+            return self._user_pool_domain.base_url()
+        # hosted_ui_domain_exists=true: the domain is real but unmanaged, so derive the
+        # URL from the prefix. Same string CDK would emit; deploy.sh still fails loudly
+        # if this output is missing entirely.
+        return (
+            f"https://{self._hosted_ui_prefix}.auth."
+            f"{cdk.Stack.of(self).region}.amazoncognito.com"
+        )
 
     @property
     def waf_enabled(self) -> bool:

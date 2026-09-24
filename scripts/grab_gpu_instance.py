@@ -112,29 +112,20 @@ DEFAULT_CANDIDATES = [
     "ml.p5.48xlarge",
 ]
 
-# USD/hour, informational only. MUST stay in sync with the authoritative table in
-# infra/lambda/shared/config.py (AWS Price List API, us-west-2, Studio-JupyterLab,
-# effective 2026-09-01). This file cannot import that module (it runs standalone
-# outside the Lambda bundle), so the values are duplicated — if you change one,
-# change both.
-INSTANCE_RATES = {
-    "ml.g5.12xlarge": 7.09,
-    "ml.g5.24xlarge": 10.18,
-    "ml.g5.48xlarge": 20.36,
-    "ml.g6.12xlarge": 5.752,
-    "ml.g6.24xlarge": 8.344,
-    "ml.g6.48xlarge": 16.688,
-    # g7e (RTX PRO 6000 Blackwell, 96 GB/card). 2xl/4xl/8xl = 1 GPU, 12xl = 2,
-    # 24xl = 4, 48xl = 8 — the size is not the GPU count.
-    "ml.g7e.2xlarge": 4.2039,
-    "ml.g7e.4xlarge": 4.9977,
-    "ml.g7e.8xlarge": 6.5853,
-    "ml.g7e.12xlarge": 10.3576,
-    "ml.g7e.24xlarge": 20.7152,
-    "ml.g7e.48xlarge": 41.4304,
-    "ml.p4d.24xlarge": 25.251286,
-    "ml.p5.48xlarge": 63.296,
-}
+# USD/hour, loaded from the SAME generated table the Lambdas use — keyed by REGION.
+# It used to be a duplicated literal here, with the note "if you change one, change both",
+# and the two copies had in fact already diverged (this file said g6.24xlarge 8.10 and
+# p4d 32.77 where config.py said 8.344 and 25.251). Loaded by path for the same reason as
+# the image table above: this script runs standalone, outside the Lambda bundle and the CDK
+# app. instance_rates.py is pure generated data with no imports, so path-loading is safe.
+_RATES_TABLE = (pathlib.Path(__file__).resolve().parent.parent
+                / "infra" / "lambda" / "shared" / "instance_rates.py")
+_rspec = importlib.util.spec_from_file_location("av30_instance_rates", _RATES_TABLE)
+if _rspec is None or _rspec.loader is None:  # pragma: no cover
+    raise SystemExit(f"cannot load the instance rate table at {_RATES_TABLE}")
+_rates_mod = importlib.util.module_from_spec(_rspec)
+_rspec.loader.exec_module(_rates_mod)
+RATES_BY_REGION = _rates_mod.RATES_BY_REGION
 
 
 def _now() -> str:
@@ -150,8 +141,15 @@ def is_gpu_instance(instance_type: str) -> bool:
     return instance_type.startswith(_GPU_INSTANCE_PREFIXES)
 
 
-def hourly_rate(instance_type: str) -> float:
-    return INSTANCE_RATES.get(instance_type, 0.0)
+def hourly_rate(instance_type: str, region: str) -> float:
+    """Informational $/hr for (type, region), or 0.0 if unknown.
+
+    Returns 0.0 rather than raising: unlike the Lambdas — where an unpriced region means
+    participants would be shown another region's prices — this figure only decorates a log
+    line, and this script exists to RESCUE a stuck GPU app. Refusing to run because a rate
+    is missing would be the wrong trade.
+    """
+    return RATES_BY_REGION.get(region, {}).get(instance_type, 0.0)
 
 
 def is_capacity_failure(failure_reason: str) -> bool:
@@ -384,7 +382,7 @@ def console_url(region: str, domain_id: str, space_name: str) -> str:
 def try_instance(sm, domain_id: str, space_name: str, instance_type: str,
                  region: str, args) -> bool:
     """One full attempt on a single instance type. Returns True if it lands."""
-    rate = hourly_rate(instance_type)
+    rate = hourly_rate(instance_type, region)
     rate_str = f" (~${rate:.2f}/hr)" if rate else ""
     log(f"Trying {instance_type}{rate_str} on {space_name} ...")
 

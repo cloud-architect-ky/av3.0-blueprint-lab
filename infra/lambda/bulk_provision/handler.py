@@ -24,13 +24,12 @@ import boto3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
 
 from config import (
-    CONTROL_REGION,
+    AWS_REGION,
     NOTEBOOK_TEMPLATES_PREFIX,
     PRESIGNED_URL_EXPIRY,
     SAGEMAKER_DOMAIN_ID,
     SESSIONS_TABLE_NAME,
     SHARED_BUCKET_NAME,
-    TARGET_REGIONS,
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
     rollback_partial_provision,
@@ -117,14 +116,13 @@ def copy_notebook_templates(user_id: str) -> int:
 def provision_single_user(user_data: dict) -> dict:
     """Provision a single user. Returns result dict with success/failure info.
 
-    `user_data["region"]` is already validated against TARGET_REGIONS by
-    parse_csv_body. It is recorded on the DynamoDB row here; the SageMaker/S3 calls in
-    this function still target the control region until the per-handler region
-    resolution lands, so today it only ever holds CONTROL_REGION in practice.
+    `user_data["region"]` was validated by the parser and always equals AWS_REGION —
+    this deployment owns one region. It is recorded on the DynamoDB row as a note of
+    which deployment owns it, not as a routing instruction.
     """
     name = user_data.get("name", "").strip()
     email = user_data.get("email", "").strip()
-    region = (user_data.get("region") or CONTROL_REGION).strip()
+    region = (user_data.get("region") or AWS_REGION).strip()
 
     if not name:
         return {"name": name, "email": email, "success": False, "error": "Name is required"}
@@ -249,12 +247,12 @@ def provision_single_user(user_data: dict) -> dict:
 def parse_user_rows(rows: list, default_region: str = "") -> list[dict]:
     """Normalise a JSON `users` array into the same shape parse_csv_body produces.
 
-    Shares parse_csv_body's region contract: an unknown region fails the WHOLE batch
-    up front rather than provisioning half a room into a region this control plane
-    does not manage — the choice is immutable per participant, so a partial batch
-    would have to be deleted and re-provisioned.
+    Shares parse_csv_body's region contract: a region other than this deployment's
+    fails the WHOLE batch up front rather than seating half a room in the wrong place —
+    the choice is immutable per participant, so a partial batch would have to be
+    deleted and re-provisioned one by one.
     """
-    default_region = default_region or CONTROL_REGION
+    default_region = default_region or AWS_REGION
     users = []
     for row in rows:
         if not isinstance(row, dict):
@@ -263,11 +261,16 @@ def parse_user_rows(rows: list, default_region: str = "") -> list[dict]:
         if not name:
             continue
         row_region = str(row.get("region") or default_region).strip()
-        if row_region not in TARGET_REGIONS:
+        if row_region != AWS_REGION:
             raise ApiError(
                 400,
-                f"Unknown region '{row_region}' for '{name}'",
-                details=f"This control plane manages: {', '.join(TARGET_REGIONS)}",
+                f"Row '{name}' asks for {row_region!r}; this deployment serves "
+                f"{AWS_REGION}",
+                details=(
+                    "One region per deployment. Remove the region column, or deploy the "
+                    "stack in that region and upload there "
+                    "(docs/en/ADDING_A_REGION.md)."
+                ),
             )
         users.append(
             {
@@ -285,7 +288,7 @@ def parse_csv_body(body: str, is_base64: bool, default_region: str = "") -> list
     Expects columns: name, email (header row required). An optional `region` column
     overrides `default_region` per row.
     """
-    default_region = default_region or CONTROL_REGION
+    default_region = default_region or AWS_REGION
     if is_base64:
         try:
             csv_content = base64.b64decode(body).decode("utf-8")
@@ -315,11 +318,16 @@ def parse_csv_body(body: str, is_base64: bool, default_region: str = "") -> list
             # upload up front, rather than provisioning half a room into the wrong
             # region — the choice is immutable per participant.
             row_region = (normalized_row.get("region") or default_region).strip()
-            if row_region not in TARGET_REGIONS:
+            if row_region != AWS_REGION:
                 raise ApiError(
                     400,
-                    f"Unknown region '{row_region}' for '{name}'",
-                    details=f"This control plane manages: {', '.join(TARGET_REGIONS)}",
+                    f"Row '{name}' asks for {row_region!r}; this deployment serves "
+                    f"{AWS_REGION}",
+                    details=(
+                        "One region per deployment. Remove the region column, or deploy "
+                        "the stack in that region and upload there "
+                        "(docs/en/ADDING_A_REGION.md)."
+                    ),
                 )
             users.append(
                 {
@@ -344,7 +352,7 @@ def handler(event, context):
     # Batch-wide region default. Initialised HERE, not inside the branch below: a raw
     # CSV body never enters that branch, so assigning it only there would leave this
     # name unbound and raise NameError on the parse call. Empty means "let
-    # parse_csv_body fall back to CONTROL_REGION".
+    # parse_csv_body fall back to AWS_REGION".
     batch_region = ""
 
     users = None

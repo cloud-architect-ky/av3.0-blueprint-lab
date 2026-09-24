@@ -60,10 +60,17 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("boto3 is required: pip install boto3")
 
-OUT_PATH = (
-    pathlib.Path(__file__).resolve().parent.parent
-    / "infra" / "lambda" / "shared" / "instance_rates.py"
-)
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# Two destinations, written from ONE fetch so they cannot diverge:
+#   - the Lambda bundle (infra/lambda/ is asset-bundled whole, so this is picked up)
+#   - scripts/, which is staged into every participant workspace by the notebook-sync LCC,
+#     so the cost cells in M3/M5/M6/M8/M9 can show THIS region's prices. Those cells used
+#     to hardcode a us-west-2 table, which understated cost ~23% in ap-northeast-2.
+# A copy is unavoidable (Lambdas get infra/lambda/, workspaces get scripts/), but a
+# GENERATED copy cannot drift — the previous hand-maintained duplicates already had.
+OUT_PATH = _ROOT / "infra" / "lambda" / "shared" / "instance_rates.py"
+WORKSPACE_OUT_PATH = _ROOT / "scripts" / "av30_instance_rates.py"
 
 # The curated set. Deliberately NOT "everything the region prices" (that is ~148 types per
 # region, which is noise for a participant dropdown). Keep in step with the module defaults
@@ -195,9 +202,15 @@ def main() -> int:
             print(f"     not offered for Studio-JupyterLab here: {', '.join(missing)}")
 
     stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")
-    OUT_PATH.write_text(render(by_region, stamp))
-    print(f"  wrote {OUT_PATH.relative_to(pathlib.Path.cwd())} "
-          f"({len(by_region)} region(s): {', '.join(sorted(by_region))})")
+    body = render(by_region, stamp)
+    for path in (OUT_PATH, WORKSPACE_OUT_PATH):
+        path.write_text(body)
+        try:
+            shown = path.relative_to(pathlib.Path.cwd())
+        except ValueError:
+            shown = path
+        print(f"  wrote {shown}")
+    print(f"  {len(by_region)} region(s): {', '.join(sorted(by_region))}")
     return 0
 
 

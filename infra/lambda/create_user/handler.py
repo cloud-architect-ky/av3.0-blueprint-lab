@@ -21,13 +21,12 @@ import boto3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
 
 from config import (
-    CONTROL_REGION,
+    AWS_REGION,
     NOTEBOOK_TEMPLATES_PREFIX,
     PRESIGNED_URL_EXPIRY,
     SAGEMAKER_DOMAIN_ID,
     SESSIONS_TABLE_NAME,
     SHARED_BUCKET_NAME,
-    TARGET_REGIONS,
     USER_BUCKET_NAME,
     jupyterlab_resource_spec,
     rollback_partial_provision,
@@ -129,18 +128,28 @@ def handler(event, context):
     if not name:
         raise ApiError(400, "Field 'name' is required")
 
-    # Which region does this participant's Studio domain live in? Optional, defaults
-    # to the control-plane region. Validated against the managed set rather than
-    # accepted blindly: a typo'd region must 400 here, because a UserProfile belongs
-    # to exactly one Domain and a Domain is regional — the choice is IMMUTABLE after
-    # this call, and the only correction is delete + re-provision.
-    region = (body.get("region") or CONTROL_REGION).strip()
-    if region not in TARGET_REGIONS:
+    # This deployment owns exactly ONE region, so the participant's region is
+    # AWS_REGION — there is nothing to choose. A `region` field is still ACCEPTED so an
+    # older client does not break, but a MISMATCH is rejected rather than ignored: the
+    # caller asked to place a participant somewhere this deployment cannot reach, and
+    # silently placing them here instead would be wrong in a way nobody would notice
+    # until the participant opened a workspace with the wrong region's data.
+    #
+    # The choice is IMMUTABLE either way: a UserProfile belongs to exactly one Domain and
+    # a Domain is regional, so there is no "move this participant", only delete and
+    # re-provision. To seat participants in another region, deploy the stack there
+    # (docs/en/ADDING_A_REGION.md) and provision from THAT deployment's dashboard.
+    requested_region = (body.get("region") or AWS_REGION).strip()
+    if requested_region != AWS_REGION:
         raise ApiError(
             400,
-            f"Unknown region '{region}'",
-            details=f"This control plane manages: {', '.join(TARGET_REGIONS)}",
+            f"This deployment serves {AWS_REGION}, not {requested_region!r}",
+            details=(
+                f"One region per deployment. Deploy the stack in {requested_region} and "
+                f"provision from that deployment instead (docs/en/ADDING_A_REGION.md)."
+            ),
         )
+    region = AWS_REGION
 
     # Generate identifiers
     user_id = generate_user_id(name)

@@ -55,7 +55,10 @@ export interface Session {
 
 export interface DailyCost {
   date: string;
+  /** Total account spend for that day, USD. */
   cost: number;
+  /** Per-service breakdown for the day, e.g. {"Amazon SageMaker": 268.12}. */
+  byService?: Record<string, number>;
 }
 
 export interface BulkProvisionResult {
@@ -76,6 +79,22 @@ export interface CreateUserRequest {
    * delete and re-provision. There is deliberately no PATCH route for it.
    */
   region?: string;
+}
+
+/**
+ * Body of POST /sessions/{id}/terminate.
+ *
+ * `terminated: false` with HTTP 200 is a normal outcome, not an error: it means no
+ * running JupyterLab app was found, so nothing was stopped and the user's status was
+ * left as-is on purpose. It must be shown differently from a real termination.
+ */
+export interface TerminateSessionResult {
+  terminated: boolean;
+  userId: string;
+  /** Present when terminated is false, e.g. "no-running-app". */
+  reason?: string;
+  /** Operator-facing explanation, including the describe-app command to check. */
+  detail?: string;
 }
 
 /** Body of DELETE /users/{id}. */
@@ -190,13 +209,28 @@ class AdminApiClient {
     return Array.isArray(data) ? data : (data?.sessions ?? []);
   }
 
+  /**
+   * Stop a participant's running JupyterLab app. Backend:
+   * POST /sessions/{id}/terminate (Cognito auth).
+   *
+   * The method and path are both load-bearing. This previously sent
+   * DELETE /sessions/{id} — a route the API does not expose at all (api.py adds no
+   * method to /sessions/{id}, only to its /terminate child), so API Gateway answered
+   * 403 "Missing Authentication Token" and the only UI lever for stopping a running
+   * GPU never worked.
+   *
+   * Returns the body rather than void: a 200 does NOT mean something was stopped.
+   * When no app was running the handler reports `terminated: false` with a reason,
+   * deliberately leaving the user's status untouched — reporting that as success is
+   * what previously let a running GPU display as offline at $0.00/hr.
+   */
   async terminateSession(
     idToken: string,
     sessionId: string
-  ): Promise<void> {
-    return this.request<void>(
-      "DELETE",
-      `/sessions/${sessionId}`,
+  ): Promise<TerminateSessionResult> {
+    return this.request<TerminateSessionResult>(
+      "POST",
+      `/sessions/${sessionId}/terminate`,
       idToken
     );
   }

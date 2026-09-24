@@ -80,8 +80,22 @@ export function SessionsPage() {
     if (!idToken) return;
     setTerminatingId(sessionId);
     try {
-      await apiClient.terminateSession(idToken, sessionId);
-      addFlash({ type: "success", content: "Session terminated." });
+      const res = await apiClient.terminateSession(idToken, sessionId);
+      // A 200 does not mean anything was stopped. When no app was running the
+      // handler reports terminated:false and deliberately leaves the status alone;
+      // announcing "terminated" there is what let a running GPU read as $0.00.
+      if (res?.terminated === false) {
+        addFlash({
+          type: "warning",
+          content:
+            res.detail ??
+            `Nothing was stopped for this session (${res.reason ?? "unknown"}). ` +
+              `Their status was left unchanged — verify the app directly before ` +
+              `assuming the instance is off.`,
+        });
+      } else {
+        addFlash({ type: "success", content: "Session terminated." });
+      }
       await fetchSessions();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

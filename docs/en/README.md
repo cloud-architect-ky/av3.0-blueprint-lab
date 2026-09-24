@@ -268,16 +268,44 @@ event, **revoke the admin HF token and rotate the NGC key**. Details in
 
 ## Region selection
 
-Default: **us-west-2 (Oregon)** — deepest GPU capacity and `ml.p5.48xlarge`
-availability. Change with `export AWS_REGION=...` before deploying.
+Region is chosen per deployment with `./scripts/deploy.sh --region <region>` — one region
+at a time. See [docs/en/ADDING_A_REGION.md](ADDING_A_REGION.md) to add another later.
 
-| Region | p4d.24xlarge | p5.48xlarge | g5.12xlarge | Notes |
-|---|---|---|---|---|
-| us-west-2 (Oregon) | ✅ | ✅ | ✅ | **Default** |
-| us-east-1 (Virginia) | ✅ | ✅ | ✅ | Alternative |
-| ap-northeast-2 (Seoul) | ✅ | ❌ | ✅ | No p5 fallback |
+Two DIFFERENT facts decide whether a GPU type is usable, and the old table here conflated
+them — it marked `ml.p5.48xlarge` available in us-east-1 when this account has quota 0 there,
+and implied only three regions were possible when the p5 quota actually exists in ten:
 
-S3 model-cache paths are region-local — re-run `cache_models.sh` after changing regions.
+1. **Does the region sell it for Studio-JupyterLab?** Generated, measured per region
+   (`$/hr`, `—` = not sold there):
+
+   | Region | g5.12xlarge | g5.24xlarge | g6.24xlarge | g7e.2xlarge | p4d.24xlarge | p5.48xlarge |
+   |---|---|---|---|---|---|---|
+   | us-west-2 | $7.09 | $10.18 | $8.34 | $4.20 | $25.25 | $63.30 |
+   | us-east-1 | $7.09 | $10.18 | $8.34 | $4.20 | $25.25 | $63.30 |
+   | ap-northeast-1 | $10.28 | $14.76 | $12.10 | — | $34.61 | $79.12 |
+   | ap-northeast-2 | $8.72 | $12.52 | $10.26 | — | $34.97 | — |
+   | eu-west-1 | $7.92 | $11.36 | — | — | $27.27 | — |
+
+   Regenerate, or add a region, with:
+   `./scripts/refresh_instance_rates.py --region <region> --merge`
+   A region with no generated table makes the Lambdas raise at import rather than quote
+   another region's prices.
+
+2. **Does YOUR account have quota, in THAT region, for your cohort size?** Quota is scoped to
+   `(account × region)` — an increase approved in one region does nothing for another — and
+   the default for big GPU types is often 0. Check before you commit to a region:
+
+   ```bash
+   ./scripts/check_quotas.py --region <region> --participants 10
+   ```
+
+   It cross-references the rate table, live quotas, and the modules' recommended instances.
+   Measured for this account: us-west-2 can run every recommended type but only **2**
+   `ml.g6.24xlarge` concurrently (four modules want it), and ap-northeast-2 has quota **0**
+   for the whole `ml.g6` family while `ml.g5` and `ml.p4d.24xlarge` are available.
+
+S3 model-cache paths are region-local — stage data into the region you deploy to
+(`AWS_REGION=<region> ./scripts/cache_models.sh`; the script refuses to guess).
 
 ---
 

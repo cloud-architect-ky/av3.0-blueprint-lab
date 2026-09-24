@@ -569,82 +569,65 @@ PRESIGNED_URL_EXPIRY = 28800
 
 # SageMaker instance rates (USD per hour) — THE authoritative table for this repo.
 #
-# SOURCE OF TRUTH: AWS Price List API, service AmazonSageMaker, region us-west-2,
-# platoinstancetype="Studio-JupyterLab", effective 2026-09-01. Re-verify with:
-#   aws pricing get-products --service-code AmazonSageMaker --region us-east-1 \
-#     --filters Type=TERM_MATCH,Field=instanceName,Value=ml.g6.24xlarge \
-#               Type=TERM_MATCH,Field=platoinstancetype,Value=Studio-JupyterLab
-# Do NOT hand-edit these from memory — a stale table silently mis-bills every
-# cost readout (admin Sessions column, get_costs, the daily budget alarm).
+# SOURCE OF TRUTH: generated per region by scripts/refresh_instance_rates.py from the AWS
+# Price List API (ServiceCode=AmazonSageMaker, platoinstancetype=Studio-JupyterLab). Never
+# hand-edit instance_rates.py.
 #
-# GPU GEOMETRY (the recurring source of confusion — size is NOT GPU count, and
-# within a family a bigger size adds GPUs, never per-GPU VRAM):
-#   g4dn  = T4    16 GB   | g5  = A10G 24 GB | g6 = L4 24 GB (NOT L40S — that is g6e)
-#   p4d   = A100  40 GB   | p5  = H100 80 GB
+# This was a single hand-maintained us-west-2 snapshot that ALSO served as the participant
+# instance allowlist (VALID_INSTANCE_TYPES in change_instance, and the dropdown built by
+# instance_options). Both halves were wrong outside us-west-2, and both failed quietly:
+#
+#   * PRICES. ap-northeast-2 is ~+23% on every type (measured: t3.medium 0.050 -> 0.062,
+#     g5.12xlarge 7.09 -> 8.718, g6.24xlarge 8.344 -> 10.26). Every figure shown to a
+#     participant and every admin session estimate read ~23% LOW — the wrong direction for
+#     a lab whose documented failure mode is spend nobody noticed.
+#   * OFFERINGS. The keys were offered regardless of region, so a participant could pick a
+#     type the region does not sell for Studio and their app simply failed to start.
+#     Measured, per region, for the curated candidate set:
+#         us-west-2 / us-east-1   34/35
+#         ap-northeast-1          28/35   (no g7e)
+#         ap-northeast-2          27/35   (no g7e, no p5)
+#         eu-west-1               21/35   (no g6 family AT ALL, no g7e, no p5)
+#     ml.p3.2xlarge has no Studio-JupyterLab product in any of the five.
+#
+# A region that has not been generated raises at import. That is deliberate: the previous
+# behaviour — quote us-west-2 and hope — is exactly the silent-wrongness this replaces.
+#
+# NOT A QUOTA. A rate here only means the region SELLS the type. Whether this account may
+# launch it is a separate per-(account x region) fact: ml.g6.* is priced in ap-northeast-2
+# but its Studio quota there is 0. instance_options resolves live quota at request time.
+#
+# GPU GEOMETRY (the recurring source of confusion — size is NOT GPU count, and within a
+# family a bigger size adds GPUs, never per-GPU VRAM):
+#   g4dn = T4 16 GB | g5 = A10G 24 GB | g6 = L4 24 GB (NOT L40S — that is g6e)
+#   g7e  = RTX PRO 6000 Blackwell 96 GB | p4d = A100 40 GB | p5 = H100 80 GB
 #   4-GPU sizes: g5/g6 .12xlarge and .24xlarge ;  8-GPU: .48xlarge
-# M5/M6 branch on PER-GPU VRAM (>=38 GB -> 720p + guardrails ON), and M9 on
-# >=40 GB (single-GPU "verified path"). So no g5/g6 size can reach the top tier;
-# only p4d (40 GB) / p5 (80 GB) can. 24 GB cards still COMPLETE the lab — see
+#   g7e differs: 2xl/4xl/8xl = 1 GPU, 12xl = 2, 24xl = 4, 48xl = 8
+# M5/M6 branch on PER-GPU VRAM (>=38 GB -> 720p + guardrails ON), and M9 on >=40 GB
+# (single-GPU "verified path"). So no g5/g6 size reaches the top tier; g7e (96 GB), p4d
+# (40 GB) and p5 (80 GB) do. 24 GB cards still COMPLETE the lab — see
 # docs/en/ALPAMAYO_M9.md "Verified runs" (minADE 0.3779 m, Status: PASS).
-INSTANCE_RATES = {
-    # --- CPU ---
-    "ml.t3.medium": 0.05,
-    "ml.t3.large": 0.10,
-    "ml.t3.xlarge": 0.20,
-    "ml.t3.2xlarge": 0.399,
-    "ml.m5.large": 0.115,
-    "ml.m5.xlarge": 0.23,
-    "ml.m5.2xlarge": 0.461,
-    "ml.m5.4xlarge": 0.922,
-    "ml.c5.large": 0.102,
-    "ml.c5.xlarge": 0.204,
-    "ml.c5.2xlarge": 0.408,
-    # --- g4dn (1x T4 16 GB) ---
-    "ml.g4dn.xlarge": 0.7364,
-    "ml.g4dn.2xlarge": 0.94,
-    # --- g5 (A10G 24 GB/card): 1 GPU up to 8xlarge, 4 on 12/24xlarge, 8 on 48xlarge ---
-    "ml.g5.xlarge": 1.41,
-    "ml.g5.2xlarge": 1.52,
-    "ml.g5.4xlarge": 2.03,
-    "ml.g5.8xlarge": 3.06,
-    "ml.g5.12xlarge": 7.09,
-    "ml.g5.24xlarge": 10.18,
-    "ml.g5.48xlarge": 20.36,
-    # --- g6 (L4 24 GB/card) — capacity fallback when g5 is short. Same per-GPU
-    #     VRAM as g5, so it is a cost/availability choice, not a capability one.
-    "ml.g6.xlarge": 1.127,
-    "ml.g6.2xlarge": 1.222,
-    "ml.g6.4xlarge": 1.654,
-    "ml.g6.12xlarge": 5.752,
-    "ml.g6.24xlarge": 8.344,
-    "ml.g6.48xlarge": 16.688,
-    # --- g7e (RTX PRO 6000 Blackwell, 96 GB/card) — the instance the AWS blog
-    #     names for Stage 5, and the CHEAPEST route to M5/M6's top tier. 96 GB
-    #     per card clears their ">= 70 GB per GPU" branch, so Cosmos Transfer /
-    #     Predict load on ONE GPU at full 720p with guardrails ON, and M9 takes
-    #     its verified single-GPU path. ml.g7e.2xlarge ($4.20) therefore beats
-    #     ml.g6.24xlarge ($8.34) on BOTH price and output quality.
-    #     GPU COUNT IS NOT THE SIZE (same trap as g6e) — verified against the
-    #     karpenter instance-type reference:
-    #       2xl / 4xl / 8xl = 1 GPU ;  12xl = 2 ;  24xl = 4 ;  48xl = 8
-    #     Note g6e differs: its 12xlarge has 4 GPUs, g7e's has 2.
-    #     AWS DLAMI release notes flag multi-node errors on g7e.8xlarge and
-    #     suggest g7e.12xlarge instead; irrelevant for single-node notebooks.
-    "ml.g7e.2xlarge": 4.2039,
-    "ml.g7e.4xlarge": 4.9977,
-    "ml.g7e.8xlarge": 6.5853,
-    "ml.g7e.12xlarge": 10.3576,
-    "ml.g7e.24xlarge": 20.7152,
-    "ml.g7e.48xlarge": 41.4304,
-    # --- p4d/p5 — clear M5/M6's 38 GB and M9's 40 GB tiers, but cost far more
-    #     per unit of quality than g7e now does ---
-    # NOTE: ml.p3.2xlarge is NOT in the us-west-2 SageMaker price list (V100 is
-    # being retired), so this rate is unverifiable and the type is effectively
-    # unorderable there. Kept only so is_gpu_instance()/validation stay stable.
-    "ml.p3.2xlarge": 3.83,
-    "ml.p4d.24xlarge": 25.251286,
-    "ml.p5.48xlarge": 63.296,
-}
+from instance_rates import RATES_BY_REGION  # noqa: E402  (shared layer, same directory)
+
+
+class UnpricedRegionError(RuntimeError):
+    """No generated rate table for this deploy region."""
+
+
+def _rates_for_region(region: str) -> dict:
+    try:
+        return RATES_BY_REGION[region]
+    except KeyError:
+        raise UnpricedRegionError(
+            f"No Studio-JupyterLab rate table for {region!r}. Costs shown to participants "
+            f"and admins would be another region's prices, and the instance dropdown would "
+            f"offer types {region} may not sell. Generate it:\n"
+            f"    ./scripts/refresh_instance_rates.py --region {region} --merge\n"
+            f"Generated regions: {', '.join(sorted(RATES_BY_REGION))}"
+        ) from None
+
+
+INSTANCE_RATES = _rates_for_region(AWS_REGION)
 
 # Module configuration for the workshop
 MODULE_CONFIG = {

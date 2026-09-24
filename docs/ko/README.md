@@ -265,16 +265,40 @@ HF 토큰을 폐기하고 NGC 키를 교체**하세요. 자세한 내용은
 
 ## 리전 선택
 
-기본값: **us-west-2 (Oregon)** — 가장 깊은 GPU 용량과 `ml.p5.48xlarge` 가용성.
-배포 전에 `export AWS_REGION=...`으로 변경하세요.
+리전은 배포마다 `./scripts/deploy.sh --region <region>` 으로 선택합니다 — **한 번에 한 리전**.
+나중에 다른 리전을 추가하려면 [docs/en/ADDING_A_REGION.md](../en/ADDING_A_REGION.md) 를 보세요.
 
-| 리전 | p4d.24xlarge | p5.48xlarge | g5.12xlarge | 비고 |
-|---|---|---|---|---|
-| us-west-2 (Oregon) | ✅ | ✅ | ✅ | **기본값** |
-| us-east-1 (Virginia) | ✅ | ✅ | ✅ | 대안 |
-| ap-northeast-2 (Seoul) | ✅ | ❌ | ✅ | p5 폴백 없음 |
+GPU 타입을 쓸 수 있는지는 **서로 다른 두 사실**이 결정하는데, 이전 표는 둘을 섞었습니다 —
+이 계정은 us-east-1 에서 `ml.p5.48xlarge` 쿼터가 0인데 사용 가능으로 표시했고, 가능한 리전이
+3개뿐인 것처럼 보이게 했습니다(실제로 p5 쿼터는 10개 리전에 존재).
 
-S3 모델 캐시 경로는 리전 로컬입니다 — 리전을 변경한 후에는 `cache_models.sh`를
+1. **그 리전이 Studio-JupyterLab 용으로 판매하는가?** 리전별 실측 생성값 (`$/hr`, `—` = 미판매):
+
+   | 리전 | g5.12xlarge | g5.24xlarge | g6.24xlarge | g7e.2xlarge | p4d.24xlarge | p5.48xlarge |
+   |---|---|---|---|---|---|---|
+   | us-west-2 | $7.09 | $10.18 | $8.34 | $4.20 | $25.25 | $63.30 |
+   | us-east-1 | $7.09 | $10.18 | $8.34 | $4.20 | $25.25 | $63.30 |
+   | ap-northeast-1 | $10.28 | $14.76 | $12.10 | — | $34.61 | $79.12 |
+   | ap-northeast-2 | $8.72 | $12.52 | $10.26 | — | $34.97 | — |
+   | eu-west-1 | $7.92 | $11.36 | — | — | $27.27 | — |
+
+   재생성/리전 추가: `./scripts/refresh_instance_rates.py --region <region> --merge`
+   생성되지 않은 리전은 Lambda 가 import 시점에 예외를 던집니다(다른 리전 가격을 조용히
+   인용하지 않기 위해).
+
+2. **내 계정이 그 리전에서, 참가자 수만큼 쿼터를 갖고 있는가?** 쿼터 스코프는 `(계정 × 리전)`
+   이라 한 리전의 증설이 다른 리전에 적용되지 않고, 큰 GPU 타입은 기본값이 0인 경우가 많습니다:
+
+   ```bash
+   ./scripts/check_quotas.py --region <region> --participants 10
+   ```
+
+   요금표·라이브 쿼터·모듈 권장 인스턴스를 교차 확인합니다. 이 계정 실측: us-west-2 는 권장
+   타입을 모두 실행할 수 있지만 `ml.g6.24xlarge` 가 **동시 2개**뿐이고(4개 모듈이 이걸 사용),
+   ap-northeast-2 는 `ml.g6` 패밀리 전체가 쿼터 **0** 이며 `ml.g5` 와 `ml.p4d.24xlarge` 는 사용 가능합니다.
+
+S3 모델 캐시 경로는 리전 로컬입니다 — 배포한 리전에 데이터를 적재하세요
+(`AWS_REGION=<region> ./scripts/cache_models.sh`; 스크립트는 리전을 추측하지 않습니다).
 다시 실행하세요.
 
 ---

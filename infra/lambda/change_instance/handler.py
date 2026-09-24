@@ -33,6 +33,7 @@ import boto3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
 
 from config import (
+    AWS_REGION,
     INSTANCE_RATES,
     MODULE_CONFIG,
     SAGEMAKER_DOMAIN_ID,
@@ -53,7 +54,12 @@ sagemaker = boto3.client("sagemaker")
 dynamodb = boto3.resource("dynamodb")
 lambda_client = boto3.client("lambda")  # for the async self-invoke
 
-# All valid instance types (keys of the rate table)
+# Valid instance types = what THIS REGION sells for Studio-JupyterLab. INSTANCE_RATES is
+# generated per region (scripts/refresh_instance_rates.py), so this set now shrinks to what
+# the deploy region actually offers. It used to be a us-west-2 snapshot applied everywhere,
+# which let a participant pick a type their region does not sell — accepted here, then the
+# app silently failed to start. Measured: eu-west-1 sells no ml.g6.* for Studio at all, and
+# ap-northeast-2 sells no ml.g7e.* / ml.p5.*.
 VALID_INSTANCE_TYPES = set(INSTANCE_RATES.keys())
 
 # App type for user compute (JupyterLab spaces, matching create_user)
@@ -92,12 +98,20 @@ def _http_handler(event, context):
     if not new_instance_type:
         raise ApiError(400, "Field 'newInstanceType' is required")
 
-    # Validate instance type exists in our rate table
+    # Validate the type is sold in THIS region. Naming the region matters: the participant
+    # dashboard's recommendations are static (web/user/src/data/pipeline-config.ts) and
+    # recommend ml.g6.24xlarge for four modules, so in a region that does not sell g6 the
+    # rejection would otherwise look like a bug in the lab rather than a regional fact.
     if new_instance_type not in VALID_INSTANCE_TYPES:
         raise ApiError(
             400,
-            f"Invalid instance type: {new_instance_type}",
-            details=f"Valid types: {sorted(VALID_INSTANCE_TYPES)}",
+            f"{new_instance_type} is not available for Studio JupyterLab in {AWS_REGION}",
+            details=(
+                f"This is a REGIONAL limitation, not a quota. Types available in "
+                f"{AWS_REGION}: {sorted(VALID_INSTANCE_TYPES)}. "
+                f"(A type listed here can still fail to start if its Studio quota is 0 — "
+                f"run scripts/check_quotas.py --region {AWS_REGION} to see quotas.)"
+            ),
         )
 
     # Retrieve current session

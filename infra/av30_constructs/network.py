@@ -96,11 +96,26 @@ class NetworkConstruct(Construct):
             description="HTTPS from VPC CIDR",
         )
 
-        # Gateway endpoint: S3. ALWAYS created — it is free and the notebooks do
-        # use it to reach the region's shared-data / user-workspace buckets.
-        # NOTE: a gateway endpoint serves only its OWN region's S3, which is why
-        # every region needs its own buckets (cross-region S3 is unreachable from
-        # these isolated subnets, not merely slow).
+        # Gateway endpoint: S3. ALWAYS created — it is free, and it is required the
+        # moment the domain moves to VpcOnly.
+        #
+        # It is NOT, today, on the notebooks' path, and two earlier claims here were
+        # wrong (verified 2026-09-24):
+        #
+        #   "the notebooks do use it"  — they do not. The domain is
+        #   AppNetworkAccessType=PublicInternetOnly in both live regions, so app traffic
+        #   egresses through the SageMaker-MANAGED VPC, not this one. The only ENIs in
+        #   these subnets are the two EFS mount targets.
+        #
+        #   "which is why every region needs its own buckets" — true premise, wrong
+        #   conclusion. A gateway endpoint does serve only its own region's S3 (the route
+        #   tables here carry just 10.0.0.0/16 local plus the local S3 prefix list —
+        #   pl-68a54001 in us-west-2, pl-78a54011 in ap-northeast-2, disjoint CIDR sets —
+        #   with no IGW and no NAT), but since the notebooks are not in these subnets that
+        #   is not what forces per-region buckets. The real reasons are S3's GLOBAL
+        #   bucket-name namespace (see storage.py) plus cross-region GET latency and
+        #   $0.02/GB transfer-out on ~157 GB of model cache — which the module docstring
+        #   above already says.
         self._vpc.add_gateway_endpoint(
             "S3Endpoint",
             service=ec2.GatewayVpcEndpointAwsService.S3,

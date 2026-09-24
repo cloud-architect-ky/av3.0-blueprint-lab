@@ -13,8 +13,8 @@ change in one notebook doesn't silently break a downstream reader.
 
 | Env var | Default | Holds |
 |---|---|---|
-| `USER_BUCKET` | `av30lab-user-workspace-{account_id}` | per-user outputs under `users/{profile}/mN/` |
-| `SHARED_BUCKET` | `av30lab-shared-data-{account_id}` | nuScenes source, Cosmos/Alpamayo HF caches, M9 demo `.pt`, M10 admin reference bundle, `notebook-templates/` |
+| `USER_BUCKET` | `av30lab-user-workspace-{account_id}-{region}` | per-user outputs under `users/{profile}/mN/` |
+| `SHARED_BUCKET` | `av30lab-shared-data-{account_id}-{region}` | nuScenes source, Cosmos/Alpamayo HF caches, M9 demo `.pt`, M10 admin reference bundle, `notebook-templates/` |
 | `USER_PROFILE` | (injected by the JupyterLab LCC from the SageMaker profile name) | the per-user prefix `{profile}`. **M4 hard-fails if unset**; all other modules fall back to `"default"`. |
 
 ## 2. Module edge graph (reads → writes)

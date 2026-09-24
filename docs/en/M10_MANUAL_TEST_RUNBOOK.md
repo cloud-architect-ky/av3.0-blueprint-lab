@@ -5,7 +5,7 @@ M10 has two layers. **Part A** = admin runs the real AlpaSim on a GPU EC2 instan
 repeatable). "Both, in order" means using A to freshly produce the reference result → then B to view it in the notebook.
 
 > In the reference deployment this has already run successfully, and genuine results were uploaded to
-> `s3://av30lab-shared-data-<aws-account-id>/m10-reference/`.
+> `s3://av30lab-shared-data-<aws-account-id>-<region>/m10-reference/`.
 > If such a reference result already exists, **running Part B alone is a complete
 > verification**. Part A is only needed when you want to "reproduce from scratch" (~$30, 2-3 hours).
 

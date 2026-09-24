@@ -13,8 +13,8 @@ S3 키와 관련된 JSON 형태에 대한 권위 있는 기록으로, 한 노트
 
 | Env var | 기본값 | 담는 내용 |
 |---|---|---|
-| `USER_BUCKET` | `av30lab-user-workspace-{account_id}` | `users/{profile}/mN/` 아래의 사용자별 출력 |
-| `SHARED_BUCKET` | `av30lab-shared-data-{account_id}` | nuScenes 소스, Cosmos/Alpamayo HF 캐시, M9 데모 `.pt`, M10 관리자 레퍼런스 번들, `notebook-templates/` |
+| `USER_BUCKET` | `av30lab-user-workspace-{account_id}-{region}` | `users/{profile}/mN/` 아래의 사용자별 출력 |
+| `SHARED_BUCKET` | `av30lab-shared-data-{account_id}-{region}` | nuScenes 소스, Cosmos/Alpamayo HF 캐시, M9 데모 `.pt`, M10 관리자 레퍼런스 번들, `notebook-templates/` |
 | `USER_PROFILE` | (SageMaker 프로필 이름에서 JupyterLab LCC가 주입) | 사용자별 프리픽스 `{profile}`. **M4은 미설정 시 하드 페일**; 다른 모든 모듈은 `"default"`로 폴백. |
 
 ## 2. 모듈 엣지 그래프 (읽기 → 쓰기)

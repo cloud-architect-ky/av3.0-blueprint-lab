@@ -13,8 +13,8 @@
 
 | Env 変数 | デフォルト | 保持するもの |
 |---|---|---|
-| `USER_BUCKET` | `av30lab-user-workspace-{account_id}` | `users/{profile}/mN/` 配下のユーザーごとの出力 |
-| `SHARED_BUCKET` | `av30lab-shared-data-{account_id}` | nuScenes ソース、Cosmos/Alpamayo HF キャッシュ、M9 デモ `.pt`、M10 管理者リファレンスバンドル、`notebook-templates/` |
+| `USER_BUCKET` | `av30lab-user-workspace-{account_id}-{region}` | `users/{profile}/mN/` 配下のユーザーごとの出力 |
+| `SHARED_BUCKET` | `av30lab-shared-data-{account_id}-{region}` | nuScenes ソース、Cosmos/Alpamayo HF キャッシュ、M9 デモ `.pt`、M10 管理者リファレンスバンドル、`notebook-templates/` |
 | `USER_PROFILE` | （SageMaker プロファイル名から JupyterLab LCC が注入） | ユーザーごとのプレフィックス `{profile}`。**M4 は未設定だとハードフェイル**します。他のすべてのモジュールは `"default"` にフォールバックします。 |
 
 ## 2. モジュールのエッジグラフ（reads → writes）

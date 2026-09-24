@@ -20,8 +20,8 @@ order you'll do it. Participants only need their dashboard link (see
 - **Two S3 buckets** (names are derived from **your** account + region — the
   examples in this guide use account `<aws-account-id>` / `us-west-2`, the reference
   deployment; substitute your own — see §1.5):
-  - `av30lab-shared-data-<account>` — models, datasets, notebook templates, M10 reference.
-  - `av30lab-user-workspace-<account>` — one `users/<id>/` prefix per participant.
+  - `av30lab-shared-data-<account>-<region>` — models, datasets, notebook templates, M10 reference.
+  - `av30lab-user-workspace-<account>-<region>` — one `users/<id>/` prefix per participant.
 
 > **Note on the IDs in this guide.** Everywhere you see `<aws-account-id>` or
 > `us-west-2` (bucket names, ARNs, quota "current" values, CLI examples), those
@@ -338,7 +338,7 @@ self-run path: [ALPASIM_M10.md](ALPASIM_M10.md), [M10_MANUAL_TEST_RUNBOOK.md](M1
 
 ### 6.5 Upload notebook templates + scripts (do this LAST, after any notebook edits)
 ```bash
-# <shared> = av30lab-shared-data-<account>. $AWS_REGION is the value exported in §5 (or: export AWS_REGION=...)
+# <shared> = av30lab-shared-data-<account>-<region>. $AWS_REGION is the value exported in §5 (or: export AWS_REGION=...)
 aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
 aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
 ```

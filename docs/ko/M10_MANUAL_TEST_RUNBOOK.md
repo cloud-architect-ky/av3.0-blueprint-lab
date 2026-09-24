@@ -4,7 +4,7 @@ M10은 두 겹이다. **Part A** = admin이 GPU EC2에서 진짜 AlpaSim을 돌�
 만드는 것(무겁고 1회성). **Part B** = 참가자가 CPU 노트북에서 그 결과를 시각화하는 것(가볍고
 반복). "둘 다 순서대로"는 A로 참조 결과를 새로 만들고 → B로 그걸 노트북에서 보는 흐름이다.
 
-> 레퍼런스 배포에서 이미 성공적으로 실행돼 `s3://av30lab-shared-data-<aws-account-id>/m10-reference/`
+> 레퍼런스 배포에서 이미 성공적으로 실행돼 `s3://av30lab-shared-data-<aws-account-id>-<region>/m10-reference/`
 > 에 진짜 결과가 올라간 적이 있다. 그런 참조 결과가 이미 있으면 **Part B만 단독으로 돌려도 완전한
 > 검증**이 된다. Part A는 "처음부터 다시 재현"을 원할 때만 필요하다(~$30, 2-3시간).
 

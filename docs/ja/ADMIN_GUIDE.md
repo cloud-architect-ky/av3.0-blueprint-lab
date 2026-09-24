@@ -20,8 +20,8 @@
 - **2 つの S3 バケット**（名前は**あなたの**アカウント + リージョンから導出されます。本ガイドの
   例ではリファレンスデプロイであるアカウント `<aws-account-id>` / `us-west-2` を使用しています。
   ご自身の値に置き換えてください — §1.5 を参照）:
-  - `av30lab-shared-data-<account>` — モデル、データセット、ノートブックテンプレート、M10 リファレンス。
-  - `av30lab-user-workspace-<account>` — 参加者ごとに 1 つの `users/<id>/` プレフィックス。
+  - `av30lab-shared-data-<account>-<region>` — モデル、データセット、ノートブックテンプレート、M10 リファレンス。
+  - `av30lab-user-workspace-<account>-<region>` — 参加者ごとに 1 つの `users/<id>/` プレフィックス。
 
 > **本ガイドの ID に関する注記。** `<aws-account-id>` や `us-west-2` を目にする箇所
 > （バケット名、ARN、クォータの「Current」値、CLI 例）はすべて、リファレンスデプロイの値です。
@@ -332,7 +332,7 @@ M10 ノートブック（CPU）は、全参加者向けにこれらの結果を�
 
 ### 6.5 ノートブックテンプレート + スクリプトのアップロード（これは最後に、ノートブック編集後に行う）
 ```bash
-# <shared> = av30lab-shared-data-<account>. $AWS_REGION は §5 で export した値（または: export AWS_REGION=...）
+# <shared> = av30lab-shared-data-<account>-<region>. $AWS_REGION は §5 で export した値（または: export AWS_REGION=...）
 aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
 aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
 ```

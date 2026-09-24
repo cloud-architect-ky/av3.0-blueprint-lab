@@ -20,8 +20,8 @@
 - **S3 버킷 2개** (이름은 **당신의** 계정 + 리전에서 파생됩니다 — 이 가이드의
   예시는 레퍼런스 배포인 계정 `<aws-account-id>` / `us-west-2`를 사용합니다.
   당신의 값으로 치환하세요 — §1.5 참고):
-  - `av30lab-shared-data-<account>` — 모델, 데이터셋, 노트북 템플릿, M10 레퍼런스.
-  - `av30lab-user-workspace-<account>` — 참가자당 `users/<id>/` 프리픽스 하나.
+  - `av30lab-shared-data-<account>-<region>` — 모델, 데이터셋, 노트북 템플릿, M10 레퍼런스.
+  - `av30lab-user-workspace-<account>-<region>` — 참가자당 `users/<id>/` 프리픽스 하나.
 
 > **이 가이드의 ID에 관한 참고.** `<aws-account-id>`나
 > `us-west-2`가 보이는 곳(버킷 이름, ARN, 쿼터 "current" 값, CLI 예시)은 모두
@@ -337,7 +337,7 @@ M10 노트북(CPU)은 모든 참가자를 위해 이 결과를 다운로드하�
 
 ### 6.5 노트북 템플릿 + 스크립트 업로드 (노트북 편집 후 맨 마지막에 실행)
 ```bash
-# <shared> = av30lab-shared-data-<account>. $AWS_REGION 은 §5에서 export한 값 (또는: export AWS_REGION=...)
+# <shared> = av30lab-shared-data-<account>-<region>. $AWS_REGION 은 §5에서 export한 값 (또는: export AWS_REGION=...)
 aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
 aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
 ```

@@ -36,8 +36,8 @@ UN aws sts get-caller-identity --query '[Account,Arn]' --output text
 # 이 랩이 배포된 계정/리전 → 이후 모든 블록이 쓰는 변수 (하드코딩 대신 여기서 한 번 정의)
 export REGION=<region>                                    # 당신이 배포한 리전으로 (예: us-west-2)
 export ACCOUNT=$(UN aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # 모델/데이터/노트북 템플릿 + m10-reference
-export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}      # 참가자별 users/<id>/ (Part C에서 사용)
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}-${REGION}       # 모델/데이터/노트북 템플릿 + m10-reference
+export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}-${REGION}      # 참가자별 users/<id>/ (Part C에서 사용)
 echo "ACCOUNT=$ACCOUNT REGION=$REGION"
 echo "SHARED_BUCKET=$SHARED_BUCKET"
 ```
@@ -147,7 +147,7 @@ export HF_TOKEN=hf_xxx                 # A1의 승인된 토큰
 export NGC_API_KEY=nvapi-xxx           # 선택 (없으면 생략 — anonymous pull)
 # 계정을 인스턴스 역할로 도출 → 버킷 이름 파생 (하드코딩 대신). 호스트엔 aws CLI 내장.
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}-${REGION}
 # 스크립트 가져오기 (S3 스테이징본 사용):
 aws s3 cp s3://$SHARED_BUCKET/notebook-templates/scripts/alpasim_ec2_setup.sh /root/
 # ── 실행 (DETACHED 기본 — 아래 경고 참조) ─────────────────────────────────────

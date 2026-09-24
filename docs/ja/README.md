@@ -147,8 +147,8 @@ aws cognito-idp admin-create-user \
 
 # 8. ノートブックテンプレート + ヘルパースクリプトを共有バケットにアップロード
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/" --region "$AWS_REGION"
-aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/scripts/" --region "$AWS_REGION"
+aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/" --region "$AWS_REGION"
+aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/scripts/" --region "$AWS_REGION"
 ```
 
 その後、`deploy.sh` が出力した **Admin Dashboard URL** を開き、ステップ 5 のメールアドレス + 仮パスワードでログインし、テストユーザーをプロビジョニングして、**Participant Dashboard Link** を開いてパイプラインマップを確認します。日ごとの完全なランブック — スモークテスト、一括プロビジョニング、モニタリング、撤去 — は **[docs/ja/ADMIN_GUIDE.md](ADMIN_GUIDE.md)** にあります。

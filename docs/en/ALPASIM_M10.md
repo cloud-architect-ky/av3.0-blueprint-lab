@@ -144,8 +144,8 @@ internet egress** (the lab VPC is isolated; use the default VPC), then:
 ```bash
 export HF_TOKEN=hf_xxx            # Alpamayo + Cosmos-Reason2 + NuRec accepted
 export NGC_API_KEY=nvapi-xxx      # NGC access to nre-ga
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
+# SHARED_BUCKET is deliberately NOT exported: the script derives
+# av30lab-shared-data-<acct>-<region> from STS + IMDS and exits 1 if it cannot.
 bash scripts/alpasim_ec2_setup.sh
 # verify the m10-reference/ upload, then TERMINATE the instance.
 ```

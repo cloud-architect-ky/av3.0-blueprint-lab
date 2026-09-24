@@ -182,8 +182,8 @@ aws cognito-idp admin-create-user \
 
 # 8. Upload notebook templates + helper scripts to the shared bucket
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/" --region "$AWS_REGION"
-aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/scripts/" --region "$AWS_REGION"
+aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/" --region "$AWS_REGION"
+aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/scripts/" --region "$AWS_REGION"
 ```
 
 Then open the **Admin Dashboard URL** printed by `deploy.sh`, log in with the

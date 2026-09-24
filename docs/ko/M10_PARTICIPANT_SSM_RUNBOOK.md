@@ -65,8 +65,8 @@ aws ssm start-session --target <your-instance-id> --region $AWS_DEFAULT_REGION
 sudo su -
 export PARTICIPANT_ID=<your-id>
 export M10_OUTPUT_PREFIX=users/<your-id>/m7
-export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT
-export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
+export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT-$REGION
+export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT-$REGION
 export HF_TOKEN=hf_xxx          # 필수 — 게이트 NuRec 씬 다운로드용 (준비물 3번)
 
 # 전달 확인 (스크립트 돌리기 전 반드시): 5개가 다 보이고 tok_len이 0이 아니어야 함
@@ -114,7 +114,7 @@ grep -q "=== DONE" /var/log/m7.log && echo "성공 (S3 업로드 완료)" \
 ```bash
 # 새 로컬 셸이면 ACCOUNT 다시 도출 (§3 세션 안이면 이미 export돼 있음)
 ACCOUNT=${ACCOUNT:-$(aws sts get-caller-identity --query Account --output text)}
-aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m10/ --recursive
+aws s3 ls s3://av30lab-user-workspace-$ACCOUNT-$REGION/users/<your-id>/m10/ --recursive
 # aggregate/results-summary.json, rollouts/**/metrics.parquet, eval/eval.mp4, run.json 이 보이면 OK
 ```
 

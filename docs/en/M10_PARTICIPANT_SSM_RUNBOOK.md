@@ -65,8 +65,8 @@ aws ssm start-session --target <your-instance-id> --region $AWS_DEFAULT_REGION
 sudo su -
 export PARTICIPANT_ID=<your-id>
 export M10_OUTPUT_PREFIX=users/<your-id>/m7
-export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT
-export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
+export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT-$REGION
+export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT-$REGION
 export HF_TOKEN=hf_xxx          # required — for downloading the gated NuRec scene (prerequisite 3)
 
 # Verify passthrough (always, before running the script): all 5 must be visible and tok_len must be non-zero
@@ -114,7 +114,7 @@ Check directly (inside the session or locally):
 ```bash
 # In a new local shell, re-derive ACCOUNT (if inside the §3 session it's already exported)
 ACCOUNT=${ACCOUNT:-$(aws sts get-caller-identity --query Account --output text)}
-aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m10/ --recursive
+aws s3 ls s3://av30lab-user-workspace-$ACCOUNT-$REGION/users/<your-id>/m10/ --recursive
 # OK if you see aggregate/results-summary.json, rollouts/**/metrics.parquet, eval/eval.mp4, run.json
 ```
 

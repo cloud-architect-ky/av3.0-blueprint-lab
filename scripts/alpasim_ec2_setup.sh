@@ -35,7 +35,9 @@
 # USAGE — ADMIN reference run (on the EC2 host, admin lab-account role):
 #     export HF_TOKEN=hf_xxx                 # accepted Alpamayo + NuRec licenses
 #     export NGC_API_KEY=nvapi-xxx           # for the gated NuRec (NRE) image
-#     export SHARED_BUCKET=av30lab-shared-data-<acct>   # else derived via STS
+#     export SHARED_BUCKET=av30lab-shared-data-<acct>-<region>   # else derived via STS+IMDS
+#     (prefer leaving it UNSET: an exported name missing the -<region> suffix overrides
+#      the correct derivation below and silently targets a nonexistent bucket)
 #     bash scripts/alpasim_ec2_setup.sh
 #     # → uploads to s3://<shared>/m10-reference/, then TERMINATE the instance.
 #
@@ -43,8 +45,8 @@
 # reached via SSM; see docs/M10_PARTICIPANT_SSM_RUNBOOK.md):
 #     export PARTICIPANT_ID=<id>
 #     export M10_OUTPUT_PREFIX=users/<id>/m7
-#     export OUTPUT_BUCKET=av30lab-user-workspace-<acct>
-#     export SHARED_BUCKET=av30lab-shared-data-<acct>   # hf-cache read
+#     export OUTPUT_BUCKET=av30lab-user-workspace-<acct>-<region>
+#     export SHARED_BUCKET=av30lab-shared-data-<acct>-<region>   # hf-cache read
 #     bash scripts/alpasim_ec2_setup.sh
 #     # → uploads to s3://<user-workspace>/users/<id>/m10/; the admin terminates.
 #

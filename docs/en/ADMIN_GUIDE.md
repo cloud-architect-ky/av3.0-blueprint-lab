@@ -327,8 +327,10 @@ AlpaSim is a Docker-Compose microservice system needing a ≥40 GB GPU — it
 ```bash
 # On a Deep Learning Base GPU AMI box (g6e.12xlarge, public subnet):
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-export HF_TOKEN=hf_... NGC_API_KEY=nvapi-... \
-  SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
+export HF_TOKEN=hf_... NGC_API_KEY=nvapi-...
+# Do NOT export SHARED_BUCKET: the script derives av30lab-shared-data-<acct>-<region>
+# itself and exits 1 if it cannot. An exported value overrides that and, if it is
+# missing the region suffix, silently targets a bucket that does not exist.
 bash scripts/alpasim_ec2_setup.sh    # → uploads s3://<shared>/m10-reference/
 # then TERMINATE the instance.
 ```
@@ -354,8 +356,8 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 >          M6_Alpamayo_VLA_Inference M7_AlpaSim_ClosedLoop \
 >          M8_OpenSearch_Semantic_Search M9_HyperPod_Distributed_Training \
 >          M10_Nerfstudio_3D_Reconstruction; do
->   aws s3 rm "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/$f.ipynb" \
->     --region "$AWS_REGION" 2>/dev/null
+>   aws s3 rm "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/$f.ipynb" \
+>     --region "$AWS_REGION"
 > done
 > ```
 > A fresh deployment after `teardown.sh` needs none of this.

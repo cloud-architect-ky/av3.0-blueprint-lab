@@ -37,8 +37,8 @@ UN aws sts get-caller-identity --query '[Account,Arn]' --output text
 # The account/region this lab is deployed to → the variables every later block uses (defined once here instead of hardcoding)
 export REGION=<region>                                    # your deployed region (e.g. us-west-2)
 export ACCOUNT=$(UN aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # model/data/notebook templates + m10-reference
-export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}      # per-participant users/<id>/ (used in Part C)
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}-${REGION}       # model/data/notebook templates + m10-reference
+export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}-${REGION}      # per-participant users/<id>/ (used in Part C)
 echo "ACCOUNT=$ACCOUNT REGION=$REGION"
 echo "SHARED_BUCKET=$SHARED_BUCKET"
 ```
@@ -148,7 +148,7 @@ export HF_TOKEN=hf_xxx                 # the approved token from A1
 export NGC_API_KEY=nvapi-xxx           # optional (omit if none — anonymous pull)
 # Derive the account from the instance role → derive the bucket name (instead of hardcoding). The host has the aws CLI bundled.
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}-${REGION}
 # Fetch the script (use the S3 staged copy):
 aws s3 cp s3://$SHARED_BUCKET/notebook-templates/scripts/alpasim_ec2_setup.sh /root/
 # ── run (DETACHED by default — see the warning below) ─────────────────────────────────────

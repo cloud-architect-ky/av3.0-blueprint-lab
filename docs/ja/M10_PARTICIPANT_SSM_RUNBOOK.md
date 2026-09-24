@@ -65,8 +65,8 @@ aws ssm start-session --target <your-instance-id> --region $AWS_DEFAULT_REGION
 sudo su -
 export PARTICIPANT_ID=<your-id>
 export M10_OUTPUT_PREFIX=users/<your-id>/m7
-export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT
-export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT
+export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT-$REGION
+export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT-$REGION
 export HF_TOKEN=hf_xxx          # 必須 — ゲート NuRec シーンのダウンロード用 (準備物 3 番)
 
 # 伝達確認 (スクリプトを回す前に必ず): 5 個がすべて見えて tok_len が 0 でないこと
@@ -114,7 +114,7 @@ grep -q "=== DONE" /var/log/m7.log && echo "成功 (S3 アップロード完了)
 ```bash
 # 新しいローカルシェルなら ACCOUNT を再導出 (§3 セッション内なら既に export 済み)
 ACCOUNT=${ACCOUNT:-$(aws sts get-caller-identity --query Account --output text)}
-aws s3 ls s3://av30lab-user-workspace-$ACCOUNT/users/<your-id>/m10/ --recursive
+aws s3 ls s3://av30lab-user-workspace-$ACCOUNT-$REGION/users/<your-id>/m10/ --recursive
 # aggregate/results-summary.json, rollouts/**/metrics.parquet, eval/eval.mp4, run.json が見えれば OK
 ```
 

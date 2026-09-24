@@ -176,8 +176,8 @@ aws cognito-idp admin-create-user \
 
 # 8. 노트북 템플릿 + 헬퍼 스크립트를 공유 버킷에 업로드
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/" --region "$AWS_REGION"
-aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT/notebook-templates/scripts/" --region "$AWS_REGION"
+aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/" --region "$AWS_REGION"
+aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/scripts/" --region "$AWS_REGION"
 ```
 
 그런 다음 `deploy.sh`가 출력한 **Admin Dashboard URL**을 열어 5단계의 이메일 +

@@ -38,8 +38,8 @@ UN aws sts get-caller-identity --query '[Account,Arn]' --output text
 # このラボが配備されたアカウント/リージョン → 以降すべてのブロックが使う変数 (ハードコードの代わりにここで一度定義)
 export REGION=<region>                                    # あなたが配備したリージョンに (例: us-west-2)
 export ACCOUNT=$(UN aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}       # モデル/データ/ノートブックテンプレート + m10-reference
-export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}      # 参加者ごとの users/<id>/ (Part C で使用)
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}-${REGION}       # モデル/データ/ノートブックテンプレート + m10-reference
+export USER_BUCKET=av30lab-user-workspace-${ACCOUNT}-${REGION}      # 参加者ごとの users/<id>/ (Part C で使用)
 echo "ACCOUNT=$ACCOUNT REGION=$REGION"
 echo "SHARED_BUCKET=$SHARED_BUCKET"
 ```
@@ -150,7 +150,7 @@ export HF_TOKEN=hf_xxx                 # A1 の承認済みトークン
 export NGC_API_KEY=nvapi-xxx           # 任意 (なければ省略 — anonymous pull)
 # アカウントをインスタンスロールで導出 → バケット名を派生 (ハードコードの代わり)。ホストには aws CLI 内蔵。
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}
+export SHARED_BUCKET=av30lab-shared-data-${ACCOUNT}-${REGION}
 # スクリプト取得 (S3 ステージング版を使用):
 aws s3 cp s3://$SHARED_BUCKET/notebook-templates/scripts/alpasim_ec2_setup.sh /root/
 # ── 実行 (DETACHED がデフォルト — 下の警告参照) ─────────────────────────────────────

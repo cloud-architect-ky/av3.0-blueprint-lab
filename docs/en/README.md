@@ -118,13 +118,19 @@ GPU **Studio JupyterLab App** quotas default to low or **0** on fresh accounts �
 request increases before the workshop. There are also separate **job** quotas for
 M12/M11 that are easy to miss. Full table + CLI commands: **[ADMIN_GUIDE.md](ADMIN_GUIDE.md)** and **[PREREQUISITES.md](PREREQUISITES.md)**.
 
-Check current values:
+Check what YOUR account has in the region you intend to deploy to — quota is scoped to
+`(account × region)`, so a value in one region says nothing about another:
+
 ```bash
-aws service-quotas list-service-quotas \
-  --service-code sagemaker --region "${AWS_REGION:-us-west-2}" \
-  --query 'Quotas[?contains(QuotaName, `Studio JupyterLab Apps`) || contains(QuotaName, `for training job`) || contains(QuotaName, `for processing job`)].{Name:QuotaName,Value:Value,Code:QuotaCode}' \
-  --output table
+./scripts/check_quotas.py --region <region> --participants <cohort-size>
 ```
+
+It cross-references live quota, what the region actually sells for Studio-JupyterLab, and the
+instance each module recommends — and names the modules blocked by any shortfall. Measured in
+the reference account at 10 participants, **neither** region passes as configured:
+`ml.g6.24xlarge` (wanted by four modules) allows 2 concurrent in us-west-2 and 0 in
+ap-northeast-2. `deploy.sh` runs this for you at the end of a deployment.
+
 
 ---
 
@@ -140,7 +146,8 @@ cd av3.0-blueprint-lab
 
 # 2. Required environment variables
 export ADMIN_EMAIL="<admin-email>"           # e.g. you@example.com
-export AWS_REGION="us-west-2"                 # default; see "Region selection"
+export REGION="us-west-2"                     # the ONE region to deploy to
+export AWS_REGION="$REGION"                   # used by the seeding scripts below
 export HF_TOKEN="hf_..."                      # admin Hugging Face read token
 # Optional but recommended: restrict admin-dashboard access to your IP/CIDR
 export ADMIN_IP_ALLOWLIST="203.0.113.0/24"    # default 0.0.0.0/0 = WAF open
@@ -151,11 +158,17 @@ export ADMIN_IP_ALLOWLIST="203.0.113.0/24"    # default 0.0.0.0/0 = WAF open
 
 # 3. Bootstrap CDK (one-time per account + region)
 cd infra && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-npx cdk bootstrap "aws://$(aws sts get-caller-identity --query Account --output text)/$AWS_REGION"
+npx cdk bootstrap "aws://$(aws sts get-caller-identity --query Account --output text)/$REGION"
 cd ..
 
-# 4. Deploy infrastructure + dashboards (~25 min)
-./scripts/deploy.sh
+# 3b. Generate this region's instance rate table (REQUIRED).
+#     The Lambdas raise at import without it rather than quote another region's
+#     prices, so a missing table shows up as 500s on the instance endpoints.
+./scripts/refresh_instance_rates.py --region "$REGION" --merge
+
+# 4. Deploy infrastructure + dashboards (~25 min). Region is EXPLICIT — there is no
+#    literal default anywhere in the deploy path.
+./scripts/deploy.sh --region "$REGION"
 
 # 5. Create the first Cognito admin user
 #    (deploy.sh prints the exact command with your pool id; username MUST be an email)
@@ -167,19 +180,19 @@ aws cognito-idp admin-create-user \
     --region "$AWS_REGION"
 
 # 6. Pre-cache NVIDIA models to S3 (background, 30–60 min)
-./scripts/cache_models.sh
+AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    M5/M6/M9 additionally need an offline HF cache, M9 a demo clip, and M10 a
 #    one-time GPU-EC2 reference eval — see ADMIN_GUIDE.md §6 and the
 #    per-module deep dives (COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10).
 
 # 7. Stage the nuScenes-mini dataset to S3 (required by M1 / M3 / M7)
-./scripts/stage_nuscenes.sh
+AWS_REGION="$REGION" ./scripts/stage_nuscenes.sh
 #    Pulls from the public AWS Open Data mirror (no login; nuScenes terms apply).
 
 # 8. Upload notebook templates + helper scripts to the shared bucket
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/" --region "$AWS_REGION"
-aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/scripts/" --region "$AWS_REGION"
+aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/" --region "$REGION"
+aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/scripts/" --region "$REGION"
 ```
 
 Then open the **Admin Dashboard URL** printed by `deploy.sh`, log in with the

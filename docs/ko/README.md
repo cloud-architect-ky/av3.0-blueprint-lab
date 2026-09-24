@@ -138,7 +138,8 @@ cd av3.0-blueprint-lab
 
 # 2. 필수 환경 변수
 export ADMIN_EMAIL="<admin-email>"           # 예: you@example.com
-export AWS_REGION="us-west-2"                 # 기본값; "리전 선택" 참고
+export REGION="us-west-2"                     # 배포할 단 하나의 리전
+export AWS_REGION="$REGION"                   # 아래 시딩 스크립트가 사용
 export HF_TOKEN="hf_..."                      # 관리자 Hugging Face 읽기 토큰
 # 선택 사항이지만 권장: 관리자 대시보드 접근을 특정 IP/CIDR로 제한
 export ADMIN_IP_ALLOWLIST="203.0.113.0/24"    # 기본값 0.0.0.0/0 = WAF 개방
@@ -149,11 +150,17 @@ export ADMIN_IP_ALLOWLIST="203.0.113.0/24"    # 기본값 0.0.0.0/0 = WAF 개방
 
 # 3. CDK 부트스트랩(계정 + 리전당 1회)
 cd infra && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-npx cdk bootstrap "aws://$(aws sts get-caller-identity --query Account --output text)/$AWS_REGION"
+npx cdk bootstrap "aws://$(aws sts get-caller-identity --query Account --output text)/$REGION"
 cd ..
 
-# 4. 인프라 + 대시보드 배포(~25분)
-./scripts/deploy.sh
+# 3b. 이 리전의 인스턴스 요금표 생성(필수).
+#     없으면 Lambda 가 다른 리전 가격을 인용하는 대신 import 시점에 예외를 던지므로,
+#     누락 시 인스턴스 관련 엔드포인트가 500 으로 나타납니다.
+./scripts/refresh_instance_rates.py --region "$REGION" --merge
+
+# 4. 인프라 + 대시보드 배포(~25분). 리전은 명시적입니다 — 배포 경로 어디에도
+#    리터럴 기본값이 없습니다.
+./scripts/deploy.sh --region "$REGION"
 
 # 5. 첫 번째 Cognito 관리자 사용자 생성
 #    (deploy.sh가 풀 id가 포함된 정확한 명령을 출력합니다; username은 반드시 이메일이어야 함)
@@ -162,22 +169,22 @@ aws cognito-idp admin-create-user \
     --username "$ADMIN_EMAIL" \
     --user-attributes Name=email,Value="$ADMIN_EMAIL" Name=email_verified,Value=true \
     --temporary-password 'TempPass1!' \
-    --region "$AWS_REGION"
+    --region "$REGION"
 
 # 6. NVIDIA 모델을 S3에 사전 캐싱(백그라운드, 30–60분)
-./scripts/cache_models.sh
+AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    M5/M6/M9은 추가로 오프라인 HF 캐시가 필요하고, M9은 데모 클립이, M10은
 #    일회성 GPU-EC2 레퍼런스 평가가 필요합니다 — docs/ko/ADMIN_GUIDE.md §6 및
 #    모듈별 심화 문서(COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10)를 참고하세요.
 
 # 7. nuScenes-mini 데이터셋을 S3에 스테이징(M1 / M3 / M7에서 필요)
-./scripts/stage_nuscenes.sh
+AWS_REGION="$REGION" ./scripts/stage_nuscenes.sh
 #    공개 AWS Open Data 미러에서 가져옵니다(로그인 불필요; nuScenes 약관 적용).
 
 # 8. 노트북 템플릿 + 헬퍼 스크립트를 공유 버킷에 업로드
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/" --region "$AWS_REGION"
-aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/scripts/" --region "$AWS_REGION"
+aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/" --region "$REGION"
+aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/scripts/" --region "$REGION"
 ```
 
 그런 다음 `deploy.sh`가 출력한 **Admin Dashboard URL**을 열어 5단계의 이메일 +

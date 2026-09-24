@@ -109,7 +109,8 @@ cd av3.0-blueprint-lab
 
 # 2. 必須の環境変数
 export ADMIN_EMAIL="<admin-email>"           # 例: you@example.com
-export AWS_REGION="us-west-2"                 # デフォルト。「リージョンの選択」を参照
+export REGION="us-west-2"                     # デプロイ先の唯一のリージョン
+export AWS_REGION="$REGION"                   # 下のシーディングスクリプトが使用                 # デフォルト。「リージョンの選択」を参照
 export HF_TOKEN="hf_..."                      # 管理者の Hugging Face 読み取りトークン
 # 任意だが推奨: 管理者ダッシュボードへのアクセスを自分の IP/CIDR に制限する
 export ADMIN_IP_ALLOWLIST="203.0.113.0/24"    # デフォルト 0.0.0.0/0 = WAF は全開放
@@ -120,11 +121,12 @@ export ADMIN_IP_ALLOWLIST="203.0.113.0/24"    # デフォルト 0.0.0.0/0 = WAF 
 
 # 3. CDK のブートストラップ（アカウント + リージョンごとに 1 回）
 cd infra && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-npx cdk bootstrap "aws://$(aws sts get-caller-identity --query Account --output text)/$AWS_REGION"
+npx cdk bootstrap "aws://$(aws sts get-caller-identity --query Account --output text)/$REGION"
 cd ..
 
 # 4. インフラストラクチャ + ダッシュボードのデプロイ（約 25 分）
-./scripts/deploy.sh
+./scripts/refresh_instance_rates.py --region "$REGION" --merge   # 必須: このリージョンの料金表を生成
+./scripts/deploy.sh --region "$REGION"
 
 # 5. 最初の Cognito 管理者ユーザーを作成
 #    （deploy.sh が、あなたのプール ID を含む正確なコマンドを出力します。ユーザー名は必ずメールアドレスにすること）
@@ -133,22 +135,22 @@ aws cognito-idp admin-create-user \
     --username "$ADMIN_EMAIL" \
     --user-attributes Name=email,Value="$ADMIN_EMAIL" Name=email_verified,Value=true \
     --temporary-password 'TempPass1!' \
-    --region "$AWS_REGION"
+    --region "$REGION"
 
 # 6. NVIDIA モデルを S3 に事前キャッシュ（バックグラウンド、30〜60 分）
-./scripts/cache_models.sh
+AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    M5/M6/M9 は追加でオフライン HF キャッシュが、M9 はデモクリップが、M10 は
 #    一度きりの GPU-EC2 リファレンス評価が必要です — docs/ja/ADMIN_GUIDE.md §6 および
 #    モジュール別の詳細解説（COSMOS_M5_M6、ALPAMAYO_M9、ALPASIM_M10）を参照してください。
 
 # 7. nuScenes-mini データセットを S3 にステージング（M1 / M3 / M7 で必須）
-./scripts/stage_nuscenes.sh
+AWS_REGION="$REGION" ./scripts/stage_nuscenes.sh
 #    公開の AWS Open Data ミラーから取得します（ログイン不要。nuScenes の利用規約が適用されます）。
 
 # 8. ノートブックテンプレート + ヘルパースクリプトを共有バケットにアップロード
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/" --region "$AWS_REGION"
-aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$AWS_REGION/notebook-templates/scripts/" --region "$AWS_REGION"
+aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/" --region "$REGION"
+aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/scripts/" --region "$REGION"
 ```
 
 その後、`deploy.sh` が出力した **Admin Dashboard URL** を開き、ステップ 5 のメールアドレス + 仮パスワードでログインし、テストユーザーをプロビジョニングして、**Participant Dashboard Link** を開いてパイプラインマップを確認します。日ごとの完全なランブック — スモークテスト、一括プロビジョニング、モニタリング、撤去 — は **[docs/ja/ADMIN_GUIDE.md](ADMIN_GUIDE.md)** にあります。

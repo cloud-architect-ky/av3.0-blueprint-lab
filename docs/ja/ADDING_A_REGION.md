@@ -219,31 +219,59 @@ aws cognito-idp describe-user-pool-domain --domain av30lab-admin --region $R
 SHARED=av30lab-shared-data-$ACCOUNT-$R
 aws s3 sync notebooks/ "s3://$SHARED/notebook-templates/"        --region $R
 aws s3 sync scripts/   "s3://$SHARED/notebook-templates/scripts/" --region $R
+```
 
-AWS_REGION=$R ./scripts/stage_nuscenes.sh
-AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh
+### 次にデータ — 再ダウンロードではなく、バケット間コピーで
+
+`cache_models.sh` は Hugging Face から取得し（`HF_TOKEN` と、gated リポジトリごとのライセンス
+同意が必要）、そのうえでアップロードします。**2 つめ**のリージョンではこれは方向が逆です —
+バイトはすでに最初のリージョンのバケットにあります。代わりにリージョン間でコピーしてください。
+トークンもライセンス手続きも不要で、インターネット→手元→S3 ではなく S3→S3 で済みます:
+
+```bash
+SRC=av30lab-shared-data-$ACCOUNT-us-west-2     # すでにシード済みのリージョン
+DST=av30lab-shared-data-$ACCOUNT-$R
+
+# 大きいものから — 最も時間のかかる処理を先に開始させます。各コマンドは再開可能なので、再実行すれば続きから完了します。
+aws s3 sync "s3://$SRC/model-cache/"   "s3://$DST/model-cache/"   --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/hf-cache/"      "s3://$DST/hf-cache/"      --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/datasets/"      "s3://$DST/datasets/"      --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/m10-reference/" "s3://$DST/m10-reference/" --source-region us-west-2 --region $R
+```
+
+`stage_nuscenes.sh` / `cache_models.sh` を使うのは、コピー元になるシード済みリージョンが
+**ない場合だけ**です:
+
+```bash
+AWS_REGION=$R ./scripts/stage_nuscenes.sh                      # 公開ミラー、トークン不要
+AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh        # 約 157 GiB を再ダウンロード
 ```
 
 us-west-2 のソースバケットでの実測値:
 
-| プレフィックス | サイズ | オブジェクト数 | 必要とするもの |
+| プレフィックス | サイズ | オブジェクト数 | 欠けると壊れるモジュール |
 |---|---|---|---|
-| `notebook-templates/` | 0.55 MiB | 31 | **すべて** |
-| `datasets/`（nuScenes-mini） | 5.01 GiB | 31,225 | M1 |
+| `notebook-templates/` | 0.55 MiB | 31 | **すべて** — プロビジョニングが即座に失敗 |
+| `datasets/`（nuScenes-mini） | 5.01 GiB | 31,225 | M1, M2, M3, M5, M6, M7, M8, M9 |
+| `model-cache/` | 157.45 GiB | 1,707 | M2, M8, M9 |
+| `hf-cache/` | 115.00 GiB | 481 | M5, M6, M9 |
 | `m10-reference/` | 0.03 GiB | 16 | M10 の可視化 |
-| `m8-lora-probe/` | 3 KiB | 1 | M8 |
-| `hf-cache/` | 115.00 GiB | 481 | M5/M6/M9 のオフライン実行 |
-| `model-cache/` | 157.45 GiB | 1,707 | M2/M3 |
+| `m8-lora-probe/` | 3 KiB | 1 | 読み込むノートブックはない — 完全性のためのステージング |
 | **合計** | **277.49 GiB** | **33,457** | |
+
+推測ではなくノートブックを読んで確認した点: M5 と M6 は `scripts/setup_cosmos_env.sh` を通じて
+`hf-cache/hub/` を**間接的に**参照するため、この 2 つのノートブックでプレフィックスを grep しても
+見つかりません。**欠けたときの失敗の仕方がエラーではありません** — `setup_cosmos_env.sh` は
+`WARNING: restore failed; will fall back to online/token download` を出力し、そのフォールバックは
+参加者が持っていない `HF_TOKEN` と gated ライセンス同意を要求します。つまり `hf-cache/` を
+シードしないと、M5/M6/M9 はきれいな失敗ではなく参加者ごとのトークン探しに変わります。
 
 コスト: ap-northeast-2 でおよそ**一度きりの $5.73**（転送 + リクエスト）と、ストレージが
 **月 $6.94** です*（転送/リクエストの単価は定価。ソウルのストレージ単価 $0.025/GB-月 は
 API で確認済み）*。
 
-`hf-cache/` と `model-cache/` については、バケット間の `aws s3 sync` のほうが Hugging Face から
-再ダウンロードするより大幅に安く、速く済みます。なお `stage_nuscenes.sh` は `ap-northeast-1` にある
-公開の `s3://motional-nuscenes` から `--no-sign-request` で取得します。これは正しい挙動であり、
-リージョンに依存しません。
+なお `stage_nuscenes.sh` は `ap-northeast-1` にある公開の `s3://motional-nuscenes` から
+`--no-sign-request` で取得します。これは正しい挙動であり、リージョンに依存しません。
 
 > `aws s3 ls` が報告するのは**現行オブジェクトのみ**です。新しいバケットでバージョニングが有効な
 > 場合、実際に課金されるフットプリントはこれより大きくなります — このアカウントでは、報告値 298 GB に

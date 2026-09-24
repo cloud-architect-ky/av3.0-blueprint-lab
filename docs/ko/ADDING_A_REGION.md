@@ -221,30 +221,57 @@ aws cognito-idp describe-user-pool-domain --domain av30lab-admin --region $R
 SHARED=av30lab-shared-data-$ACCOUNT-$R
 aws s3 sync notebooks/ "s3://$SHARED/notebook-templates/"        --region $R
 aws s3 sync scripts/   "s3://$SHARED/notebook-templates/scripts/" --region $R
+```
 
-AWS_REGION=$R ./scripts/stage_nuscenes.sh
-AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh
+### 그다음 데이터 — 버킷 간 복사이며, 다시 내려받는 것이 아닙니다
+
+`cache_models.sh`는 Hugging Face에서 받아오고(`HF_TOKEN`과 gated 리포마다 라이선스
+동의가 필요합니다) 그다음에야 업로드합니다. **두 번째** 리전에서는 방향이 틀렸습니다 —
+바이트는 이미 첫 번째 리전 버킷에 있습니다. 대신 리전 간 복사하세요. 토큰도 라이선스
+단계도 필요 없고, 인터넷→내 PC→S3가 아니라 S3→S3입니다:
+
+```bash
+SRC=av30lab-shared-data-$ACCOUNT-us-west-2     # 이미 시딩된 리전
+DST=av30lab-shared-data-$ACCOUNT-$R
+
+# 큰 것부터 — 가장 오래 걸리는 작업이 먼저 시작됩니다. 각각 재개 가능하므로 다시 실행하면 이어서 끝냅니다.
+aws s3 sync "s3://$SRC/model-cache/"   "s3://$DST/model-cache/"   --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/hf-cache/"      "s3://$DST/hf-cache/"      --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/datasets/"      "s3://$DST/datasets/"      --source-region us-west-2 --region $R
+aws s3 sync "s3://$SRC/m10-reference/" "s3://$DST/m10-reference/" --source-region us-west-2 --region $R
+```
+
+복사해 올 시딩된 리전이 **없을 때만** `stage_nuscenes.sh` / `cache_models.sh`를 쓰세요:
+
+```bash
+AWS_REGION=$R ./scripts/stage_nuscenes.sh                      # 공개 미러, 토큰 불필요
+AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh        # 약 157 GiB 재다운로드
 ```
 
 us-west-2 원본 버킷에서 실측한 값:
 
-| 프리픽스 | 크기 | 객체 수 | 필요한 곳 |
+| 프리픽스 | 크기 | 객체 수 | 없으면 깨지는 모듈 |
 |---|---|---|---|
-| `notebook-templates/` | 0.55 MiB | 31 | **전부** |
-| `datasets/` (nuScenes-mini) | 5.01 GiB | 31,225 | M1 |
+| `notebook-templates/` | 0.55 MiB | 31 | **전부** — 프로비저닝이 즉시 실패 |
+| `datasets/` (nuScenes-mini) | 5.01 GiB | 31,225 | M1, M2, M3, M5, M6, M7, M8, M9 |
+| `model-cache/` | 157.45 GiB | 1,707 | M2, M8, M9 |
+| `hf-cache/` | 115.00 GiB | 481 | M5, M6, M9 |
 | `m10-reference/` | 0.03 GiB | 16 | M10 시각화 |
-| `m8-lora-probe/` | 3 KiB | 1 | M8 |
-| `hf-cache/` | 115.00 GiB | 481 | M5/M6/M9 오프라인 |
-| `model-cache/` | 157.45 GiB | 1,707 | M2/M3 |
+| `m8-lora-probe/` | 3 KiB | 1 | 읽는 노트북이 없음 — 완전성을 위해 스테이징 |
 | **합계** | **277.49 GiB** | **33,457** | |
+
+추측이 아니라 노트북을 읽어서 확인한 사항: M5와 M6은 `scripts/setup_cosmos_env.sh`를
+통해 `hf-cache/hub/`를 **간접적으로** 사용하므로, 두 노트북에서 프리픽스를 grep해도
+나오지 않습니다. **없을 때의 실패 방식이 에러가 아닙니다** — `setup_cosmos_env.sh`는
+`WARNING: restore failed; will fall back to online/token download`를 남기고, 그 폴백은
+참가자에게 없는 `HF_TOKEN`과 gated 라이선스 동의를 요구합니다. 즉 `hf-cache/`를
+시딩하지 않으면 M5/M6/M9은 깔끔한 실패가 아니라 참가자별 토큰 구하기로 변합니다.
 
 비용: ap-northeast-2에서 대략 **1회성 $5.73**(전송 + 요청)과 스토리지 **$6.94/month**
 *(전송/요청 단가는 정가이며, 서울 스토리지 요율 $0.025/GB-mo는 API로 확인했습니다)*.
 
-`hf-cache/`와 `model-cache/`는 Hugging Face에서 다시 내려받는 것보다 버킷 간
-`aws s3 sync`가 훨씬 싸고 빠릅니다. `stage_nuscenes.sh`는 `ap-northeast-1`의 공개
-버킷 `s3://motional-nuscenes`에서 `--no-sign-request`로 가져오는데, 이는 의도된
-동작이며 리전과 무관합니다.
+`stage_nuscenes.sh`는 `ap-northeast-1`의 공개 버킷 `s3://motional-nuscenes`에서
+`--no-sign-request`로 가져오는데, 이는 의도된 동작이며 리전과 무관합니다.
 
 > `aws s3 ls`는 **현재 객체만** 보고합니다. 새 버킷에 버저닝이 켜져 있으면 실제 과금
 > 용량은 더 큽니다 — 이 계정에서는 이미 298 GB로 보고된 것이 실제로는 441.7 GB로

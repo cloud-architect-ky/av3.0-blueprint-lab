@@ -18,15 +18,37 @@ export interface User {
   region?: string;
 }
 
+/**
+ * One row of GET /sessions. These names are a CONTRACT with
+ * infra/lambda/list_sessions/handler.py — they did not match it until recently, and
+ * because TypeScript cannot see across that boundary every mismatch compiled fine
+ * and failed at runtime: `costToday` was absent, so `s.costToday.toFixed(2)` threw
+ * inside the table's cell renderer and blanked the page; `sessionId` was absent, so
+ * the terminate button requested /sessions/undefined; and `gpuType` was absent, so
+ * the "GPU sessions" count matched every row (undefined !== null). Change both sides
+ * together.
+ */
 export interface Session {
+  /** Same value as userId — what the table trackBy and the action buttons use. */
   sessionId: string;
   userId: string;
   userName: string;
   instanceType: string;
-  status: "active" | "idle" | "offline";
+  /**
+   * Every state the backend actually writes. "idle" is NOT one of them — it was in
+   * this union while "provisioning" and "stopping" (both written by create_user and
+   * change_instance) were missing, so real rows fell outside the declared type.
+   */
+  status: "active" | "offline" | "provisioning" | "stopping";
   startedAt: string;
+  /** GPU model (e.g. "L4", "A100"), or null for a CPU instance. */
   gpuType: string | null;
+  /** Spend since 00:00 UTC today — matches the "Cost Today" column and tile. */
   costToday: number;
+  /** Spend since the participant was provisioned. Not currently displayed. */
+  estimatedCostTotal?: number;
+  currentModule?: string | null;
+  storageGB?: number;
   /** Region this session's instance actually runs in. "" for pre-existing rows. */
   region?: string;
 }

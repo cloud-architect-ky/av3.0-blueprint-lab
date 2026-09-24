@@ -94,13 +94,18 @@ export function SessionsPage() {
     }
   };
 
+  // Covers every status list_sessions can write. This previously handled "idle",
+  // which the backend never produces, and had no branch for "provisioning" or
+  // "stopping" — both real — so a session mid-provision rendered as "stopped".
   const statusType = (status: Session["status"]) => {
     switch (status) {
       case "active":
         return "success";
-      case "idle":
+      case "provisioning":
+        return "in-progress";
+      case "stopping":
         return "warning";
-      default:
+      case "offline":
         return "stopped";
     }
   };

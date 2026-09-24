@@ -204,20 +204,40 @@ def buckets_for(region: str) -> tuple:
 # Only families that also have INSTANCE_RATES entries belong here. A prefix
 # without a rate is harmless (change_instance rejects on the rate table) but
 # implies support that does not exist — so g6e and g7 are deliberately absent.
-_GPU_INSTANCE_PREFIXES = (
-    "ml.g4dn.",
-    "ml.g5.",
-    "ml.g6.",
-    "ml.g7e.",
-    "ml.p3.",
-    "ml.p4d.",
-    "ml.p5.",
-)
+#
+# Keyed by prefix so the family -> GPU-model mapping and the "is this a GPU box"
+# test cannot drift apart: _GPU_INSTANCE_PREFIXES is DERIVED from this dict, so
+# adding a family here automatically teaches both. Models match the reference
+# table further down this file (g4dn=T4, g5=A10G, g6=L4, p4d=A100, p5=H100).
+_GPU_MODEL_BY_PREFIX = {
+    "ml.g4dn.": "T4",
+    "ml.g5.": "A10G",
+    "ml.g6.": "L4",
+    "ml.g7e.": "RTX PRO 6000",
+    "ml.p3.": "V100",
+    "ml.p4d.": "A100",
+    "ml.p5.": "H100",
+}
+_GPU_INSTANCE_PREFIXES = tuple(_GPU_MODEL_BY_PREFIX)
 
 
 def is_gpu_instance(instance_type: str) -> bool:
     """True if instance_type belongs to a GPU-accelerated family."""
     return instance_type.startswith(_GPU_INSTANCE_PREFIXES)
+
+
+def gpu_model(instance_type: str) -> str | None:
+    """GPU model name for an instance type, or None for a CPU instance.
+
+    Returns None rather than "" or "none" because the admin Sessions page counts
+    GPU sessions with `gpuType !== null`. Any non-null placeholder would make every
+    CPU session count as a GPU session — which is exactly what happened while this
+    field was absent from the API response entirely (undefined !== null is true).
+    """
+    for prefix, model in _GPU_MODEL_BY_PREFIX.items():
+        if instance_type.startswith(prefix):
+            return model
+    return None
 
 
 def image_for_instance(instance_type: str) -> str:

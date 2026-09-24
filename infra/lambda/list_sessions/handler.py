@@ -14,7 +14,7 @@ import boto3
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
 
-from config import INSTANCE_RATES, SESSIONS_TABLE_NAME
+from config import INSTANCE_RATES, SESSIONS_TABLE_NAME, gpu_model
 from errors import api_handler
 
 logger = logging.getLogger()
@@ -24,21 +24,42 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource("dynamodb")
 
 
-def calculate_estimated_cost(item: dict, now: datetime) -> float:
-    """Calculate estimated cost based on running time and instance rate."""
-    start_time_str = item.get("createdAt")
-    instance_type = item.get("instanceType", "ml.t3.medium")
-
-    if not start_time_str:
-        return 0.0
-
+def _start_time(item: dict) -> datetime | None:
+    """Parse the session start, or None if it is missing/unparseable."""
+    raw = item.get("createdAt")
+    if not raw:
+        return None
     try:
-        start_time = datetime.fromisoformat(start_time_str)
+        return datetime.fromisoformat(raw)
     except (ValueError, TypeError):
+        return None
+
+
+def calculate_estimated_cost(item: dict, now: datetime, *, since_midnight: bool) -> float:
+    """Estimated spend for one session, from INSTANCE_RATES x elapsed hours.
+
+    `since_midnight=True` clamps the window to 00:00 UTC today. That is what the
+    admin column labelled "Cost Today" needs: billing from createdAt would report a
+    participant provisioned four days ago as having spent four days of money today,
+    and the page also SUMS these into a "today's cost" tile. Pass False for the
+    run-to-date figure.
+
+    Note this bills from when the user was PROVISIONED, not from when their current
+    app started, and it does not subtract time the app spent stopped — so it is an
+    upper bound, which is the safe direction for a cost guardrail.
+    """
+    start_time = _start_time(item)
+    if start_time is None:
         return 0.0
+
+    if since_midnight:
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_time = max(start_time, midnight)
 
     elapsed_hours = (now - start_time).total_seconds() / 3600
-    rate = INSTANCE_RATES.get(instance_type, 0.0)
+    if elapsed_hours <= 0:
+        return 0.0
+    rate = INSTANCE_RATES.get(item.get("instanceType", "ml.t3.medium"), 0.0)
     return round(elapsed_hours * rate, 4)
 
 
@@ -63,23 +84,44 @@ def handler(event, context):
 
     for item in items:
         status = item.get("status", "offline")
-        estimated_cost = 0.0
+        instance_type = item.get("instanceType", "ml.t3.medium")
+        user_id = item.get("userId")
 
+        cost_today = 0.0
+        cost_total = 0.0
         if status != "offline":
-            estimated_cost = calculate_estimated_cost(item, now)
+            cost_today = calculate_estimated_cost(item, now, since_midnight=True)
+            cost_total = calculate_estimated_cost(item, now, since_midnight=False)
 
+        # FIELD NAMES ARE A CONTRACT with web/admin/src/pages/SessionsPage.tsx. They
+        # previously did NOT match, and every mismatch failed silently in a different
+        # way: the page reads s.costToday and called .toFixed(2) on it, so an
+        # undefined threw inside the cell renderer and blanked the whole table; it
+        # reads s.sessionId and passed it to terminateSession(), so the request went
+        # to /sessions/undefined; and it counts GPU boxes with `gpuType !== null`,
+        # which an absent field satisfies for EVERY row. Keep these keys in step with
+        # the Session interface in web/admin/src/api/client.ts.
         sessions.append(
             {
-                "userId": item.get("userId"),
-                "name": item.get("name"),
+                # The terminate/instance-type/storage routes all key on the userId,
+                # so that is what the page must hand back. Same value, two names:
+                # sessionId is what the table trackBy + action buttons use.
+                "sessionId": user_id,
+                "userId": user_id,
+                "userName": item.get("name"),
                 "status": status,
-                "instanceType": item.get("instanceType", "ml.t3.medium"),
+                "instanceType": instance_type,
+                # null (not "" or "none") for CPU — the page's GPU count is
+                # `gpuType !== null`, so any truthy placeholder over-counts.
+                "gpuType": gpu_model(instance_type),
+                "startedAt": item.get("createdAt"),
+                "costToday": cost_today,
+                # Run-to-date, for context; the page currently shows only costToday.
+                "estimatedCostTotal": cost_total,
                 "currentModule": item.get("currentModule"),
                 # See list_users: region must be visible or a mis-regioned session
                 # looks identical to a healthy one.
                 "region": item.get("region", ""),
-                "estimatedCost": estimated_cost,
-                "startTime": item.get("createdAt"),
                 "storageGB": item.get("storageGB", 5),
             }
         )
@@ -89,7 +131,7 @@ def handler(event, context):
     sessions.sort(
         key=lambda s: (
             status_priority.get(s["status"], 9),
-            -s["estimatedCost"],
+            -s["costToday"],
         )
     )
 

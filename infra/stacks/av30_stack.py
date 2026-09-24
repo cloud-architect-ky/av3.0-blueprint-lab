@@ -103,6 +103,15 @@ class Av30BlueprintLabStack(cdk.Stack):
             self,
             "Auth",
             dashboard_url=admin_dashboard.url,
+            # The hosted-UI prefix namespace is PER REGION, not global — verified:
+            # av30lab-admin is ACTIVE in us-west-2 and free in ap-northeast-2,
+            # eu-west-1 and us-east-1 (the region is part of the hostname,
+            # <prefix>.auth.<region>.amazoncognito.com). So a second region can reuse
+            # the same prefix and needs no rename. Overridable anyway, for the case
+            # where another AWS account has already taken it in the target region.
+            hosted_ui_prefix=(
+                self.node.try_get_context("hosted_ui_prefix") or "av30lab-admin"
+            ),
         )
 
         # Monitoring layer: SNS notifications + daily budget alarm

@@ -30,7 +30,7 @@ explicitly with --image-arn if you need a specific image.
 
 CREDENTIALS / REGION
     Uses the standard boto3 credential chain (env vars, ~/.aws, SSO, instance role).
-    Default region is us-west-2; override with --region or AWS_REGION.
+    Region is REQUIRED (--region or AWS_REGION); it is never defaulted.
 
 TYPICAL USAGE
     # Auto-detect the (single) domain and JupyterLab space, loop until a GPU lands:
@@ -432,7 +432,17 @@ def main() -> int:
         description="Auto-grab an available GPU instance for a JupyterLab space.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--region", default=os.environ.get("AWS_REGION", "us-west-2"))
+    # No region literal. This tool DELETES and recreates the target JupyterLab app, so a
+    # wrong-region default is destructive: with AWS_REGION unset it used to build a
+    # us-west-2 client, auto-resolve the single domain there, and kill a live region-1
+    # participant's workspace while the operator believed they were acting on region 2.
+    p.add_argument(
+        "--region",
+        default=os.environ.get("AWS_REGION"),
+        help="Target region. Required: set --region or AWS_REGION. Never defaulted, "
+             "because this tool recreates a participant's app and a wrong region "
+             "destroys the wrong person's workspace.",
+    )
     p.add_argument("--profile", default=None,
                    help="AWS profile name (default: standard credential chain)")
     p.add_argument("--domain-id", default=None,
@@ -469,6 +479,9 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true",
                    help="Resolve domain/space and print the plan without mutating.")
     args = p.parse_args()
+    if not args.region:
+        p.error("no region: pass --region or set AWS_REGION. This tool recreates a\n"
+                "participant's JupyterLab app, so it refuses to guess.")
 
     session = (boto3.Session(profile_name=args.profile)
                if args.profile else boto3.Session())

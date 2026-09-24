@@ -72,9 +72,25 @@ class ApiConstruct(Construct):
         stack = cdk.Stack.of(self)
 
         # --- REST API ---
+        # cloud_watch_role: CDK creates an AWS::ApiGateway::Account when this is true, and
+        # that resource is a per-account-PER-REGION SINGLETON implemented as an
+        # unconditional PATCH /account — it OVERWRITES whatever cloudwatchRoleArn the
+        # region already has, and removes it on stack delete. Measured in this account:
+        #   us-west-2      -> this lab's own role
+        #   ap-northeast-1 -> inspection-kzsaka-apigw-cloudwatch      (another stack)
+        #   ap-northeast-2 -> FAST-stack-...FeedbackApiCloudWatchRol  (another stack)
+        #   eu-west-1      -> none
+        # So deploying this lab into ap-northeast-1/2 would silently break an unrelated
+        # stack's API access logging. Default OFF unless the region is known to be free;
+        # set -c apigw_account_role=true only after confirming with
+        #   aws apigateway get-account --region <r> --query cloudwatchRoleArn
+        # returns None. Access logging for THIS api's stage does not depend on it.
+        _apigw_account_role = bool(self.node.try_get_context("apigw_account_role"))
+
         self._api = apigw.RestApi(
             self,
             "Api",
+            cloud_watch_role=_apigw_account_role,
             rest_api_name="av30-api",
             description="AV 3.0 Blueprint Lab API",
             deploy_options=apigw.StageOptions(

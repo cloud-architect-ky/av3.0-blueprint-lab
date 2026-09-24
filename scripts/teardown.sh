@@ -22,7 +22,18 @@
 # double-guarded (tag:Participant AND tag:Name=av30-alpasim-*).
 set -uo pipefail
 
-REGION="${AWS_REGION:-us-west-2}"
+# Region must be explicit. It used to default to the literal "us-west-2", which made
+# this script actively dangerous once a second region exists: running it with AWS_REGION
+# unset to reclaim region B would silently delete the FIRST, live deployment — its Studio
+# apps, spaces, user profiles, AOSS collections and, with --destroy, the whole stack.
+# The old confirmation prompt could not catch it either, because it only asked for the
+# ACCOUNT id, which is identical for every region.
+REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null)}"
+if [ -z "$REGION" ]; then
+  echo "ERROR: no region. Set AWS_REGION (or a profile region) explicitly — this" >&2
+  echo "       script will not guess, because guessing deletes the wrong region." >&2
+  exit 2
+fi
 STACK_NAME="Av30BlueprintLabStack"
 TABLE="av30-sessions-v2"
 
@@ -52,8 +63,19 @@ echo "  Stack:        $STACK_NAME"
 [ -n "$ONLY_USER" ] && echo "  Scoped to:    $ONLY_USER  (global AOSS sweep §2 skipped)"
 echo "================================================================"
 if $YES; then
-  read -r -p "Type the account id ($ACCOUNT) to proceed: " CONF
-  [ "$CONF" = "$ACCOUNT" ] || { echo "Aborted."; exit 1; }
+  # Require account/REGION, not just the account: the account id is the same for every
+  # region, so it could never distinguish "tear down region B" from "tear down the live
+  # primary". Typing the region is the only thing that makes the target unambiguous.
+  read -r -p "Type \"$ACCOUNT/$REGION\" to proceed: " CONF
+  [ "$CONF" = "$ACCOUNT/$REGION" ] || { echo "Aborted."; exit 1; }
+  # And confirm a stack actually exists in the region being torn down, so a typo'd or
+  # stale region cannot start sweeping resources that belong to something else.
+  if ! aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+        --region "$REGION" >/dev/null 2>&1; then
+    echo "ERROR: no stack $STACK_NAME in $REGION — refusing to sweep a region this" >&2
+    echo "       lab was never deployed to." >&2
+    exit 1
+  fi
 fi
 
 # ── Resolve resources from stack outputs (deterministic-name fallback) ───────

@@ -60,13 +60,22 @@ def generate_user_id(name: str) -> str:
     return f"{slug}-{suffix}"
 
 
-def copy_notebook_templates(user_id: str) -> None:
-    """Copy notebook templates from shared bucket to user workspace."""
+def copy_notebook_templates(user_id: str) -> int:
+    """Copy notebook templates into the user's workspace. Returns the count copied.
+
+    RAISES when nothing was copied. An empty/absent notebook-templates/ prefix used to
+    be indistinguishable from success: the paginator yields a page with no "Contents"
+    key, the loop body never runs, and this returned None to a caller that ignored it.
+    The participant then received an EMPTY workspace and provisioning still answered
+    HTTP 200. That is the expected state of a NEW REGION's shared-data bucket before it
+    is seeded, so silently succeeding there would hand a whole cohort empty workspaces.
+    """
     paginator = s3.get_paginator("list_objects_v2")
     pages = paginator.paginate(
         Bucket=SHARED_BUCKET_NAME, Prefix=NOTEBOOK_TEMPLATES_PREFIX
     )
 
+    copied = 0
     for page in pages:
         for obj in page.get("Contents", []):
             source_key = obj["Key"]
@@ -84,6 +93,19 @@ def copy_notebook_templates(user_id: str) -> None:
                 Key=dest_key,
             )
             logger.info(f"Copied {source_key} -> {dest_key}")
+            copied += 1
+
+    if copied == 0:
+        raise ApiError(
+            500,
+            "Notebook templates are not staged in this region",
+            details=(
+                f"s3://{SHARED_BUCKET_NAME}/{NOTEBOOK_TEMPLATES_PREFIX} is empty, so "
+                f"this participant would get an empty workspace. Publish the templates "
+                f"first (README deploy Step 8 / ADMIN_GUIDE §6.5)."
+            ),
+        )
+    return copied
 
 
 @api_handler

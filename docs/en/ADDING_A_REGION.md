@@ -57,19 +57,67 @@ Collision-free: every bootstrap role name carries `-{account}-{region}`.
 
 ## 2. Quotas (do this ~a week ahead)
 
-Quota **codes** are region-independent. **Values are not**, and the default for the GPU
-workhorse is frequently **0**. Measured:
+**Scope: a quota is `(account × region)`.** The console's "Applied **account-level** quota
+value" column and "Adjustability: **Account level**" read like "one value for the whole
+account" — they do not mean that. Those labels render a **different field** from the one
+that answers the region question, and the API makes the two explicit:
 
-| Quota (Studio apps) | Code | us-west-2 | ap-northeast-2 | Need (10 people) |
+| Field | Question it answers | Value here |
+|---|---|---|
+| `QuotaAppliedAtLevel` | account **vs resource** — what the console labels | `ACCOUNT` |
+| `GlobalQuota` | account-global **vs per-region** | `false` |
+
+`list-service-quotas --quota-applied-at-level` takes the enum `[ALL, ACCOUNT, RESOURCE]`
+and its own help says it "filters the response to return applied quota values for the
+ACCOUNT, RESOURCE, or ALL levels". So *account-level* is the opposite of *resource-level*
+(adjusted for the account rather than per individual resource) **within whichever region
+the console is currently showing**. It says nothing about cross-region sharing.
+
+Three independent proofs of the region scope:
+
+- **`GlobalQuota`** is `false` for all **2,258** SageMaker quotas (full paginated count).
+  For contrast: IAM 23/23 and Route 53 9/9 are `true`, and S3 is mixed — `General purpose
+  buckets` is `true` while its replication quotas are `false`.
+- The `QuotaArn` embeds the region, so they are distinct resources:
+  `arn:aws:servicequotas:us-west-2:…:sagemaker/L-8ACE1754` vs
+  `arn:aws:servicequotas:ap-northeast-2:…:sagemaker/L-8ACE1754`.
+- Same account, same code, **different applied values** (2 vs 0), with two entirely
+  separate `list-requested-service-quota-change-history` streams — increases are filed and
+  approved per region.
+
+So an increase granted in region A does nothing for region B. Quota **codes** are shared;
+**values, requests and even which quotas exist** are not — `ml.g6.24xlarge for notebook
+instance usage` exists in us-west-2 and does not exist in ap-northeast-2 at all (10 vs 9
+search hits for "g6.24xlarge").
+
+### Measured for the instance types this lab actually offers
+
+| Quota (Studio JupyterLab apps) | Code | us-west-2 | ap-northeast-2 | Used by |
 |---|---|---|---|---|
-| `ml.t3.medium` | `L-71FAF417` | 2500 | 2500 | ≥ 20 |
-| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | ≥ 5 (M10) |
-| `ml.g5.12xlarge` | `L-8D2ED7BF` | 5 | 5 | ≥ 5 (M2/M3) |
-| **`ml.g6.24xlarge`** | **`L-8ACE1754`** | 2 | **0** ⚠ | ≥ 2 (most GPU modules) |
-| `ml.m5.xlarge` *training* | `L-CCE2AFA6` | 30 | 30 | ≥ 2 (M12) |
-| `ml.m5.xlarge` *processing* | `L-0307F515` | 16 | 16 | ≥ 1 (M11) |
+| `ml.t3.medium` | `L-71FAF417` | 2500 | 2500 | default workspace |
+| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M10 |
+| `ml.g5.12xlarge` | `L-8D2ED7BF` | 5 | 5 | M2/M3 |
+| `ml.g5.24xlarge` | `L-F087CCFC` | 2 | 2 | M4/M5/M6 (24 GB tier) |
+| `ml.g5.48xlarge` | `L-83AB5D73` | 2 | 2 | M6 sharded |
+| `ml.p4d.24xlarge` | `L-AD63F1D2` | 2 | **2** | 40 GB tier — 720p, guardrails ON |
+| **`ml.g6.12xlarge`** | `L-962247BA` | 2 | **0** ⚠ | M2/M3 alternative |
+| **`ml.g6.24xlarge`** | `L-8ACE1754` | 2 | **0** ⚠ | documented default for M4–M9 |
+| `ml.p5.48xlarge` | `L-B41FBF28` | 1 | **0** | 80 GB tier |
+| `ml.m5.xlarge` *training* | `L-CCE2AFA6` | 30 | 30 | M12 |
+| `ml.m5.xlarge` *processing* | `L-0307F515` | 16 | 16 | M11 |
+
+**The whole `g6` and `g6e` family is 0 in ap-northeast-2** — not just the 24xlarge. `g7e`
+is 0 in *both* regions.
+
+**But Seoul is not GPU-blocked.** `g5` is available across the full range and
+`p4d.24xlarge` is already approved at 2, so the lab runs there today with **no quota
+request at all**: use `ml.g5.12xlarge` for M2/M3 and `ml.g5.24xlarge` for M4/M5/M6 (same
+~22.5 GB-per-GPU tier as the g6 default, ~22% dearer), with `ml.p4d.24xlarge` as the
+quality option. Request `g6` only if you want the documented default — and note the price
+there is ~23% above us-west-2 either way.
 
 ```bash
+# Only if you want the g6 default. Must be filed IN the target region.
 aws service-quotas request-service-quota-increase --region $R \
   --service-code sagemaker --quota-code L-8ACE1754 --desired-value 10
 ```

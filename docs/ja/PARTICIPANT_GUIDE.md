@@ -92,7 +92,7 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 | M5 Cosmos Transfer (Weather Aug) | **`ml.g5.12xlarge`** | GPU（4× A10G、GPU あたり 24 GB） — 480p で実行; 下のティア表を参照 |
 | M6 Cosmos Predict (Scenario Gen) | **`ml.g5.12xlarge`** | GPU（4× A10G） — 480×832 で実行; 下のティア表を参照 |
 | M7 Nerfstudio 3D Reconstruction | `ml.g5.xlarge` | GPU（1× A10G）— ⚠️ **既知の制限あり**：GPU チェックとデータ準備のセルは実行されますが、最終的な 3D トレーニングのセル（splatfacto）は現在のイメージでは実行されません。M7 はオプション／デモモジュールとして扱ってください（下記の注記を参照）。 |
-| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU（4× A10G）— 4× 24 GB でネイティブ 1600×900 を実測: 最悪 GPU ピーク 11.28 GiB、余裕 10.76 GiB。GPU 2 枚以上（または 40 GB 以上 1 枚）が必要。 |
+| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU（4× A10G）— ネイティブ 1600×900 で学習。VRAM は同じ 22,888 MiB 形状の **4× L4 で実測**: 最悪 GPU ピーク 11.28 GiB、余裕 10.76 GiB。GPU 2 枚以上（または 40 GB 以上 1 枚）が必要。**どのハードウェアでも end-to-end 実行の記録はまだありません。** |
 | M9 Alpamayo VLA Inference | **`ml.g5.12xlarge`** | GPU（4× A10G） — シャーディング "balanced-expert" 経路; 合格した実行（minADE 0.3779）は A10G 上のものです |
 | M10 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU（本物の AlpaSim の結果を可視化。実際のシミュレーションは GPU EC2 ホスト上で実行 — 管理者リファレンス、または SSM 経由の自己実行） |
 | M11 Pipeline Automation | `ml.t3.medium` | CPU |

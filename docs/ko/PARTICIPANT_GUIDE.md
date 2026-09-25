@@ -95,7 +95,7 @@ GPU 이미지와 노트북 동기화를 대신 처리합니다.
 | M5 Cosmos Transfer (날씨 증강) | **`ml.g5.12xlarge`** | GPU (4× A10G, GPU당 24 GB) — 480p로 실행; 아래 티어 표 참조 |
 | M6 Cosmos Predict (시나리오 생성) | **`ml.g5.12xlarge`** | GPU (4× A10G) — 480×832로 실행; 아래 티어 표 참조 |
 | M7 Nerfstudio 3D 재구성 | `ml.g5.xlarge` | GPU (1× A10G) — ⚠️ **제한적으로 동작**: GPU 확인 + 데이터 준비 셀은 실행되지만, 최종 3D 학습 셀(splatfacto)은 현재 이미지에서 실행되지 않습니다. M7은 선택/데모 모듈로 취급하세요(아래 참고 사항 참조). |
-| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU (4× A10G) — 4× 24 GB에서 네이티브 1600×900 실측: 최악 GPU 피크 11.28 GiB, 여유 10.76 GiB. GPU 2장 이상(또는 40 GB 이상 1장) 필요. |
+| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU (4× A10G) — 네이티브 1600×900으로 학습. VRAM은 같은 22,888 MiB 지오메트리인 **4× L4에서 실측**: 최악 GPU 피크 11.28 GiB, 여유 10.76 GiB. GPU 2장 이상(또는 40 GB 이상 1장) 필요. **어떤 하드웨어에서도 end-to-end 실행 기록은 아직 없습니다.** |
 | M9 Alpamayo VLA 추론 | **`ml.g5.12xlarge`** | GPU (4× A10G) — 샤딩 "balanced-expert" 경로; 통과한 실행(minADE 0.3779)은 A10G에서 나왔습니다 |
 | M10 AlpaSim 폐루프 평가 | `ml.t3.medium` | CPU (실제 AlpaSim 결과를 시각화; 실제 시뮬레이션은 GPU EC2 호스트에서 실행 — 관리자 레퍼런스 또는 SSM을 통한 본인 실행) |
 | M11 파이프라인 자동화 | `ml.t3.medium` | CPU |

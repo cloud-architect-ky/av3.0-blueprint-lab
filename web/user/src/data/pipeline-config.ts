@@ -95,11 +95,14 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     sourceUrl: "https://github.com/nvidia-cosmos/cosmos-cookbook/tree/main/docs/recipes/post_training/reason1/av_video_caption_vqa",
     // Stage 3 — Cosmos Reason 1 (Qwen2.5-VL) needs ~96 GB VRAM.
     recommendedInstance: "ml.g5.12xlarge",
+    // Ordered so the first fallback is a type every deploy region sells. ml.g6.* trails:
+    // it is quota 0 in ap-northeast-2, where change_instance rejects it with a 400. g7e is
+    // omitted entirely — not sold for Studio in ap-northeast-2, so it would be a dead end.
     // ml.g6.12xlarge (4× L4 24 GB) is the capacity fallback when g5 is unavailable
     // — same 96 GB total as g5.12xlarge, so it clears M2's gate identically.
     // ml.g7e.2xlarge reaches the same 96 GB on ONE card and is cheaper ($4.20 vs
     // $7.09); M2's gate is on TOTAL VRAM (with 10% tolerance), so it passes.
-    alternatives: ["ml.g6.12xlarge", "ml.g7e.2xlarge", "ml.g6.24xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
+    alternatives: ["ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge", "ml.g6.12xlarge", "ml.g6.24xlarge"],
     storageGB: 100,
     estimatedMinutes: 45,
     awsAdvantage:
@@ -109,9 +112,9 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     feedsModules: ["m03-cosmos-curator", "m04-opensearch"],
     errorHints: {
       "No GPU detected":
-        "You are on a CPU instance. Open Instance Options and switch to ml.g5.12xlarge (or ml.g6.12xlarge). The GPU image is applied automatically — reopen the workspace after it restarts.",
+        "You are on a CPU instance. Open Instance Options and switch to ml.g5.12xlarge. The GPU image is applied automatically — reopen the workspace after it restarts.",
       "EC2InsufficientCapacity":
-        "ml.g5.12xlarge capacity is tight in the region. Pick the ml.g6.12xlarge alternative (4× L4, 96 GB total) instead — same total VRAM, so M2 behaves identically.",
+        "ml.g5.12xlarge capacity is tight in the region. Pick ml.g5.24xlarge or ml.g5.48xlarge from Instance Options — M2 gates on TOTAL VRAM, so any of them behaves identically. (ml.g6.12xlarge also matches on paper but has quota 0 in ap-northeast-2, where the dashboard will refuse it.)",
     },
   },
   {
@@ -125,7 +128,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // NVIDIA/NeMo-Curator silently redirects to a new org + name; pin the real one.
     sourceUrl: "https://github.com/NVIDIA-NeMo/Curator",
     recommendedInstance: "ml.g5.12xlarge",
-    alternatives: ["ml.g6.12xlarge", "ml.g7e.2xlarge", "ml.g6.24xlarge", "ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
+    alternatives: ["ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge", "ml.g6.12xlarge", "ml.g6.24xlarge"],
     storageGB: 100,
     estimatedMinutes: 40,
     awsAdvantage:
@@ -192,29 +195,46 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // quota, so the change is accepted, the app never starts, and a failed instance change
     // leaves the space pinned to an unlaunchable type.
     //
-    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
-    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
-    // label used elsewhere is a misattribution of a g5 result.
+    // WHAT IS ACTUALLY MEASURED — an earlier version of this comment had it backwards and
+    // called the "g6.24xlarge verified" label a misattribution. It was not. There are two
+    // independent bodies of evidence, on different axes:
     //
-    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
-    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
-    // it takes the same branch; nobody has watched it finish.
+    //   4 GPUs: examples/notebooks-with-outputs.tar.gz holds captured Run-All output for
+    //           M2, M5, M6 and M9 on 4x NVIDIA L4, 88.1 GB aggregate -- i.e. exactly the
+    //           ml.g6.24xlarge geometry AND its silicon. M9 recorded minADE 0.3805,
+    //           "Status: PASS", device_map=balanced-expert. The inference cells are
+    //           unchanged since (M9 cell 3, the deciding gate, is byte-identical).
+    //   A10G:   docs/en/ALPAMAYO_M9.md:181-187 records M9 passing on 8x A10G
+    //           (ml.g5.48xlarge), minADE 0.378 / 0.3779.
+    //
+    // So (4 GPUs) and (A10G) are each measured; the (4x A10G) PAIR is not itself captured.
+    // Nothing in any heavy module branches on GPU name, compute capability or driver -- the
+    // gates read per-GPU VRAM and GPU count only, and props.name appears solely inside
+    // print f-strings -- so there is no mechanism by which this pair can diverge from the
+    // captured 4x L4 runs. The reason to prefer g5.12xlarge is quota and price, NOT a
+    // better verification story.
+    //
+    // GENUINELY UNVERIFIED: M8 has no end-to-end run on ANY hardware. Its cell 2 carries a
+    // targeted VRAM bench on 4x L4 (11.28 GiB peak / 10.76 GiB spare at native 1600x900),
+    // but the train / A-B generate / adapter-save cells have never been watched to finish.
     recommendedInstance: "ml.g5.12xlarge",
-    // Ordered by capability-per-dollar. g7e (96 GB/card) clears the per-GPU tier
-    // and is CHEAPER than the default, so it leads; p4d/p5 also clear it but cost
-    // more. The g5/g6 entries are 24 GB/GPU like the default — capacity
-    // fallbacks, NOT upgrades (ml.g5.24xlarge is the same tier at +22% cost).
+    // Ordered so the first thing offered on a capacity error is a type the deploy region
+    // actually sells. g7e is NOT listed: ap-northeast-2 does not sell it for Studio at all,
+    // so it would be a dead end there (and it remains unrun in this lab anyway).
+    // ml.g5.24xlarge / ml.g5.48xlarge are 24 GB/GPU like the default -- capacity fallbacks,
+    // NOT upgrades; g5.24xlarge is the same 4-GPU tier at +44% cost. ml.p4d.24xlarge is the
+    // only genuine tier-up here (40 GB/GPU), and it has quota 2 in both regions.
     alternatives: ["ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) generates weather-augmented clips by sharding across GPUs; EBS-backed scratch keeps intermediate frames off S3. The notebook branches on PER-GPU VRAM: under 38 GB it runs 480p with guardrails OFF (16 of 57 frames). For full 720p with guardrails ON you need ≥38 GB/GPU — in both regions that means ml.p4d.24xlarge (4× A100 40 GB). Not ml.g7e.2xlarge — ONE RTX PRO 6000 Blackwell with 96 GB, ~$4.20/hr, i.e. better output at half the default's price (needs its own quota; not yet run in this lab). ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) also clears the tier. No g5/g6 size does: bigger sizes add GPUs, not per-GPU VRAM.",
+      "ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) generates weather-augmented clips by sharding across GPUs; EBS-backed scratch keeps intermediate frames off S3. The notebook branches on PER-GPU VRAM: under 38 GB it runs 480p with guardrails OFF (16 of 57 frames). For full 720p with guardrails ON you need ≥38 GB per GPU, and in both regions that means ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr). No g5 or g6 size reaches that tier: a bigger size adds GPUs, not per-GPU VRAM. ml.g7e.2xlarge would clear it on ONE 96 GB card for ~$4.20/hr — cheaper than the default — but ap-northeast-2 does not sell it for Studio, and this lab has never run it.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m5/",
     feedsModules: [],
     errorHints: {
       CUDAOutOfMemory:
-        "On 24 GB cards the notebook runs 480p sharded across all GPUs — first close any OTHER open notebooks (their kernels hold GPU memory), then re-run. For full 720p, move to ml.g7e.2xlarge (1× 96 GB, cheapest) or ml.p4d.24xlarge / ml.p5.48xlarge.",
+        "On 24 GB cards the notebook runs 480p sharded across all GPUs — first close any OTHER open notebooks (their kernels hold GPU memory), then re-run. For full 720p with guardrails ON you need ≥38 GB per GPU: move to ml.p4d.24xlarge (40 GB/GPU) — the option available in every region this lab deploys to.",
     },
   },
   {
@@ -239,29 +259,46 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // quota, so the change is accepted, the app never starts, and a failed instance change
     // leaves the space pinned to an unlaunchable type.
     //
-    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
-    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
-    // label used elsewhere is a misattribution of a g5 result.
+    // WHAT IS ACTUALLY MEASURED — an earlier version of this comment had it backwards and
+    // called the "g6.24xlarge verified" label a misattribution. It was not. There are two
+    // independent bodies of evidence, on different axes:
     //
-    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
-    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
-    // it takes the same branch; nobody has watched it finish.
+    //   4 GPUs: examples/notebooks-with-outputs.tar.gz holds captured Run-All output for
+    //           M2, M5, M6 and M9 on 4x NVIDIA L4, 88.1 GB aggregate -- i.e. exactly the
+    //           ml.g6.24xlarge geometry AND its silicon. M9 recorded minADE 0.3805,
+    //           "Status: PASS", device_map=balanced-expert. The inference cells are
+    //           unchanged since (M9 cell 3, the deciding gate, is byte-identical).
+    //   A10G:   docs/en/ALPAMAYO_M9.md:181-187 records M9 passing on 8x A10G
+    //           (ml.g5.48xlarge), minADE 0.378 / 0.3779.
+    //
+    // So (4 GPUs) and (A10G) are each measured; the (4x A10G) PAIR is not itself captured.
+    // Nothing in any heavy module branches on GPU name, compute capability or driver -- the
+    // gates read per-GPU VRAM and GPU count only, and props.name appears solely inside
+    // print f-strings -- so there is no mechanism by which this pair can diverge from the
+    // captured 4x L4 runs. The reason to prefer g5.12xlarge is quota and price, NOT a
+    // better verification story.
+    //
+    // GENUINELY UNVERIFIED: M8 has no end-to-end run on ANY hardware. Its cell 2 carries a
+    // targeted VRAM bench on 4x L4 (11.28 GiB peak / 10.76 GiB spare at native 1600x900),
+    // but the train / A-B generate / adapter-save cells have never been watched to finish.
     recommendedInstance: "ml.g5.12xlarge",
-    // Ordered by capability-per-dollar. g7e (96 GB/card) clears the per-GPU tier
-    // and is CHEAPER than the default, so it leads; p4d/p5 also clear it but cost
-    // more. The g5/g6 entries are 24 GB/GPU like the default — capacity
-    // fallbacks, NOT upgrades (ml.g5.24xlarge is the same tier at +22% cost).
+    // Ordered so the first thing offered on a capacity error is a type the deploy region
+    // actually sells. g7e is NOT listed: ap-northeast-2 does not sell it for Studio at all,
+    // so it would be a dead end there (and it remains unrun in this lab anyway).
+    // ml.g5.24xlarge / ml.g5.48xlarge are 24 GB/GPU like the default -- capacity fallbacks,
+    // NOT upgrades; g5.24xlarge is the same 4-GPU tier at +44% cost. ml.p4d.24xlarge is the
+    // only genuine tier-up here (40 GB/GPU), and it has quota 2 in both regions.
     alternatives: ["ml.g5.24xlarge", "ml.g5.48xlarge", "ml.p4d.24xlarge"],
     storageGB: 200,
     estimatedMinutes: 60,
     awsAdvantage:
-      "Synthetic traffic scenarios extend the dataset beyond what was collected — an AWS-native alternative to physical re-drives. ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) runs it at 480×832 with guardrails OFF (45 frames), because the notebook branches on PER-GPU VRAM and 24 GB is under its 38 GB threshold. For native resolution with guardrails ON, ml.p4d.24xlarge (4× A100 40 GB) is the route in both regions; ml.g7e.2xlarge is NOT — ONE RTX PRO 6000 Blackwell with 96 GB at ~$4.20/hr, half the default's price (needs its own quota; not yet run in this lab). ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) also qualifies; no g5/g6 size can reach that tier.",
+      "Synthetic traffic scenarios extend the dataset beyond what was collected — an AWS-native alternative to physical re-drives. ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) runs it at 480×832 with guardrails OFF (45 frames), because the notebook branches on PER-GPU VRAM and 24 GB is under its 38 GB threshold. For native resolution with guardrails ON, ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) is the route in both regions; no g5 or g6 size can reach that tier. ml.g7e.2xlarge would clear it on ONE 96 GB card for ~$4.20/hr, but ap-northeast-2 does not sell it for Studio and this lab has never run it.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m6/",
     feedsModules: [],
     errorHints: {
       CUDAOutOfMemory:
-        "On 24 GB cards the notebook runs 480×832 sharded across all GPUs — first close any OTHER open notebooks (their kernels hold GPU memory), then re-run. For native resolution, step up to ml.g7e.2xlarge (1× 96 GB, cheapest) or ml.p4d.24xlarge / ml.p5.48xlarge.",
+        "On 24 GB cards the notebook runs 480×832 sharded across all GPUs — first close any OTHER open notebooks (their kernels hold GPU memory), then re-run. For native resolution, step up to ml.p4d.24xlarge (40 GB/GPU) — the ≥38 GB option available in every region this lab deploys to.",
     },
   },
   {
@@ -314,13 +351,28 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // quota, so the change is accepted, the app never starts, and a failed instance change
     // leaves the space pinned to an unlaunchable type.
     //
-    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
-    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
-    // label used elsewhere is a misattribution of a g5 result.
+    // WHAT IS ACTUALLY MEASURED — an earlier version of this comment had it backwards and
+    // called the "g6.24xlarge verified" label a misattribution. It was not. There are two
+    // independent bodies of evidence, on different axes:
     //
-    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
-    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
-    // it takes the same branch; nobody has watched it finish.
+    //   4 GPUs: examples/notebooks-with-outputs.tar.gz holds captured Run-All output for
+    //           M2, M5, M6 and M9 on 4x NVIDIA L4, 88.1 GB aggregate -- i.e. exactly the
+    //           ml.g6.24xlarge geometry AND its silicon. M9 recorded minADE 0.3805,
+    //           "Status: PASS", device_map=balanced-expert. The inference cells are
+    //           unchanged since (M9 cell 3, the deciding gate, is byte-identical).
+    //   A10G:   docs/en/ALPAMAYO_M9.md:181-187 records M9 passing on 8x A10G
+    //           (ml.g5.48xlarge), minADE 0.378 / 0.3779.
+    //
+    // So (4 GPUs) and (A10G) are each measured; the (4x A10G) PAIR is not itself captured.
+    // Nothing in any heavy module branches on GPU name, compute capability or driver -- the
+    // gates read per-GPU VRAM and GPU count only, and props.name appears solely inside
+    // print f-strings -- so there is no mechanism by which this pair can diverge from the
+    // captured 4x L4 runs. The reason to prefer g5.12xlarge is quota and price, NOT a
+    // better verification story.
+    //
+    // GENUINELY UNVERIFIED: M8 has no end-to-end run on ANY hardware. Its cell 2 carries a
+    // targeted VRAM bench on 4x L4 (11.28 GiB peak / 10.76 GiB spare at native 1600x900),
+    // but the train / A-B generate / adapter-save cells have never been watched to finish.
     recommendedInstance: "ml.g5.12xlarge",
     // g7e clears it on ONE 96 GB card and costs half the default; p4d/p5 also fit.
     // g5/g6 entries are the same 24 GB tier — capacity fallbacks, not upgrades.
@@ -328,13 +380,13 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     storageGB: 200,
     estimatedMinutes: 45,
     awsAdvantage:
-      "LoRA fine-tunes the 8.33B Cosmos Reason VLM by training 40.4M adapter params (0.48%) while the base weights and the vision tower stay frozen — so an ml.g5.12xlarge ($7.09/hr in us-west-2, $8.72 in ap-northeast-2) trains at NATIVE nuScenes resolution (measured: 11.28 GiB worst-GPU peak, 10.76 GiB spare). A full fine-tune of the same model would need ~123 GiB of weight+gradient+optimizer state, more than this box has in total. Targets are nuScenes HUMAN annotation (scene descriptions + category labels), never M2's own captions, so the loss is not self-referential.",
+      "LoRA fine-tunes the 8.33B Cosmos Reason VLM by training 40.4M adapter params (0.48%) while the base weights and the vision tower stay frozen — so an ml.g5.12xlarge ($7.09/hr in us-west-2, $8.72 in ap-northeast-2) trains at NATIVE nuScenes resolution. The VRAM figures were measured on 4× L4 — the same 22,888 MiB geometry, so the same tier — at 11.28 GiB worst-GPU peak with 10.76 GiB spare. A full fine-tune of the same model would need ~123 GiB of weight+gradient+optimizer state, more than this box has in total. Targets are nuScenes HUMAN annotation (scene descriptions + category labels), never M2's own captions, so the loss is not self-referential.",
     inputPath: "s3://av30lab-user-workspace/users/{userId}/m1/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m8/",
     feedsModules: [],
     errorHints: {
       CUDAOutOfMemory:
-        "Close any OTHER open notebooks first — their kernels hold GPU memory and the pre-flight cell halts on it. This module needs >=2 GPUs on 24 GB cards (the 15.61 GiB of weights must shard) or one card >=40 GB such as ml.g7e.2xlarge.",
+        "Close any OTHER open notebooks first — their kernels hold GPU memory and the pre-flight cell halts on it. This module needs >=2 GPUs on 24 GB cards (the 15.61 GiB of weights must shard) or one card >=40 GB — ml.p4d.24xlarge (40 GB/GPU) is the option available in every region this lab deploys to.",
       "M1 output not found":
         "Run M1 (Data Exploration) first. M8 trains on the frames M1 selected — it reads users/{userId}/m1/manifest.json to know which ones.",
     },
@@ -363,13 +415,28 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     // quota, so the change is accepted, the app never starts, and a failed instance change
     // leaves the space pinned to an unlaunchable type.
     //
-    // It is also closer to the only MEASURED hardware: docs/en/ALPAMAYO_M9.md's passing run
-    // ("Restart & Run All on g5", minADE 0.3779) was A10G, so the "g6.24xlarge verified"
-    // label used elsewhere is a misattribution of a g5 result.
+    // WHAT IS ACTUALLY MEASURED — an earlier version of this comment had it backwards and
+    // called the "g6.24xlarge verified" label a misattribution. It was not. There are two
+    // independent bodies of evidence, on different axes:
     //
-    // Still UNVERIFIED at this exact size: no captured run of M5/M6/M8 exists on any g5,
-    // and M9's measured multi-GPU run was 8x A10G (g5.48xlarge), not 4x. The geometry says
-    // it takes the same branch; nobody has watched it finish.
+    //   4 GPUs: examples/notebooks-with-outputs.tar.gz holds captured Run-All output for
+    //           M2, M5, M6 and M9 on 4x NVIDIA L4, 88.1 GB aggregate -- i.e. exactly the
+    //           ml.g6.24xlarge geometry AND its silicon. M9 recorded minADE 0.3805,
+    //           "Status: PASS", device_map=balanced-expert. The inference cells are
+    //           unchanged since (M9 cell 3, the deciding gate, is byte-identical).
+    //   A10G:   docs/en/ALPAMAYO_M9.md:181-187 records M9 passing on 8x A10G
+    //           (ml.g5.48xlarge), minADE 0.378 / 0.3779.
+    //
+    // So (4 GPUs) and (A10G) are each measured; the (4x A10G) PAIR is not itself captured.
+    // Nothing in any heavy module branches on GPU name, compute capability or driver -- the
+    // gates read per-GPU VRAM and GPU count only, and props.name appears solely inside
+    // print f-strings -- so there is no mechanism by which this pair can diverge from the
+    // captured 4x L4 runs. The reason to prefer g5.12xlarge is quota and price, NOT a
+    // better verification story.
+    //
+    // GENUINELY UNVERIFIED: M8 has no end-to-end run on ANY hardware. Its cell 2 carries a
+    // targeted VRAM bench on 4x L4 (11.28 GiB peak / 10.76 GiB spare at native 1600x900),
+    // but the train / A-B generate / adapter-save cells have never been watched to finish.
     recommendedInstance: "ml.g5.12xlarge",
     // Ordered by capability-per-dollar. g7e (96 GB/card) clears M9's 40 GB
     // single-device threshold and is CHEAPER than the default, so it leads;
@@ -385,7 +452,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     feedsModules: ["m10-alpasim"],
     errorHints: {
       CUDAOutOfMemory:
-        "The VLA policy is large — first close any OTHER open notebooks (their kernels hold GPU memory), then re-run. On 24 GB cards it must shard, so use a multi-GPU box (g6.24xlarge / p4d.24xlarge / p5.48xlarge), not a single-GPU one. The exception is a single card ≥40 GB (e.g. ml.g7e.2xlarge, 96 GB), which holds the whole policy on one device.",
+        "The VLA policy is large — first close any OTHER open notebooks (their kernels hold GPU memory), then re-run. On 24 GB cards it must shard, so use a multi-GPU box — ml.g5.48xlarge (8× A10G) has the most recorded evidence for this path — and not a single-GPU one. Any card ≥40 GB instead takes the simpler single-device path: ml.p4d.24xlarge is 40 GB/GPU and is available in every region this lab deploys to.",
     },
   },
   {

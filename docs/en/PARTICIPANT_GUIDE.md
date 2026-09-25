@@ -93,7 +93,7 @@ the GPU image and the notebook-sync for you.
 | M5 Cosmos Transfer (Weather Aug) | **`ml.g5.12xlarge`** | GPU (4× A10G, 24 GB/GPU) — runs at 480p; see tier table below |
 | M6 Cosmos Predict (Scenario Gen) | **`ml.g5.12xlarge`** | GPU (4× A10G) — runs at 480×832; see tier table below |
 | M7 Nerfstudio 3D Reconstruction | `ml.g5.xlarge` | GPU (1× A10G) — ⚠️ **known-limited**: the GPU check + data-prep cells run, but the final 3D-training cell (splatfacto) does not run on the current image. Treat M7 as an optional/demo module (see note below). |
-| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU (4× A10G) — measured at native 1600×900 on 4× 24 GB: 11.28 GiB worst-GPU peak, 10.76 GiB spare. Needs ≥2 GPUs (or one card ≥40 GB). |
+| M8 Cosmos Reason LoRA SFT | **`ml.g5.12xlarge`** | GPU (4× A10G) — trains at native 1600×900. VRAM measured on 4× L4, the same 22,888 MiB geometry: 11.28 GiB worst-GPU peak, 10.76 GiB spare. Needs ≥2 GPUs (or one card ≥40 GB). **Not yet run end to end on any hardware.** |
 | M9 Alpamayo VLA Inference | **`ml.g5.12xlarge`** | GPU (4× A10G) — sharded "balanced-expert" path; the passing run (minADE 0.3779) was on A10G |
 | M10 AlpaSim Closed-Loop Eval | `ml.t3.medium` | CPU (visualizes genuine AlpaSim results; real sim runs on a GPU EC2 host — admin reference, or your own via SSM) |
 | M11 Pipeline Automation | `ml.t3.medium` | CPU |

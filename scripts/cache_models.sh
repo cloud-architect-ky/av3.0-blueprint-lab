@@ -101,9 +101,29 @@ echo "Bucket:    $BUCKET"
 echo "Temp dir:  $TEMP_DIR"
 echo ""
 
-# Authenticate with Hugging Face
+# Authenticate with Hugging Face.
+#
+# Export only — do NOT run `hf auth login --token "$HF_TOKEN"`. Two reasons, both real:
+#   1. A token on the command line is visible to every user on the machine via `ps`.
+#      Measured: `ps -Ao command` printed the full admin token for 2 hours while a
+#      download ran.
+#   2. `login` also WRITES the token to ~/.cache/huggingface/token, where it outlives this
+#      script — the opposite of what "revoke the token after the workshop" wants.
+#
+# The export is sufficient: huggingface_hub's get_token() resolves
+# _get_token_from_environment() BEFORE the token file (verified in huggingface_hub 1.22.0,
+# utils/_auth.py), so every `hf` call in this script picks it up.
 export HF_TOKEN="$HF_TOKEN"
-hf auth login --token "$HF_TOKEN" 2>/dev/null || true
+
+# Fail fast on a bad token instead of discovering it 15 minutes into the first download.
+# whoami takes the token from the environment, so nothing lands in argv.
+if ! HF_WHOAMI=$(hf auth whoami 2>&1); then
+    echo "ERROR: HF_TOKEN was rejected by Hugging Face." >&2
+    echo "       $HF_WHOAMI" >&2
+    echo "       Create a 'read' token at https://huggingface.co/settings/tokens" >&2
+    exit 1
+fi
+echo "Hugging Face: authenticated as ${HF_WHOAMI%%$'\n'*}"
 
 # --------------------------------------------------------------------------
 # Download and sync models
@@ -132,20 +152,78 @@ for entry in "${MODELS[@]}"; do
     echo ""
 
     LOCAL_PATH="$TEMP_DIR/$PREFIX"
+
+    # ALREADY IN S3? Skip. Re-running after a partial failure used to re-download every
+    # model that had already succeeded — measured: a second run spent 17 min re-fetching
+    # 15 GiB and then 2 HOURS re-fetching 51 GiB that were already uploaded, only to run
+    # the local disk out of space again. Compare object COUNT and total BYTES against the
+    # weights actually present, so a half-finished prefix is not mistaken for a complete one.
+    S3_STATS=$(aws s3 ls "s3://$BUCKET/model-cache/$PREFIX/" --recursive --region "$REGION" \
+                 2>/dev/null | awk '{n++; b+=$3} END {printf "%d %d", n+0, b+0}')
+    S3_N=$(echo "$S3_STATS" | cut -d' ' -f1)
+    S3_B=$(echo "$S3_STATS" | cut -d' ' -f2)
+    if [ "${S3_N:-0}" -gt 0 ] && [ "${S3_B:-0}" -gt 1000000000 ]; then
+        echo "  SKIP: already in S3 ($S3_N objects, $((S3_B / 1073741824)) GiB)."
+        echo "        Delete the prefix first if you need to re-cache it:"
+        echo "          aws s3 rm s3://$BUCKET/model-cache/$PREFIX/ --recursive --region $REGION"
+        echo ""
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        continue
+    fi
+
+    # DISK CHECK before downloading. The HF weights are large (Cosmos-Predict2.5-2B is
+    # ~70 GiB) and `hf download` on a full volume does not fail fast — it stalls at ~0%
+    # CPU indefinitely, which is indistinguishable from a slow network. Measured: one run
+    # sat for 2 hours in that state. Refuse up front instead.
+    AVAIL_KB=$(df -Pk "$TEMP_DIR" | awk 'NR==2 {print $4}')
+    AVAIL_GB=$((AVAIL_KB / 1048576))
+    if [ "$AVAIL_GB" -lt 80 ]; then
+        echo "  FAILED: only ${AVAIL_GB} GiB free on $(df -Pk "$TEMP_DIR" | awk 'NR==2 {print $6}')."
+        echo "          The largest model in this set needs ~70 GiB of scratch, plus HF keeps"
+        echo "          a second copy in .cache/huggingface, so budget ~80 GiB free."
+        echo ""
+        echo "  If another region of this lab is already seeded, copy bucket-to-bucket"
+        echo "  instead — it uses NO local disk and needs no HF token:"
+        echo "    aws s3 sync s3://av30lab-shared-data-<account>-<seeded-region>/model-cache/$PREFIX/ \\"
+        echo "                s3://$BUCKET/model-cache/$PREFIX/ \\"
+        echo "      --source-region <seeded-region> --region $REGION"
+        echo ""
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        FAILED_MODELS+=("$NAME")
+        continue
+    fi
+
     mkdir -p "$LOCAL_PATH"
 
     # Step 1: Download from Hugging Face
+    #
+    # Token via HF_TOKEN in the environment, NOT --token: a CLI argument is visible to
+    # every user on the machine in `ps`. Measured: `ps -Ao command` printed the full
+    # admin token for 2 hours while a download was running.
+    #
+    # Output is NOT piped through `tail` any more. Buffering the progress meant a stalled
+    # download printed nothing at all — the operator could not tell "downloading 70 GiB"
+    # from "wedged on a full disk". The last lines are kept on failure via the log file.
     echo "  Downloading from Hugging Face..."
-    if ! hf download "$REPO" \
-        --local-dir "$LOCAL_PATH" \
-        --token "$HF_TOKEN" 2>&1 | tail -5; then
+    DL_LOG="$TEMP_DIR/.$PREFIX.download.log"
+    if ! HF_TOKEN="$HF_TOKEN" hf download "$REPO" --local-dir "$LOCAL_PATH" 2>&1 \
+           | tee "$DL_LOG"; then
         echo "  FAILED: Download failed for $NAME"
-        echo "  Possible causes:"
-        if [ "$GATED" = "true" ]; then
-            echo "    - License not accepted: visit https://huggingface.co/$REPO"
+        if grep -qiE "No space left on device|os error 28" "$DL_LOG" 2>/dev/null; then
+            # Do not offer the license/token/network guesses for a disk error — that
+            # mis-sent an operator to Hugging Face to re-check licences that were fine.
+            echo "    Cause: OUT OF DISK on $(df -Pk "$TEMP_DIR" | awk 'NR==2 {print $6}')"
+            echo "           ($(df -Ph "$TEMP_DIR" | awk 'NR==2 {print $4}') free)"
+            echo "    Free space, or copy bucket-to-bucket from a seeded region (no local"
+            echo "    disk, no token) — see the command above."
+        else
+            echo "  Possible causes:"
+            if [ "$GATED" = "true" ]; then
+                echo "    - License not accepted: visit https://huggingface.co/$REPO"
+            fi
+            echo "    - Invalid or expired HF_TOKEN"
+            echo "    - Network connectivity issue"
         fi
-        echo "    - Invalid or expired HF_TOKEN"
-        echo "    - Network connectivity issue"
         echo ""
         FAIL_COUNT=$((FAIL_COUNT + 1))
         FAILED_MODELS+=("$NAME")

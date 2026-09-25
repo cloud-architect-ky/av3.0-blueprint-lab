@@ -60,19 +60,20 @@
 | M1_Data_Exploration | `m01-data-exploration` |
 | M2_Cosmos_Reason_Captioning | `m02-cosmos-reason` |
 | M3_Cosmos_Curator | `m03-cosmos-curator` |
+| M4_OpenSearch_Semantic_Search | `m04-opensearch` |
 | M5_Cosmos_Transfer_Augmentation | `m05-cosmos-transfer` |
 | M6_Cosmos_Predict_Synthesis | `m06-cosmos-predict` |
+| M7_Nerfstudio_3D_Reconstruction | `m07-nerfstudio` |
+| M8_Cosmos_Reason_SFT | `m08-cosmos-sft` |
 | M9_Alpamayo_VLA_Inference | `m09-alpamayo-vla` |
 | M10_AlpaSim_ClosedLoop | `m10-alpasim` |
-| M4_OpenSearch_Semantic_Search | `m04-opensearch` |
-| M12_HyperPod_Distributed_Training | `m12-hyperpod` |
-| M7_Nerfstudio_3D_Reconstruction | `m07-nerfstudio` |
 | M11_Pipeline_Automation | `m11-orchestration` |
+| M12_HyperPod_Distributed_Training | `m12-hyperpod` |
 
 各ノートブックの最終セルは `mark_complete("<id>")` を呼び出し、これは `X-Api-Key` ヘッダー付きで
 `{moduleId, status:"completed"}` を `{AV30_API_URL}/sessions/{profile}/progress` に POST します。
 これはベストエフォートかつ非致命的です — ping の失敗がモジュールを失敗させることは決してありません。
-バックエンド（`update_progress`）は、短い後方互換 ID `m0`–`m11` も引き続き受け付けます。
+バックエンド（`update_progress`）は、短い後方互換 ID `m0`–`m12` も引き続き受け付けます。
 
 ## 5. 明記すべきニュアンス
 

@@ -16,7 +16,7 @@ Offline / no-token design
 `load_physical_aiavdataset` (physical_ai_av) CANNOT run offline — it calls
 `list_repo_refs()` unconditionally, needing a network + gated HF token. So the
 admin pre-saves each demo clip's `data` dict with `torch.save` (see
-scripts/README or docs/ALPAMAYO_M9.md); this script only `torch.load`s those
+scripts/README or docs/en/ALPAMAYO_M9.md); this script only `torch.load`s those
 `.pt` files and NEVER imports physical_ai_av. The model + its hidden
 Cosmos-Reason2-8B VLM backbone load from the S3-restored HF cache with
 `HF_HUB_OFFLINE=1` (set by alpamayo_env.sh when the cache is present).

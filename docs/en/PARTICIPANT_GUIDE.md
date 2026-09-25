@@ -255,7 +255,7 @@ $7.09/hr; `ml.g6.24xlarge` ≈ $8.34/hr; `ml.p4d.24xlarge` ≈ $25.25/hr). Pleas
 
 - **Switch back to `ml.t3.medium`** (via Instance Options) when you move from a
   GPU module to a CPU module (M4, M11) — don't leave a GPU box idle.
-- Your workspace **auto-shuts down after ~3 hours of inactivity**, but don't rely
+- Your workspace **auto-shuts down after 90 minutes (`-c idle_timeout_minutes=<60..180>` to change) of inactivity**, but don't rely
   on it — finish or pause when you step away.
 - The workshop admin can see active sessions and will help if something is stuck.
 

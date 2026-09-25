@@ -497,8 +497,15 @@ seeded with the notebook templates, and a personal dashboard link.
 
 ## 11. M7 Nerfstudio — gsplat build (per-session)
 
-**M7 now trains** — the `splatfacto` cell works after a one-time gsplat CUDA
-build. `gsplat` ships a pure-Python wheel and compiles its CUDA kernels from
+**M7's training cell is UNVERIFIED — the repo contradicts itself.** This section used to
+assert "M7 now trains". The notebook's own cell 0 says the opposite ("does NOT run on the
+current image"), both claims arrived in the same commit, and the captured run retained
+output for only 2 of 9 cells — so nobody has seen this pass or fail. One `ml.g5.xlarge`
+Run-All (~$0.25, ~15 min) settles it; see `docs/en/TODO_M7_nerfstudio.md`. Until then,
+treat M7 as the optional concept + data-prep demo the PARTICIPANT_GUIDE describes.
+
+What the setup is *intended* to do, after a per-session gsplat CUDA
+build: `gsplat` ships a pure-Python wheel and compiles its CUDA kernels from
 source on first use, but the SageMaker Distribution image's conda CUDA dev
 packages are incomplete. **`scripts/setup_gsplat_env.sh`** (M7 cell 3 invokes it)
 fixes the whole chain: installs the missing dev headers, symlinks `nvvm` so `nvcc`

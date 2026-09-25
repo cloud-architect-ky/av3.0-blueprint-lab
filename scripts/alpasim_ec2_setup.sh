@@ -42,7 +42,7 @@
 #     # → uploads to s3://<shared>/m10-reference/, then TERMINATE the instance.
 #
 # USAGE — PARTICIPANT self-run (participant on their own pre-provisioned GPU host,
-# reached via SSM; see docs/M10_PARTICIPANT_SSM_RUNBOOK.md):
+# reached via SSM; see docs/en/M10_PARTICIPANT_SSM_RUNBOOK.md):
 #     export PARTICIPANT_ID=<id>
 #     export M10_OUTPUT_PREFIX=users/<id>/m10
 #     export OUTPUT_BUCKET=av30lab-user-workspace-<acct>-<region>
@@ -73,7 +73,24 @@ else
 fi
 REPO_DIR="$WORK/alpasim"
 REPO_URL="https://github.com/NVlabs/alpasim.git"
-REPO_TAG="${ALPASIM_TAG:-alpasim-base-v0.96.0}"   # pin; empty ALPASIM_TAG => default branch
+# Pinned tag. Override with ALPASIM_TAG=<tag>; set ALPASIM_TAG="" to take the default
+# branch deliberately.
+#
+# Was alpasim-base-v0.96.0, which is a 404 — `git ls-remote --tags` on NVlabs/alpasim
+# returns only v2026.4 and v2026.5, and six docs advertised the dead tag as the "verified"
+# version. The clone then fell through to a moving `main`, so a run could silently differ
+# from anything anyone had tested.
+#
+# v2026.5 chosen because every path this script touches exists there (verified:
+# deploy/local.yaml, driver/alpamayo1_5.yaml, topology/ with 6 entries,
+# data/scenes/sim_scenes.csv) and the pinned SCENE_ID appears exactly once in its
+# sim_scenes.csv (916 scenes). main lists that scene TWICE, which is its own reason not to
+# float on main.
+#
+# UNVERIFIED: no M10 run has been performed against v2026.5. Run it once on the admin EC2
+# host before a workshop. If it fails, try ALPASIM_TAG=v2026.4 (also carries the scene,
+# 910 scenes) rather than falling back to the default branch.
+REPO_TAG="${ALPASIM_TAG-v2026.5}"
 LOG_DIR="$WORK/out"
 HF_HOME_DIR="${HF_HOME:-$WORK/hf}"
 
@@ -88,7 +105,7 @@ NRE_IMAGE="${NRE_IMAGE:-nvcr.io/nvidia/nre/nre-ga:26.04}"
 #     bucket under m10-reference/ (one run, shared by all participants).
 #   - PARTICIPANT self-run: set PARTICIPANT_ID=<id>, M10_OUTPUT_PREFIX=users/<id>/m10,
 #     OUTPUT_BUCKET=<user-workspace-bucket> so each participant writes their OWN
-#     results and they never collide. See docs/M10_PARTICIPANT_SSM_RUNBOOK.md.
+#     results and they never collide. See docs/en/M10_PARTICIPANT_SSM_RUNBOOK.md.
 PARTICIPANT_ID="${PARTICIPANT_ID:-}"
 M10_OUTPUT_PREFIX="${M10_OUTPUT_PREFIX:-m10-reference}"
 
@@ -230,9 +247,21 @@ if [ -d "$REPO_DIR/.git" ]; then
 else
     echo "[clone] cloning $REPO_URL (tag=${REPO_TAG:-<default branch>}) ..."
     if [ -n "$REPO_TAG" ]; then
-        git clone --depth 1 --branch "$REPO_TAG" "$REPO_URL" "$REPO_DIR" 2>&1 | tail -3 \
-            || { echo "[clone] tag $REPO_TAG not found — falling back to default branch";
-                 git clone --depth 1 "$REPO_URL" "$REPO_DIR" 2>&1 | tail -3; }
+        if ! git clone --depth 1 --branch "$REPO_TAG" "$REPO_URL" "$REPO_DIR" 2>&1 | tail -3; then
+            # HARD FAIL, no silent fallback. The previous version fell through to the
+            # default branch on a tag miss, which is how a 404 pin (alpasim-base-v0.96.0)
+            # went unnoticed while every run actually used a moving `main`.
+            echo "" >&2
+            echo "ERROR: tag '$REPO_TAG' not found in $REPO_URL." >&2
+            echo "  Available tags:" >&2
+            git ls-remote --tags "$REPO_URL" 2>/dev/null \
+              | sed 's#.*refs/tags/#    #' | grep -v '\^{}' >&2
+            echo "  Pick one with ALPASIM_TAG=<tag>, or ALPASIM_TAG=\"\" to use the" >&2
+            echo "  default branch deliberately (it moves — expect drift from any" >&2
+            echo "  result recorded in docs/)." >&2
+            rm -rf "$REPO_DIR"
+            exit 1
+        fi
     else
         git clone --depth 1 "$REPO_URL" "$REPO_DIR" 2>&1 | tail -3
     fi
@@ -283,7 +312,7 @@ mkdir -p "$REPO_DIR/data/drivers" \
 # Inject HF env into the DRIVER container so it loads Alpamayo from the mounted
 # HF cache OFFLINE (no token, no network). Without this the driver hits the gated
 # repo online and dies with a 401 — the base driver service has no `environments`.
-# (Same offline-cache lesson as M9; see docs/ALPAMAYO_M9.md.) CLI list overrides
+# (Same offline-cache lesson as M9; see docs/en/ALPAMAYO_M9.md.) CLI list overrides
 # with `KEY=VALUE` items break Hydra's grammar, so we drop a small deploy config
 # `deploy/local_m7.yaml` (extends `local`) that sets driver.environments, and
 # select it with deploy=local_m7.

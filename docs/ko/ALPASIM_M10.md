@@ -178,7 +178,7 @@ wizard.log_dir=$PWD/out eval.video.video_layouts=[REASONING_OVERLAY]` →
 
 ## 검증된 실행(2026-07-12, 레퍼런스 배포 예시 계정 <aws-account-id>)
 
-**g6e.12xlarge**(4× L40S 46 GB), alpasim **v0.96.0**, renderer
+**g6e.12xlarge**(4× L40S 46 GB), alpasim **v0.96.0** *(그 태그는 이후 상류에서 사라졌습니다. 현재 핀은 v2026.5이며 **미검증**입니다 — 아래 주석 참고)*, renderer
 `nvcr.io/nvidia/nre/nre-ga:26.04`, scene
 `clipgt-01d503d4-449b-46fc-8d78-9085e70d3554`, topology `m7_4gpu`(driver가 GPU
 0에 단독)에서 `nvidia/Alpamayo-1.5-10B`의 실제 AlpaSim 폐루프 평가. Driver는 S3
@@ -219,3 +219,22 @@ hf-cache에서 Alpamayo를 **오프라인**으로 로드함(토큰 없음, 다�
 Alpamayo-1.5-10B 가중치는 **비상업용**입니다(연구/평가 전용). AlpaSim 코드는
 Apache-2.0입니다. NuRec 장면은 NVIDIA AV NuRec Dataset License 하에 있습니다.
 M10 노트북은 이 고지를 표시합니다.
+
+---
+
+### 핀된 alpasim 태그 (워크숍 전에 읽으세요)
+
+`scripts/alpasim_ec2_setup.sh`가 `ALPASIM_TAG`를 핀합니다(기본 `v2026.5`). 위에 기록된
+실측 실행은 `alpasim-base-v0.96.0`을 썼는데 그 태그는 **이제 존재하지 않습니다** —
+`git ls-remote --tags https://github.com/NVlabs/alpasim`은 `v2026.4`와 `v2026.5`만
+반환합니다. 스크립트는 예전에 태그 미스 시 조용히 기본 브랜치로 떨어졌고, 그래서 실행이
+움직이는 `main`을 쓸 수 있었습니다. 지금은 **크게 실패하고** 사용 가능한 태그를 출력합니다.
+
+`v2026.5`에 대해 확인된 것: 이 스크립트가 건드리는 모든 상류 경로가 존재하고
+(`deploy/local.yaml`, `driver/alpamayo1_5.yaml`, 6개 항목의 `topology/`,
+`data/scenes/sim_scenes.csv`), 핀된 `SCENE_ID`가 916개 씬 CSV에 정확히 1회 나옵니다.
+`main`은 그 씬을 2회 나열합니다.
+
+**확인되지 않은 것**: `v2026.5`에서 M10을 실행한 기록이 없습니다. 행사 전에 관리자 EC2
+호스트에서 한 번 돌리세요. 실패하면 `ALPASIM_TAG=v2026.4`(910개 씬, 핀된 씬 포함)를
+시도하고, 기본 브랜치로 되돌리지는 마세요.

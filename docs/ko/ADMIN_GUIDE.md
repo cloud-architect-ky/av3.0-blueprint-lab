@@ -492,8 +492,14 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 
 ## 11. M7 Nerfstudio — gsplat 빌드 (세션별)
 
-**M7은 이제 트레이닝을 합니다** — 일회성 gsplat CUDA 빌드 이후 `splatfacto`
-셀이 작동합니다. `gsplat`은 순수 Python 휠을 제공하고 첫 사용 시 CUDA 커널을
+**M7의 트레이닝 셀은 미검증입니다 — 저장소가 스스로 모순합니다.** 이 절은 예전에 "M7은
+이제 트레이닝을 합니다"라고 단정했습니다. 그런데 노트북 cell 0은 반대로 말하고("현재
+이미지에서 실행되지 않음"), 두 주장이 같은 커밋에서 들어왔고, 캡처된 실행은 9개 셀 중
+2개만 출력을 남겼습니다 — 즉 통과도 실패도 본 사람이 없습니다. `ml.g5.xlarge`로 한 번
+실행하면(~$0.25, ~15분) 판정됩니다. `docs/en/TODO_M7_nerfstudio.md` 참고. 그때까지는
+PARTICIPANT_GUIDE가 서술하는 선택적 개념 + 데이터 준비 데모로 취급하세요.
+
+세션별 gsplat CUDA 빌드 이후 *의도된* 동작은 다음과 같습니다: `gsplat`은 순수 Python 휠을 제공하고 첫 사용 시 CUDA 커널을
 소스에서 컴파일하지만, SageMaker Distribution 이미지의 conda CUDA dev
 패키지가 불완전합니다. **`scripts/setup_gsplat_env.sh`**(M7 셀 3이 호출)가
 전체 체인을 고칩니다: 누락된 dev 헤더를 설치하고, `nvcc`가 `cicc`를 찾도록 `nvvm`을

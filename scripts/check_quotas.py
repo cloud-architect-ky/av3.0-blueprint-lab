@@ -67,25 +67,42 @@ def region_rates(region: str) -> dict[str, float]:
     return table[region]
 
 
-def recommended_types() -> dict[str, list[str]]:
-    """instance type -> module titles that recommend it, parsed from the participant UI.
+def _parse_pipeline_config() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """(recommended, alternatives): instance type -> module titles, from the participant UI.
 
     Parsed rather than duplicated: this file is the ONLY place the participant-facing
     recommendation lives (the instance_options Lambda is dead code — getInstanceOptions has
     zero call sites), so a hand-copied list here would drift from what users actually see.
+
+    ALTERNATIVES matter as much as the recommendation. They are what the dashboard offers
+    on a capacity error and what every errorHint tells a stuck participant to pick, so a
+    fallback with quota 0 is a dead end at the worst possible moment. This used to read
+    only recommendedInstance, which is how ml.g6.12xlarge and ml.g7e.2xlarge sat at the
+    FRONT of M2/M3's alternatives — both unusable in ap-northeast-2 — while the report
+    said everything was fine.
     """
     if not PIPELINE_CONFIG.exists():
-        return {}
+        return {}, {}
     text = PIPELINE_CONFIG.read_text()
-    out: dict[str, list[str]] = {}
-    # Walk module blocks so a recommendation can be attributed to a module title.
+    rec_out: dict[str, list[str]] = {}
+    alt_out: dict[str, list[str]] = {}
+    # Walk module blocks so a type can be attributed to a module title.
     for block in re.split(r"\n  \{\n", text):
-        title = re.search(r'title:\s*"([^"]+)"', block)
+        title_m = re.search(r'title:\s*"([^"]+)"', block)
+        title = title_m.group(1) if title_m else "(unknown module)"
         rec = re.search(r'recommendedInstance:\s*"(ml\.[a-z0-9.]+)"', block)
         if rec:
-            out.setdefault(rec.group(1), []).append(
-                title.group(1) if title else "(unknown module)")
-    return out
+            rec_out.setdefault(rec.group(1), []).append(title)
+        alts = re.search(r'alternatives:\s*\[([^\]]*)\]', block)
+        if alts:
+            for t in re.findall(r'"(ml\.[a-z0-9.]+)"', alts.group(1)):
+                alt_out.setdefault(t, []).append(title)
+    return rec_out, alt_out
+
+
+def recommended_types() -> dict[str, list[str]]:
+    """Back-compat wrapper — recommendations only."""
+    return _parse_pipeline_config()[0]
 
 
 def live_quotas(region: str) -> dict[str, tuple[float, str]]:
@@ -138,7 +155,7 @@ def main() -> int:
 
     rates = region_rates(args.region)
     quotas = live_quotas(args.region)
-    recs = recommended_types()
+    recs, alts = _parse_pipeline_config()
 
     print(f"Region: {args.region}   participants (concurrent): {args.participants}")
     print(f"Account: {boto3.client('sts').get_caller_identity()['Account']}")
@@ -174,15 +191,52 @@ def main() -> int:
         print(f"  {status:14s} {itype:20s} {note}")
         print(f"                 used by: {', '.join(sorted(set(modules)))}")
 
+    # ALTERNATIVES — what the dashboard offers on a capacity error, and what every
+    # errorHint points a stuck participant at. A dead fallback is worse than no fallback,
+    # because it is reached at the moment the first choice already failed. Not fatal: an
+    # alternative is a convenience, so these DOWNGRADE to a warning rather than exit 1.
+    dead_alts: list[tuple[str, str | None, str]] = []
+    print()
+    print("Types offered as ALTERNATIVES (what a capacity error steers people to):")
+    if not alts:
+        print("  (none parsed)")
+    for itype in sorted(alts, key=lambda t: -rates.get(t, 0)):
+        if itype in recs:
+            continue          # already reported above
+        sold = itype in rates
+        entry = quotas.get(itype)
+        quota, code = entry if entry else (None, None)
+        if not sold:
+            status, note, bad = "NOT SOLD", f"{args.region} has no Studio-JupyterLab product", True
+        elif quota is None:
+            status, note, bad = "NO QUOTA ROW", "quota does not exist in this region", True
+        elif quota <= 0:
+            status, note, bad = "QUOTA 0", f"code {code} — a dead end for a stuck participant", True
+        else:
+            status, note, bad = f"ok {quota:.0f}", f"${rates[itype]:.4f}/hr", False
+        if bad:
+            dead_alts.append((itype, code, ", ".join(sorted(set(alts[itype])))))
+        print(f"  {status:14s} {itype:20s} {note}")
+        print(f"                 offered by: {', '.join(sorted(set(alts[itype])))}")
+
     print()
     print("Other lab types sold here, by quota:")
     # quotas[t] is (value, code); sort on the value only. A type with no quota row sorts last.
     for itype in sorted(rates, key=lambda t: (-(quotas[t][0] if t in quotas else 0), t)):
-        if itype in recs:
+        if itype in recs or itype in alts:
             continue
         e = quotas.get(itype)
         q_s = "no quota row" if e is None else f"{e[0]:.0f}"
         print(f"  quota {q_s:>13s}  {itype:20s} ${rates[itype]:.4f}/hr")
+
+    if dead_alts:
+        print()
+        print(f"WARNING: {len(dead_alts)} alternative(s) cannot run in {args.region}. A")
+        print("  participant hitting EC2InsufficientCapacityError will be steered to one of")
+        print("  these and get a second failure. Reorder the alternatives arrays in")
+        print("  web/user/src/data/pipeline-config.ts so region-available types come first:")
+        for itype, code, mods in dead_alts:
+            print(f"    {itype:20s} offered by {mods}")
 
     print()
     if blocked:

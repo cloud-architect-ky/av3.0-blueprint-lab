@@ -60,20 +60,21 @@ S3 키와 관련된 JSON 형태에 대한 권위 있는 기록으로, 한 노트
 | M1_Data_Exploration | `m01-data-exploration` |
 | M2_Cosmos_Reason_Captioning | `m02-cosmos-reason` |
 | M3_Cosmos_Curator | `m03-cosmos-curator` |
+| M4_OpenSearch_Semantic_Search | `m04-opensearch` |
 | M5_Cosmos_Transfer_Augmentation | `m05-cosmos-transfer` |
 | M6_Cosmos_Predict_Synthesis | `m06-cosmos-predict` |
+| M7_Nerfstudio_3D_Reconstruction | `m07-nerfstudio` |
+| M8_Cosmos_Reason_SFT | `m08-cosmos-sft` |
 | M9_Alpamayo_VLA_Inference | `m09-alpamayo-vla` |
 | M10_AlpaSim_ClosedLoop | `m10-alpasim` |
-| M4_OpenSearch_Semantic_Search | `m04-opensearch` |
-| M12_HyperPod_Distributed_Training | `m12-hyperpod` |
-| M7_Nerfstudio_3D_Reconstruction | `m07-nerfstudio` |
 | M11_Pipeline_Automation | `m11-orchestration` |
+| M12_HyperPod_Distributed_Training | `m12-hyperpod` |
 
 각 노트북의 마지막 셀은 `mark_complete("<id>")`를 호출하며, 이는
 `{moduleId, status:"completed"}`를 `X-Api-Key` 헤더와 함께
 `{AV30_API_URL}/sessions/{profile}/progress`로 POST합니다. 이는 베스트 에포트이고
 비치명적입니다 — 핑 실패가 모듈을 실패시키는 일은 없습니다. 백엔드(`update_progress`)는
-짧은 하위 호환 id `m0`–`m11`도 여전히 받습니다.
+짧은 하위 호환 id `m0`–`m12`도 여전히 받습니다.
 
 ## 5. 짚고 넘어갈 만한 뉘앙스
 

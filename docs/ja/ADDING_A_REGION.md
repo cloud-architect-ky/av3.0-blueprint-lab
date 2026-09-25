@@ -100,7 +100,7 @@ levels」と述べています。つまり *アカウントレベル* は *リ�
 | クォータ（Studio JupyterLab アプリ） | コード | us-west-2 | ap-northeast-2 | 使用箇所 |
 |---|---|---|---|---|
 | `ml.t3.medium` | `L-71FAF417` | 2500 | 2500 | デフォルトのワークスペース |
-| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M10 |
+| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M7 (Nerfstudio) |
 | `ml.g5.12xlarge` | `L-8D2ED7BF` | 5 | 5 | M2/M3 |
 | `ml.g5.24xlarge` | `L-F087CCFC` | 2 | 2 | M5/M6/M8/M9 の代替（24 GB ティア） |
 | `ml.g5.48xlarge` | `L-83AB5D73` | 2 | 2 | M6 のシャード実行 |

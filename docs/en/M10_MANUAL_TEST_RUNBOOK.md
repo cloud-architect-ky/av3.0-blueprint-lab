@@ -183,7 +183,7 @@ tail -f /var/log/alpasim_m7.log   # even if you exit with Ctrl-C, the background
 > tail -f /var/log/alpasim_m7.log
 > ```
 What the script does: preflight (nvidia-smi/docker/uv/cargo) → restore hf-cache → alpasim clone
-(tag alpasim-base-v0.96.0) → NGC login (optional) + verify image access → `source setup_local_env.sh`
+(tag v2026.5 — alpasim-base-v0.96.0 no longer exists upstream; see below) → NGC login (optional) + verify image access → `source setup_local_env.sh`
 → create mount directories → write `deploy/local_m7.yaml` (driver HF-offline) + `topology/m7_4gpu.yaml`
 (driver alone on GPU0) → run `uv run alpasim_wizard ...` → verify results → upload to `s3://.../m10-reference/`.
 **The first build takes a long time (protos compilation + image pull + NuRec scene download).**

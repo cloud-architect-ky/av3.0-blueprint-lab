@@ -31,7 +31,7 @@ TEMP_DIR="${TMPDIR:-/tmp}/av30-model-cache"
 # from the HuggingFace OFFLINE cache tree (hf-cache/hub/), not this flat
 # model-cache, because at runtime it also pulls a hidden Cosmos-Reason2-8B VLM
 # backbone that a flat weights-only copy would miss. The admin populates M9's
-# checkpoints as part of the hf-cache run (see README Step 6b / docs/ALPAMAYO_M9.md),
+# checkpoints as part of the hf-cache run (see README Step 6b / docs/en/ALPAMAYO_M9.md),
 # so a flat model-cache/alpamayo-1.5/ copy would just be unused dead weight.
 declare -a MODELS=(
     "Cosmos Reason 1 (7B)|nvidia/Cosmos-Reason1-7B|cosmos-reason1|false"

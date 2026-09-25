@@ -177,7 +177,7 @@ participant.)
 ## Verified run (2026-07-12, reference deploy example account <aws-account-id>)
 
 Real AlpaSim closed-loop evaluation of `nvidia/Alpamayo-1.5-10B` on **g6e.12xlarge**
-(4× L40S 46 GB), alpasim **v0.96.0**, renderer `nvcr.io/nvidia/nre/nre-ga:26.04`,
+(4× L40S 46 GB), alpasim **v0.96.0** *(that tag has since been removed upstream; the pin is now v2026.5, which is UNVERIFIED — see the note below)*, renderer `nvcr.io/nvidia/nre/nre-ga:26.04`,
 scene `clipgt-01d503d4-449b-46fc-8d78-9085e70d3554`, topology `m7_4gpu` (driver
 alone on GPU 0). Driver loaded Alpamayo from the S3 hf-cache **offline** (no token,
 no download). Genuine driving scores:
@@ -214,3 +214,22 @@ g6e.12xlarge including the cached-miss first build).
 Alpamayo-1.5-10B weights are **non-commercial** (research/evaluation only).
 AlpaSim code is Apache-2.0. NuRec scenes are under the NVIDIA AV NuRec Dataset
 License. The M10 notebook surfaces this notice.
+
+---
+
+### The pinned alpasim tag (read before a workshop)
+
+`scripts/alpasim_ec2_setup.sh` pins `ALPASIM_TAG` (default `v2026.5`). The measured run
+recorded above used `alpasim-base-v0.96.0`, which **no longer exists** —
+`git ls-remote --tags https://github.com/NVlabs/alpasim` returns only `v2026.4` and
+`v2026.5`. The script used to fall through to the default branch on a tag miss, so a run
+could silently use a moving `main`; it now **fails loudly** and prints the available tags.
+
+What is verified about `v2026.5`: every upstream path this script touches exists there
+(`deploy/local.yaml`, `driver/alpamayo1_5.yaml`, `topology/` with 6 entries,
+`data/scenes/sim_scenes.csv`), and the pinned `SCENE_ID` appears exactly once in its
+916-scene `sim_scenes.csv`. `main` lists that scene twice.
+
+What is **NOT** verified: no M10 run has been performed against `v2026.5`. Run one on the
+admin EC2 host before the event. If it fails, try `ALPASIM_TAG=v2026.4` (910 scenes, also
+carries the pinned scene) — do not fall back to the default branch.

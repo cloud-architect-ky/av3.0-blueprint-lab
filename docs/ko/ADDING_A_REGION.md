@@ -100,7 +100,7 @@ the ACCOUNT, RESOURCE, or ALL levels"라고 말합니다. 즉 *account-level*은
 | 할당량 (Studio JupyterLab apps) | 코드 | us-west-2 | ap-northeast-2 | 사용 모듈 |
 |---|---|---|---|---|
 | `ml.t3.medium` | `L-71FAF417` | 2500 | 2500 | 기본 워크스페이스 |
-| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M10 |
+| `ml.g5.xlarge` | `L-988CE6C5` | 5 | 5 | M7 (Nerfstudio) |
 | `ml.g5.12xlarge` | `L-8D2ED7BF` | 5 | 5 | M2/M3 |
 | `ml.g5.24xlarge` | `L-F087CCFC` | 2 | 2 | M5/M6/M8/M9 대안 (24 GB 티어) |
 | `ml.g5.48xlarge` | `L-83AB5D73` | 2 | 2 | M6 샤딩 |

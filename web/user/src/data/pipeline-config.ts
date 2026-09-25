@@ -133,7 +133,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     estimatedMinutes: 40,
     awsAdvantage:
       "GPU-accelerated semantic dedup and quality filtering process the captioned clips in minutes rather than hours of CPU work.",
-    inputPath: "s3://av30lab-user-workspace/users/{userId}/m2/",
+    inputPath: "s3://av30lab-user-workspace/users/{userId}/m1/ + users/{userId}/m2/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
     feedsModules: [
       "m05-cosmos-transfer",
@@ -229,7 +229,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     estimatedMinutes: 60,
     awsAdvantage:
       "ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) generates weather-augmented clips by sharding across GPUs; EBS-backed scratch keeps intermediate frames off S3. The notebook branches on PER-GPU VRAM: under 38 GB it runs 480p with guardrails OFF (16 of 57 frames). For full 720p with guardrails ON you need ≥38 GB per GPU, and in both regions that means ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr). No g5 or g6 size reaches that tier: a bigger size adds GPUs, not per-GPU VRAM. ml.g7e.2xlarge would clear it on ONE 96 GB card for ~$4.20/hr — cheaper than the default — but ap-northeast-2 does not sell it for Studio, and this lab has never run it.",
-    inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
+    inputPath: "s3://av30lab-user-workspace/users/{userId}/m1/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m5/",
     feedsModules: [],
     errorHints: {
@@ -293,7 +293,10 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     estimatedMinutes: 60,
     awsAdvantage:
       "Synthetic traffic scenarios extend the dataset beyond what was collected — an AWS-native alternative to physical re-drives. ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) runs it at 480×832 with guardrails OFF (45 frames), because the notebook branches on PER-GPU VRAM and 24 GB is under its 38 GB threshold. For native resolution with guardrails ON, ml.p4d.24xlarge (8× A100 40 GB, ~$25.25/hr) is the route in both regions; no g5 or g6 size can reach that tier. ml.g7e.2xlarge would clear it on ONE 96 GB card for ~$4.20/hr, but ap-northeast-2 does not sell it for Studio and this lab has never run it.",
-    inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
+    // Required input is M1. M6 REUSES m5/source/nuscenes_cam_front.mp4 when M5 has
+    // already run, and rebuilds the clip from M1 otherwise (M6 cell 4) — so M5 is an
+    // optimisation, not a prerequisite. Was listed as m3/, which no cell reads.
+    inputPath: "s3://av30lab-user-workspace/users/{userId}/m1/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m6/",
     feedsModules: [],
     errorHints: {
@@ -447,7 +450,7 @@ export const PIPELINE_MODULES: ModuleConfig[] = [
     estimatedMinutes: 60,
     awsAdvantage:
       "ml.g5.12xlarge (4× A10G, 22.4 GB/GPU, $7.09/hr in us-west-2, $8.72 in ap-northeast-2) runs the 10B VLA policy via balanced-expert placement — the VLM shards across GPUs while the action stack is pinned to cuda:0; results feed closed-loop simulation. The passing reference run was on g5/A10G hardware (docs/en/ALPAMAYO_M9.md: minADE 0.3779 m, Status: PASS) — at 8 GPUs (g5.48xlarge), so this 4-GPU size takes the same branch but has not itself been captured. Any single GPU ≥40 GB takes the simpler single-device path instead: ml.g7e.2xlarge (1× RTX PRO 6000, 96 GB, ~$4.20/hr) is the cheapest such box — half the default's price, though not yet run in this lab and needing its own quota — and ml.p4d.24xlarge (~$25.25/hr) also qualifies. No g5/g6 size has a 40 GB card.",
-    inputPath: "s3://av30lab-user-workspace/users/{userId}/m3/",
+    inputPath: "s3://av30lab-shared-data/hf-cache/alpamayo-demo/",
     outputPath: "s3://av30lab-user-workspace/users/{userId}/m9/",
     feedsModules: ["m10-alpasim"],
     errorHints: {

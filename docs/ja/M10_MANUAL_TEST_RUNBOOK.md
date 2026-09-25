@@ -184,7 +184,7 @@ tail -f /var/log/alpasim_m7.log   # Ctrl-C で抜けてもバックグラウン�
 > tail -f /var/log/alpasim_m7.log
 > ```
 スクリプトがやること: preflight(nvidia-smi/docker/uv/cargo) → hf-cache 復元 → alpasim clone
-(tag alpasim-base-v0.96.0) → NGC login(オプション)+イメージアクセス確認 → `source setup_local_env.sh`
+(tag v2026.5 — alpasim-base-v0.96.0 は上流に存在しません。下記参照) → NGC login(オプション)+イメージアクセス確認 → `source setup_local_env.sh`
 → mount ディレクトリ作成 → `deploy/local_m7.yaml`(driver HF-offline) + `topology/m7_4gpu.yaml`
 (driver 単独 GPU0) 作成 → `uv run alpasim_wizard ...` 実行 → 結果検証 → `s3://.../m10-reference/`
 アップロード。**初回ビルドは時間がかかります (protos コンパイル + イメージ pull + NuRec シーンのダウンロード)。**

@@ -173,7 +173,7 @@ wizard.log_dir=$PWD/out eval.video.video_layouts=[REASONING_OVERLAY]` →
 
 ## 検証済みの実行 (2026-07-12、リファレンスデプロイ例 account <aws-account-id>)
 
-**g6e.12xlarge** (4× L40S 46 GB)、alpasim **v0.96.0**、renderer
+**g6e.12xlarge** (4× L40S 46 GB)、alpasim **v0.96.0** *(このタグは上流から削除されました。現在のピンは v2026.5 で、**未検証**です — 下の注記を参照)*、renderer
 `nvcr.io/nvidia/nre/nre-ga:26.04`、scene `clipgt-01d503d4-449b-46fc-8d78-9085e70d3554`、
 topology `m7_4gpu` (driver が GPU 0 単独) 上での、`nvidia/Alpamayo-1.5-10B` の実際の
 AlpaSim クローズドループ評価。ドライバーは S3 hf-cache から Alpamayo を **オフライン** で
@@ -211,3 +211,22 @@ reasoning オーバーレイ付きの eval/eval.mp4、run.json)。一度きり�
 
 Alpamayo-1.5-10B の重みは **非商用** です (研究/評価のみ)。AlpaSim のコードは Apache-2.0 です。
 NuRec のシーンは NVIDIA AV NuRec Dataset License の下にあります。M10 ノートブックはこの通知を表示します。
+
+---
+
+### ピン留めされた alpasim タグ（ワークショップ前に読んでください）
+
+`scripts/alpasim_ec2_setup.sh` は `ALPASIM_TAG`（デフォルト `v2026.5`）をピン留めします。
+上に記録された実測実行は `alpasim-base-v0.96.0` を使用しましたが、そのタグは**もう存在しません** —
+`git ls-remote --tags https://github.com/NVlabs/alpasim` は `v2026.4` と `v2026.5` のみを
+返します。スクリプトは以前タグミス時に黙ってデフォルトブランチへフォールバックしていたため、
+実行が動く `main` を使う可能性がありました。現在は**明示的に失敗し**、利用可能なタグを出力します。
+
+`v2026.5` について確認済みのこと: このスクリプトが触れる上流パスはすべて存在し
+（`deploy/local.yaml`、`driver/alpamayo1_5.yaml`、6 項目の `topology/`、
+`data/scenes/sim_scenes.csv`）、ピン留めした `SCENE_ID` は 916 シーンの CSV にちょうど 1 回
+現れます。`main` はそのシーンを 2 回列挙します。
+
+**未確認のこと**: `v2026.5` に対する M10 の実行記録はありません。イベント前に管理者 EC2
+ホストで一度実行してください。失敗した場合は `ALPASIM_TAG=v2026.4`（910 シーン、ピン留めした
+シーンを含む）を試し、デフォルトブランチには戻さないでください。

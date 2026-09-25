@@ -143,7 +143,7 @@ REPLACEMENTS = {
     # (no np.random simulation). It trains on CPU (ml.m5.xlarge x2, gloo); the same
     # script runs GPU/nccl if that quota is raised. The old bucket string this
     # patch targeted no longer exists, so there is nothing for the string-patcher.
-    # See docs/HYPERPOD_M12.md.
+    # See docs/en/HYPERPOD_M12.md.
     "M12_HyperPod_Distributed_Training.ipynb": [],
     # M11 is NOT string-patched. Like M12, it was rewritten in-repo (via
     # NotebookEdit) into a real SageMaker Pipeline that upserts + starts a 3-step
@@ -153,7 +153,7 @@ REPLACEMENTS = {
     # so SDK uploads stay inside the exec role's write scope. Step 1 consumes M1's
     # real selected_scenes.json. The old av30-blueprint-lab-* bucket strings this
     # patch targeted no longer exist, so there is nothing for the string-patcher.
-    # See docs/PIPELINE_M11.md.
+    # See docs/en/PIPELINE_M11.md.
     "M11_Pipeline_Automation.ipynb": [],
     "M7_Nerfstudio_3D_Reconstruction.ipynb": [
         ('USER_BUCKET = f"av30-blueprint-lab-{ACCOUNT_ID}"', USER_LINE),
@@ -261,14 +261,14 @@ REPLACEMENTS = {
     # frames into an mp4, and call examples/inference.py with edge control. The
     # rewritten cells already carry the correct config + `total_memory`, so
     # there is nothing left for the string-patcher to fix. See
-    # docs/COSMOS_M5_M6.md and scripts/setup_cosmos_env.sh.
+    # docs/en/COSMOS_M5_M6.md and scripts/setup_cosmos_env.sh.
     "M5_Cosmos_Transfer_Augmentation.ipynb": [],
     # M6 is NOT patched here. Its shipped cells used a hallucinated `cosmos1`
     # API; the notebook was rewritten directly (via NotebookEdit) to the REAL
     # cosmos-predict2.5 Video2World workflow — setup_cosmos_env.sh (predict) +
     # reuse M5's nuScenes clip + examples/inference.py --inference-type=video2world.
     # The rewritten cells carry the correct config + `total_memory`, so there is
-    # nothing left for the string-patcher. See docs/COSMOS_M5_M6.md.
+    # nothing left for the string-patcher. See docs/en/COSMOS_M5_M6.md.
     "M6_Cosmos_Predict_Synthesis.ipynb": [],
     # M9 is NOT patched here. Its shipped cells imported a hallucinated `alpamayo`
     # package (alpamayo.model.AlpamayoForConditionalGeneration,
@@ -280,7 +280,7 @@ REPLACEMENTS = {
     # (sample_trajectories_from_data_with_vlm_rollout → Chain-of-Causation
     # reasoning + trajectory + minADE). The rewritten cells carry the correct
     # config + per-device `total_memory` check, so there is nothing left for the
-    # string-patcher. See docs/ALPAMAYO_M9.md.
+    # string-patcher. See docs/en/ALPAMAYO_M9.md.
     "M9_Alpamayo_VLA_Inference.ipynb": [],
     # M10 is NOT patched here. Its shipped cells imported a hallucinated `alpasim`
     # package (import alpasim, alpasim.env.NuRecEnvironment,
@@ -297,8 +297,8 @@ REPLACEMENTS = {
     #   - participant self-run  -> s3://<user-workspace>/users/<id>/m10/ (preferred)
     #   - admin reference run   -> s3://<shared>/m10-reference/          (fallback)
     # Because the notebook is rewritten in-repo and shipped as-is via `aws s3 sync
-    # notebooks/`, there is nothing for the string-patcher. See docs/ALPASIM_M10.md
-    # and docs/M10_PARTICIPANT_SSM_RUNBOOK.md.
+    # notebooks/`, there is nothing for the string-patcher. See docs/en/ALPASIM_M10.md
+    # and docs/en/M10_PARTICIPANT_SSM_RUNBOOK.md.
     "M10_AlpaSim_ClosedLoop.ipynb": [],
     # M8 is NOT patched here. It was authored in-repo against the real nuScenes
     # tables and the S3 model cache, so its shipped cells already carry the right

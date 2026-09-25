@@ -71,7 +71,7 @@ fi
 CUDA_RT="$(find "$CONDA_ROOT/targets" -path '*/include/cuda_runtime.h' 2>/dev/null | head -1)"
 if [ -z "$CUDA_RT" ]; then
     echo "ERROR: cuda_runtime.h still missing after install — cannot build gsplat."
-    echo "       Fall back to the M7 demo path (see docs/TODO_M7_nerfstudio.md)."
+    echo "       Fall back to the M7 demo path (see docs/en/TODO_M7_nerfstudio.md)."
     exit 1
 fi
 TGT="$(dirname "$(dirname "$CUDA_RT")")"   # .../targets/x86_64-linux
@@ -158,6 +158,6 @@ if env -u CPATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u LIBRARY_PATH -u LD_LI
 else
     echo "ERROR: gsplat built but its CUDA backend failed to import in a clean env."
     echo "       Re-run this script, or fall back to the M7 demo path"
-    echo "       (see docs/TODO_M7_nerfstudio.md)."
+    echo "       (see docs/en/TODO_M7_nerfstudio.md)."
     exit 1
 fi

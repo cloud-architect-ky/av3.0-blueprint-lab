@@ -5,7 +5,7 @@
 **Docs language:** **English** · [한국어](../ko/README.md) · [日本語](../ja/README.md)
 
 A self-service AWS platform for hands-on execution of the [Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/).
-Participants work through **12 Jupyter notebook modules
+Participants work through **13 Jupyter notebook modules
 (M0–M12)** covering the full autonomous-vehicle data pipeline — data exploration,
 video captioning (Cosmos Reason), data curation (Cosmos Curator), synthetic
 augmentation (Cosmos Transfer & Predict), vision-language-action inference
@@ -253,7 +253,7 @@ av3.0-blueprint-lab/
 │   ├── stacks/av30_stack.py
 │   ├── av30_constructs/    # network, storage, database, sagemaker, auth, api, dashboards, monitoring
 │   └── lambda/             # create_user, delete_user, bulk_provision, change_instance, get_costs, update_progress, …
-├── notebooks/              # 12 workshop notebooks M0–M12
+├── notebooks/              # 13 workshop notebooks M0–M12
 ├── web/
 │   ├── admin/              # Admin dashboard (React + Vite)
 │   └── user/               # Participant pipeline map (React + Vite)

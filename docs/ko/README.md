@@ -6,7 +6,7 @@
 
 [NVIDIA와 함께 AWS에서 자율주행 3.0을 위한 End-to-End Physical AI 데이터 파이프라인 구축하기](https://aws.amazon.com/ko/blogs/tech/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/)를 직접 실행해 볼 수 있는 셀프
 서비스 AWS 플랫폼입니다. 참가자는 자율주행 데이터 파이프라인 전체를 다루는
-**12개의 Jupyter 노트북 모듈(M0–M12)**을 차례로 진행합니다 — 데이터 탐색,
+**13개의 Jupyter 노트북 모듈(M0–M12)**을 차례로 진행합니다 — 데이터 탐색,
 비디오 캡셔닝(Cosmos Reason), 데이터 큐레이션(Cosmos Curator), 합성 데이터
 증강(Cosmos Transfer & Predict), 비전-언어-행동 추론(Alpamayo),
 폐루프 시뮬레이션(AlpaSim), 시맨틱 검색, 분산 학습, 3D 재구성, 프로덕션
@@ -244,7 +244,7 @@ av3.0-blueprint-lab/
 │   ├── stacks/av30_stack.py
 │   ├── av30_constructs/    # network, storage, database, sagemaker, auth, api, dashboards, monitoring
 │   └── lambda/             # create_user, delete_user, bulk_provision, change_instance, get_costs, update_progress, …
-├── notebooks/              # 12 workshop notebooks M0–M12
+├── notebooks/              # 13 workshop notebooks M0–M12
 ├── web/
 │   ├── admin/              # Admin dashboard (React + Vite)
 │   └── user/               # Participant pipeline map (React + Vite)

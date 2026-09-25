@@ -1,6 +1,6 @@
 # AV 3.0 Blueprint Lab — Cross-Module Data Contract
 
-The 11 pipeline modules (M1–M12) pass data to each other **only through S3** — no
+The 12 pipeline modules (M1–M12) pass data to each other **only through S3** — no
 in-memory or cross-notebook state. This document is the authoritative record of
 which S3 keys each module reads and writes, and the JSON shapes involved, so a
 change in one notebook doesn't silently break a downstream reader.

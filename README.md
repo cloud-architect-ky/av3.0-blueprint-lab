@@ -5,7 +5,7 @@
 **📖 Docs:** **English** · [한국어](docs/ko/README.md) · [日本語](docs/ja/README.md)
 
 A self-service AWS platform for hands-on execution of the [Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/).
-Participants work through **12 Jupyter notebook modules
+Participants work through **13 Jupyter notebook modules
 (M0–M12)** covering the full autonomous-vehicle data pipeline — data exploration,
 video captioning (Cosmos Reason), data curation (Cosmos Curator), synthetic
 augmentation (Cosmos Transfer & Predict), vision-language-action inference
@@ -43,7 +43,9 @@ Anyone can deploy it into **their own AWS account**.
 
 **The numbering follows the blog's 8-stage order**, so running M0 → M1 → M2 → … in
 sequence walks the pipeline as the blog describes it. M11 and M12 are extensions
-with no blog stage of their own and sit at the end.
+with no blog stage of their own, so they are numbered last — but on the pipeline map
+each sits in the phase it belongs to, which puts M12 under TRAIN and M11 under
+VALIDATE.
 
 Recommended path: straight through **M0 → M10**, then the extensions (M11, M12).
 If you only want one branch: synthetic data is M5/M6, policy + simulation is
@@ -264,7 +266,7 @@ av3.0-blueprint-lab/
 │   ├── stacks/av30_stack.py
 │   ├── av30_constructs/    # network, storage, database, sagemaker, auth, api, dashboards, monitoring
 │   └── lambda/             # create_user, delete_user, bulk_provision, change_instance, get_costs, update_progress, …
-├── notebooks/              # 12 workshop notebooks M0–M12
+├── notebooks/              # 13 workshop notebooks M0–M12
 ├── web/
 │   ├── admin/              # Admin dashboard (React + Vite)
 │   └── user/               # Participant pipeline map (React + Vite)

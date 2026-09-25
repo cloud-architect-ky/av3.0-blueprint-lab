@@ -34,55 +34,91 @@ export function InstanceOptionsPanel({
   const [appStatus, setAppStatus] = useState<AppStatusResponse | null>(null);
   const [polling, setPolling] = useState(false);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cancel flag for the CURRENTLY RUNNING poll loop. pollAppStatus used to return a
+  // cleanup closure that nobody ever called, so a tick already in flight re-armed the
+  // timer after the unmount cleanup had run, and a second Apply stacked a second loop
+  // over the one timer ref — orphaning the first forever. Holding the flag in a ref lets
+  // both the unmount effect and the next Apply actually stop the previous loop.
+  const pollCancelled = useRef<{ v: boolean } | null>(null);
+  // How long to keep polling before giving up. A failed start can leave the app absent
+  // indefinitely (create_app raised, nothing to describe), and an unbounded poll left the
+  // panel on "Waiting for the workspace to be created…" with Apply disabled forever.
+  const POLL_DEADLINE_MS = 10 * 60 * 1000;
 
-  // Poll getAppStatus until the app reaches a terminal state (InService / Failed
-  // / NotFound). Started after Apply. Cleared on unmount.
-  const pollAppStatus = useCallback(() => {
-    if (!userId || !apiClient) return;
-    let cancelled = false;
+  // Poll getAppStatus until the app reaches a terminal state, or the deadline passes.
+  const pollAppStatus = useCallback(
+    // dispatched=true when changeInstance returned 2xx, i.e. a real delete->recreate cycle
+    // is now running server-side. false when it returned 409 ("already set"), i.e. nothing
+    // was dispatched and whatever we read first IS the answer.
+    (dispatched: boolean) => {
+      if (!userId || !apiClient) return;
+      // Stop any previous loop before starting a new one.
+      if (pollCancelled.current) pollCancelled.current.v = true;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+      const me = { v: false };
+      pollCancelled.current = me;
 
-    const tick = async () => {
-      try {
-        const s = await apiClient.getAppStatus(userId);
-        if (cancelled) return;
-        // B1 fix: after a capacity failure on instance A, the participant picks
-        // instance B and re-applies. The just-Failed app for A may not have been
-        // torn down yet, so the FIRST poll can read that stale Failed app —
-        // carrying A's capacityError — and (previously) latch the terminal gate,
-        // showing last cycle's error against the wrong instance. Ignore a
-        // terminal status whose instanceType doesn't match what we just applied:
-        // treat it as the old app still deleting and keep polling until the new
-        // app (selectedInstance) appears.
-        const isStaleTerminal =
-          (s.status === "InService" || s.status === "Failed") &&
-          !!s.instanceType &&
-          s.instanceType !== selectedInstance;
-        if (!isStaleTerminal) {
-          setAppStatus(s);
-          // Terminal states stop the poll; Pending/Deleting keep going.
-          if (s.status === "InService" || s.status === "Failed") {
+      const startedAt = Date.now();
+      // When a cycle was dispatched, the app we want does not exist yet: the old one is
+      // being deleted and the new one has not been created. So the FIRST terminal status
+      // we see can only be the previous cycle's leftovers. Require one non-terminal
+      // observation (Deleting / NotFound / Pending) before believing any terminal one.
+      //
+      // The old guard compared instanceType against selectedInstance instead, which cannot
+      // work for a same-type restart — the case the relaxed 409 in change_instance now
+      // makes reachable — because there the stale app's type IS the requested type, so a
+      // just-Failed app from the previous attempt was reported as this attempt's result
+      // within one second.
+      let sawNonTerminal = !dispatched;
+
+      const tick = async () => {
+        try {
+          const s = await apiClient.getAppStatus(userId);
+          if (me.v) return;
+          const terminal = s.status === "InService" || s.status === "Failed";
+          if (!terminal) {
+            sawNonTerminal = true;
+            setAppStatus(s);
+          } else if (sawNonTerminal) {
+            setAppStatus(s);
             setPolling(false);
             return;
           }
+          // A recorded failure is terminal even though the app is absent: create_app threw,
+          // so there will never be an app to describe. The backend already explains why in
+          // lastInstanceChangeError; without this the poll ran to the deadline showing a
+          // reassuring "waiting" message over a known failure.
+          const err = s.lastInstanceChangeError;
+          if (err && err.requestedType === selectedInstance && sawNonTerminal) {
+            setAppStatus(s);
+            setPolling(false);
+            return;
+          }
+        } catch {
+          // Transient (e.g. API GW hiccup) — keep polling; don't surface noise.
         }
-      } catch {
-        // Transient (e.g. API GW hiccup) — keep polling; don't surface noise.
-      }
-      if (!cancelled) {
+        if (me.v) return;
+        if (Date.now() - startedAt > POLL_DEADLINE_MS) {
+          setPolling(false);
+          setApplyError(
+            "The workspace did not come up within 10 minutes. Re-open Instance Options " +
+              "to try again, pick a different instance type, or ask the workshop admin to " +
+              "check the session."
+          );
+          return;
+        }
         pollTimer.current = setTimeout(() => void tick(), 8000);
-      }
-    };
+      };
 
-    setPolling(true);
-    void tick();
-    return () => {
-      cancelled = true;
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-    };
-  }, [userId, apiClient, selectedInstance]);
+      setPolling(true);
+      void tick();
+    },
+    [userId, apiClient, selectedInstance]
+  );
 
   useEffect(() => {
     return () => {
+      if (pollCancelled.current) pollCancelled.current.v = true;
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, []);
@@ -141,6 +177,10 @@ export function InstanceOptionsPanel({
       // exceed the API Gateway 29s timeout and surface as a 502/504 even though
       // the change is proceeding server-side. So a gateway timeout is NOT fatal:
       // we fall through to polling getAppStatus, which reflects the real outcome.
+      // Did change_instance actually dispatch a delete->recreate cycle? 409 means it did
+      // not (the app is already running the requested type), and the poller needs to know:
+      // with no cycle running, the first status it reads IS the answer.
+      let dispatched = true;
       try {
         await apiClient.changeInstance(userId, selectedInstance);
       } catch (e) {
@@ -150,8 +190,18 @@ export function InstanceOptionsPanel({
         if (!isAlreadySet && !isGatewayTimeout) {
           throw e;
         }
+        if (isAlreadySet) dispatched = false;
       }
-      if (storageAdded > 0) {
+      // Storage resize. expand_storage runs its OWN delete -> update_space -> create_app
+      // cycle, so firing it while change_instance's cycle is in flight puts two tails on
+      // one space: they both wait for the delete, both update_space, and one loses
+      // create_app with ResourceInUse. expand_storage has no recovery path and
+      // retry_attempts=0, so the resize is then dropped with nothing recorded anywhere.
+      //
+      // Only one cycle per click: when change_instance dispatched, it already recreates the
+      // app, so the resize has to be a separate, later action. When it returned 409 there
+      // is no cycle in flight and expand_storage is safe to run now.
+      if (storageAdded > 0 && !dispatched) {
         try {
           await apiClient.expandStorage(userId, storageAdded);
         } catch (e) {
@@ -160,10 +210,16 @@ export function InstanceOptionsPanel({
             throw e;
           }
         }
+      } else if (storageAdded > 0) {
+        setApplyError(
+          `Applying ${selectedInstance} now. Storage was NOT resized — re-open Instance ` +
+            `Options once the workspace is running and add the ${storageAdded} GB then ` +
+            `(a resize and an instance change cannot run at the same time).`
+        );
       }
       // Do not close — start polling so the user watches the workspace come up
       // (and sees a capacity failure with an actionable hint if it happens).
-      pollAppStatus();
+      pollAppStatus(dispatched);
     } catch (e) {
       setApplyError(
         e instanceof Error ? e.message : "Failed to apply changes. Try again."
@@ -348,6 +404,30 @@ function buildStatusFlash(
   polling: boolean
 ): FlashbarProps.MessageDefinition {
   const id = "app-status";
+
+  // A RECORDED failure outranks the app lifecycle. When create_app itself raises there is
+  // no app to describe, so `status` is a bland "NotFound" and every branch below would
+  // reassure the participant that their workspace is on its way. change_instance's async
+  // tail writes the real reason to lastInstanceChangeError; surface it, and say what to do.
+  const changeError = status?.lastInstanceChangeError;
+  if (changeError && status && status.status !== "InService" && status.status !== "Pending") {
+    const sameType = changeError.requestedType === changeError.previousType;
+    return {
+      id,
+      type: "error",
+      dismissible: false,
+      header: `Could not start ${changeError.requestedType}`,
+      content:
+        `${changeError.message} ` +
+        (changeError.recovered === true
+          ? `Your previous instance (${changeError.previousType}) was restored.`
+          : sameType
+            ? "Nothing was lost — no workspace was running before this attempt. " +
+              "Pick a different instance type and apply again."
+            : "Pick a different instance type and apply again, or ask the workshop admin " +
+              "to free a slot."),
+    };
+  }
 
   // Still waiting for the first status, or app is coming up.
   if (!status || status.status === "Pending" || status.status === "Deleting") {

@@ -43,7 +43,7 @@ https://<user-dashboard>.cloudfront.net/?userId=<your-id>&token=<your-token>
   워크숍 중 언제든 다시 사용하세요.
 - 페이지에 **"Demo Mode"** 배너가 표시되면, 링크에 `userId`/`token`이
   누락된 것입니다 — 뒤로 돌아가 관리자가 보낸 전체 링크를 여세요.
-- **Pipeline Map**이 표시됩니다: M1–M11 노드가 상태별로 색상 구분되어 있습니다.
+- **Pipeline Map**이 표시됩니다: M1–M12 노드 12개가 상태별로 색상 구분되어 있습니다.
 
 > 여기서 실행하는 워크스페이스 링크는 몇 분 후 만료되지만, 그것을 직접 복사할
 > 일은 없습니다 — **Open Workspace**를 클릭할 때마다(3단계) 대시보드가 새 링크를
@@ -257,7 +257,9 @@ GPU 인스턴스는 시간 단위로 과금되며 **무료가 아닙니다**(`ml
 - GPU 모듈에서 CPU 모듈(M4, M11)로 이동할 때는 (Instance Options를 통해)
   **`ml.t3.medium`으로 다시 전환**하세요 — GPU 인스턴스를 유휴 상태로 두지 마세요.
 - 워크스페이스는 **90분(`-c idle_timeout_minutes=<60..180>`로 변경 가능) 동안 활동이 없으면 자동으로 종료**되지만, 여기에
-  의존하지 마세요 — 자리를 비울 때는 작업을 마치거나 일시 중지하세요.
+  의존하지 마세요 — 자리를 비울 때는 작업을 마치거나 일시 중지하세요. 다시 켜려면 아무
+  모듈 노드 → **Instance Options** → **Apply & Restart**. 파일은 스페이스 볼륨에 있으므로
+  종료되어도 그대로 남습니다.
 - 워크숍 관리자는 활성 세션을 볼 수 있으며 문제가 생기면 도와줄 것입니다.
 
 ---
@@ -301,6 +303,7 @@ M1 (explore, CPU)
 | GPU 노트북에서 "No GPU detected" | CPU에 있는 것입니다 — Instance Options → GPU 인스턴스 → Apply & Restart → Open Workspace 다시 클릭. |
 | `EC2InsufficientCapacityError` | Instance Options에서 `ml.g6.12xlarge`(또는 다음) 대체 인스턴스를 선택합니다. |
 | 워크스페이스 링크 만료 / 빈 화면 | 대시보드에서 **Open Workspace**를 다시 클릭하여 새 링크를 받습니다. |
+| **Open Workspace**가 JupyterLab이 아니라 Studio 홈으로 갈 때 | 워크스페이스가 멈춘 상태입니다(90분 유휴 종료가 이렇게 만듭니다). 대시보드에서 다시 켜세요: 아무 모듈 노드 → **Instance Options** → **Apply & Restart** → “Workspace running”이 되면 **Open Workspace**. Studio의 **Run space** 버튼은 쓰지 마세요 — 참가자는 스페이스를 수정할 권한이 없어 `UpdateSpace` 권한 오류가 납니다. |
 | 노트북에서 디스크 부족 | Instance Options → +50 GB / +200 GB → Apply. |
 | 인스턴스 변경 후 노트북 파일 누락 | 재시작이 완료될 때까지 기다린 후 Open Workspace를 다시 클릭합니다(시작 시 노트북이 다시 동기화됨). |
 | "인스턴스를 변경한 후 결과를 잃었나요?" | 아니요 — 결과는 S3에 있고 홈 디렉터리는 유지됩니다; 이전 커널의 메모리만 지워집니다. [인스턴스 변경 시 무엇이 유지되나요?](#what-survives-an-instance-change)를 참조하세요. 새 노트북을 위에서부터 다시 실행하세요. |

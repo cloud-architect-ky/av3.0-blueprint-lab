@@ -333,9 +333,27 @@ class SageMakerConstruct(Construct):
         #   DeleteSpace               destroyed any participant's workspace. delete_user's
         #                             Lambda owns teardown.
         #   CreateSpace               create_user's Lambda owns provisioning.
-        #   UpdateSpace               change_instance's Lambda owns instance changes. (If
-        #                             the Studio UI is ever seen to need this for a
-        #                             participant's own space, restore it and say so.)
+        #   UpdateSpace               change_instance's Lambda owns instance changes.
+        #                             ANSWERING THE OPEN QUESTION THIS COMMENT USED TO ASK:
+        #                             yes, the Studio UI was seen to need it — the space
+        #                             page's "Run space" button calls UpdateSpace to persist
+        #                             the form before CreateApp, so a participant clicking it
+        #                             gets "not authorized to perform: sagemaker:UpdateSpace"
+        #                             (measured in ap-northeast-2, 2026-09-25). It was NOT
+        #                             restored. Restoring it would hand every participant
+        #                             UpdateSpace on resources=["*"] — all participants share
+        #                             this one role, so A could retype B's space onto a
+        #                             $8/hr GPU — and it would bypass the dashboard's quota
+        #                             pre-check and the recorded instanceType that
+        #                             list_sessions prices the admin Costs view from
+        #                             (list_sessions/handler.py). Fixed in the dashboard
+        #                             instead:
+        #                             change_instance's 409 "already set" guard now fires
+        #                             only when an app is actually live, so "Apply" starts
+        #                             the app for the current type (first run, and after an
+        #                             idle shutdown), and presigned_url lands a participant
+        #                             inside a running JupyterLab rather than on the space
+        #                             page. Participants never need to press "Run space".
         #   ListUserProfiles          the cohort roster — pure targeting value.
         #   ListDomains               enumeration; only the admin rescue tool used it.
         #   DeleteTags                unused by any participant path.
@@ -353,6 +371,18 @@ class SageMakerConstruct(Construct):
         # RESIDUAL RISK, accepted deliberately for a trusted cohort: the kept Describe*
         # and List* still see PEER resources, and CreateApp/DeleteApp are not restricted
         # to the caller's own space. Removing that needs per-participant roles.
+        #
+        # COST BLAST RADIUS, stated plainly rather than implied: keeping CreateApp on
+        # resources=["*"] means the dashboard is the cost control by CONVENTION, not by
+        # IAM. CreateApp takes a caller-supplied ResourceSpec, so a participant who runs
+        # boto3 from inside their own notebook can ask for an instance type the dashboard
+        # would refuse (VALID_INSTANCE_TYPES is enforced in the Lambda, not here) on any
+        # space in the domain, with no studio_quota_for pre-check and no DynamoDB record —
+        # which also means list_sessions prices it at the recorded type, not the running
+        # one. What limits the damage today is the per-type Studio quota (the heavy types
+        # are 2-5 in both deploy regions) and the daily budget alarm, not this policy.
+        # Closing it properly is the same change as isolating peers: one role per user
+        # profile, with the space ARN baked in.
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="SageMakerStudioAccess",

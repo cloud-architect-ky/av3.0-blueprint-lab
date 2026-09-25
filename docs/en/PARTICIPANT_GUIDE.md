@@ -43,7 +43,7 @@ https://<user-dashboard>.cloudfront.net/?userId=<your-id>&token=<your-token>
   it any time during the workshop.
 - If the page shows a **"Demo Mode"** banner, the link is missing your
   `userId`/`token` — go back and open the full link the admin sent you.
-- You'll see the **Pipeline Map**: nodes M1–M11, color-coded by status.
+- You'll see the **Pipeline Map**: nodes M1–M12 (12 of them), color-coded by status.
 
 > The workspace links you launch from here do expire after a few minutes, but you
 > never copy those by hand — the dashboard mints a fresh one each time you click
@@ -256,7 +256,9 @@ $7.09/hr; `ml.g6.24xlarge` ≈ $8.34/hr; `ml.p4d.24xlarge` ≈ $25.25/hr). Pleas
 - **Switch back to `ml.t3.medium`** (via Instance Options) when you move from a
   GPU module to a CPU module (M4, M11) — don't leave a GPU box idle.
 - Your workspace **auto-shuts down after 90 minutes (`-c idle_timeout_minutes=<60..180>` to change) of inactivity**, but don't rely
-  on it — finish or pause when you step away.
+  on it — finish or pause when you step away. To get it back: any module node →
+  **Instance Options** → **Apply & Restart**. Your files are on the space's volume and
+  survive the shutdown.
 - The workshop admin can see active sessions and will help if something is stuck.
 
 ---
@@ -301,6 +303,7 @@ full architecture and the blog stage → module mapping.
 | "No GPU detected" in a GPU notebook | You're on CPU — Instance Options → GPU instance → Apply & Restart → Open Workspace again. |
 | `EC2InsufficientCapacityError` | Pick the `ml.g6.12xlarge` (or next) alternative in Instance Options. |
 | Workspace link expired / blank | Click **Open Workspace** again from the dashboard for a fresh link. |
+| **Open Workspace** lands on the Studio home page, not JupyterLab | Your workspace is stopped (this is what the 90-minute idle shutdown does). The dashboard restarts it: open any module node → **Instance Options** → **Apply & Restart**, wait for “Workspace running”, then **Open Workspace**. Do **not** use Studio's own **Run space** button — participants are not permitted to modify the space, so it fails with an `UpdateSpace` authorization error. |
 | Out of disk in a notebook | Instance Options → +50 GB / +200 GB → Apply. |
 | Notebook files missing after instance change | Wait for the restart to finish, then Open Workspace again (notebooks re-sync on start). |
 | "Did I lose my results after changing instances?" | No — results are in S3 and your home directory persists; only the old kernel's memory is cleared. See [What survives an instance change?](#what-survives-an-instance-change). Re-run the new notebook from the top. |

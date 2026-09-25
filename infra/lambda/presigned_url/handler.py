@@ -55,12 +55,40 @@ def handler(event, context):
     if user_item.get("status") == "deleted":
         raise ApiError(410, f"User has been deleted: {user_id}")
 
-    # Generate new presigned URL
-    presigned_url_response = sagemaker.create_presigned_domain_url(
-        DomainId=SAGEMAKER_DOMAIN_ID,
-        UserProfileName=user_id,
-        SessionExpirationDurationInSeconds=PRESIGNED_URL_EXPIRY,
-    )
+    # Generate new presigned URL.
+    #
+    # When the participant's JupyterLab app is already running, land them INSIDE it
+    # (LandingUri "app:JupyterLab:" + SpaceName) instead of on the Studio home page.
+    # Without this the participant arrives at Studio home, has to find their space, and
+    # is one click away from the space page's "Run space" button — which calls
+    # sagemaker:UpdateSpace and fails with AccessDenied, because the participant
+    # execution role deliberately does not have it (see the REMOVED list in
+    # infra/av30_constructs/sagemaker.py). Studio also shows a scary banner there
+    # ("Permission issue detected... include: sagemaker:createPresignedDomainUrl")
+    # for the same reason. Landing in the app avoids that whole page.
+    #
+    # Only when the app is LIVE. A LandingUri pointing at an app that does not exist has
+    # nowhere to go, so with no app we keep the old behaviour (Studio home) — and the
+    # dashboard's Instance Options panel is what starts the app in that case.
+    # LandingUri values are from the CreatePresignedDomainUrl API reference:
+    # "app:JupyterLab:relative/path" directs the user into the JupyterLab application.
+    url_kwargs = {
+        "DomainId": SAGEMAKER_DOMAIN_ID,
+        "UserProfileName": user_id,
+        "SessionExpirationDurationInSeconds": PRESIGNED_URL_EXPIRY,
+    }
+    space_name = user_item.get("spaceName") or f"{user_id}-space"
+    if _app_is_serving(space_name):
+        url_kwargs["SpaceName"] = space_name
+        url_kwargs["LandingUri"] = "app:JupyterLab:"
+        logger.info(f"App is live; landing {user_id} directly in JupyterLab")
+    else:
+        logger.info(
+            f"No live app for space {space_name}; landing {user_id} on Studio home "
+            f"(the dashboard's Instance Options panel starts the app)"
+        )
+
+    presigned_url_response = sagemaker.create_presigned_domain_url(**url_kwargs)
     presigned_url = presigned_url_response["AuthorizedUrl"]
 
     # Calculate new expiry
@@ -86,3 +114,36 @@ def handler(event, context):
         "presignedUrl": presigned_url,
         "expiresAt": expires_at_iso,
     }
+
+
+def _app_is_serving(space_name: str) -> bool:
+    """True only when this space's JupyterLab app is InService.
+
+    DELIBERATELY STRICTER than _live_app_state in change_instance/handler.py, which counts
+    Pending as live. The two predicates answer different questions:
+      * change_instance asks "is a restart a no-op?" — a Pending app is already coming up
+        on the requested type, so yes.
+      * this asks "should I deep-link the browser into JupyterLab?" — a Pending app has no
+        server behind it yet (the instance is still booting and the image still pulling),
+        and a deep link would land on a route nothing answers. Studio home is the better
+        destination until the app is actually serving.
+
+    Best-effort: any failure returns False, which costs the participant only the nicer
+    landing page, never the URL itself.
+    """
+    try:
+        resp = sagemaker.describe_app(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            SpaceName=space_name,
+            AppType="JupyterLab",
+            AppName="default",
+        )
+    except sagemaker.exceptions.ResourceNotFound:
+        # Normal: no app has been created yet, or one was idle-shut-down.
+        return False
+    except Exception as exc:  # noqa: BLE001
+        # A throttle is NOT "no app" — log it as the anomaly it is rather than at INFO,
+        # so a cohort-start DescribeApp throttle is visible instead of looking routine.
+        logger.warning(f"DescribeApp failed for {space_name}: {exc}")
+        return False
+    return resp.get("Status") == "InService"

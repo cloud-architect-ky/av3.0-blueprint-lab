@@ -14,8 +14,9 @@ Split into a fast synchronous request path and an asynchronous continuation:
 
 * Async path (`_apply_async`): the slow tail. Runs within the 15-min Lambda
   timeout. Persists the new instanceType to DynamoDB only AFTER create_app
-  succeeds, so the 409 "already set" guard stays meaningful and we never record
-  a type that isn't actually running.
+  succeeds, so the previous type stays a valid rollback target and we never
+  record a type that isn't actually running. (It is NOT what makes the 409
+  "already set" guard work — that reads the live app via _live_app_state.)
 
 Issuing delete_app on the SYNC path (before returning) flips the old app to
 Deleting before the frontend's first poll, so the poller can't latch onto the
@@ -132,16 +133,19 @@ def _http_handler(event, context):
 
     # Validate against module config if user has an active module.
     #
-    # NOTE this is dormant in the real workshop: update_progress writes
-    # currentModule as "m0".."m11", and MODULE_CONFIG is keyed
-    # "module-1".."module-5", so the membership test is False and the guard is
-    # skipped. It only fires for the legacy module-N ids.
+    # NOTE this is dormant in the real workshop: update_progress accepts currentModule
+    # as the short ids "m0".."m12" AND the canonical long ids the frontend and the
+    # notebooks actually emit ("m01-data-exploration".."m12-hyperpod" — see
+    # VALID_MODULE_IDS in infra/lambda/update_progress/handler.py). MODULE_CONFIG is keyed
+    # "module-1".."module-5", so the membership test is False for every id a real
+    # participant produces and the guard is skipped. It only fires for the legacy
+    # module-N ids.
     #
     # It also uses PRICE as a proxy for CAPABILITY, which is no longer sound now
     # that ml.g7e.* exists: ml.g7e.2xlarge is 96 GB on one card ($4.20/hr) yet
     # CHEAPER than ml.g6.24xlarge (4× 24 GB, $8.34/hr) while clearing every
     # per-GPU tier the g6 box fails. If MODULE_CONFIG is ever populated with the
-    # real m0..m11 modules and their GPU defaults, this comparison must become a
+    # real m0..m12 modules and their GPU defaults, this comparison must become a
     # capability check (per-GPU VRAM / total VRAM), or it will reject the
     # strictly better instance as "below minimum requirement".
     if current_module and current_module in MODULE_CONFIG:
@@ -157,8 +161,45 @@ def _http_handler(event, context):
                 details=f"Minimum: {module_default}",
             )
 
-    if new_instance_type == previous_type:
+    # 409 ONLY when there is genuinely nothing to do — that is, an app for this type is
+    # already up (or coming up). It is NOT enough that DynamoDB records the type.
+    #
+    # Measured first-run dead end this guard used to create (ap-northeast-2, 2026-09-25):
+    # create_user creates the SPACE but no app, and this handler is the only path the
+    # dashboard's Apply invokes that can start one. (expand_storage also recreates the app
+    # as a side effect of a resize — see infra/lambda/expand_storage/handler.py — which is
+    # why the frontend must not call both in one click.) M1's recommendedInstance is ml.t3.medium, which is
+    # exactly the space default — so the very first Apply of the workshop arrived here
+    # with new == previous and got a 409. Both escape routes were then closed:
+    #   * the frontend treats 409 as a no-op and starts polling GET /app-status, which
+    #     stays "NotFound" forever because nothing created an app;
+    #   * the Studio UI's own "Run space" button calls sagemaker:UpdateSpace, which the
+    #     participant execution role deliberately does not have (see the REMOVED list in
+    #     infra/av30_constructs/sagemaker.py) — the participant saw
+    #     "Error updating space ... not authorized to perform: sagemaker:UpdateSpace".
+    # Verified against the live domain: space InService on ml.t3.medium, list-apps [].
+    #
+    # The same gate also locked participants out after every idle shutdown: SageMaker
+    # DELETES the app when the idle timer fires (90 min here), leaving the recorded type
+    # unchanged, so "start my workspace again on the same instance" was a 409 too. Asking
+    # them to switch to a different (billable GPU) type just to get a shell was the only
+    # workaround. Falling through fixes first-run and idle-recovery with one change.
+    # Decide from the LIVE app, not from DynamoDB. The recorded instanceType can disagree
+    # with what is actually running (an admin Terminate leaves the type recorded with no
+    # app; a failed tail leaves the type recorded after a rollback), and whenever they
+    # disagree a DDB-only guard 409s a participant whose workspace is genuinely down.
+    app_state, live_type = _live_app_state(space_name)
+    if app_state == "live" and live_type == new_instance_type:
         raise ApiError(409, "Instance type is already set to the requested type")
+    if app_state == "unknown" and new_instance_type == previous_type:
+        # DescribeApp was unreadable (throttle, transient). Do NOT fall through: the request
+        # path below deletes the existing app before dispatching, so guessing "no app" here
+        # would tear down a possibly-healthy workspace. Refusing costs one retry.
+        raise ApiError(
+            409,
+            "Could not confirm whether your workspace is already running on "
+            f"{new_instance_type}; nothing was changed. Try again in a moment.",
+        )
 
     # Being SOLD in this region is not the same as being LAUNCHABLE by this account. A priced
     # type whose Studio quota is 0 is accepted by CreateApp and then fails to start —
@@ -225,6 +266,38 @@ def _http_handler(event, context):
         "previousType": previous_type,
         "newType": new_instance_type,
     }
+
+
+def _live_app_state(space_name: str):
+    """What is ACTUALLY running for this space, as ("absent"|"live"|"unknown", type|None).
+
+    "live"    -> a JupyterLab app is Pending or InService; the second element is its
+                 ResourceSpec.InstanceType, which is the only trustworthy answer to
+                 "what is this participant running right now".
+    "absent"  -> no app (never created), or Deleting / Deleted / Failed. Deleted is what an
+                 idle shutdown leaves behind and Failed is what a capacity error leaves
+                 behind; in both cases a same-type Apply is the participant asking for
+                 their workspace back, which must be allowed.
+    "unknown" -> DescribeApp could not be read. Deliberately NOT folded into "absent":
+                 the caller deletes the existing app before dispatching the async tail, so
+                 treating an unreadable lookup as "no app" would tear down a workspace that
+                 is probably healthy. The caller refuses the same-type case instead.
+    """
+    try:
+        resp = sagemaker.describe_app(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            SpaceName=space_name,
+            AppType=APP_TYPE,
+            AppName="default",
+        )
+    except sagemaker.exceptions.ResourceNotFound:
+        return "absent", None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"DescribeApp failed for {space_name}: {exc}")
+        return "unknown", None
+    if resp.get("Status") not in ("Pending", "InService"):
+        return "absent", None
+    return "live", resp.get("ResourceSpec", {}).get("InstanceType")
 
 
 def _record_change_error(user_id, previous_type, new_instance_type, message, recovered):
@@ -362,7 +435,20 @@ def _apply_async(event):
             f"[async] Failed applying {new_instance_type} for {user_id}; "
             f"restoring {previous_type}"
         )
-        recovered = _restore_previous(space_name, previous_type)
+        # Only roll back when there is a DIFFERENT state to roll back TO. On a same-type
+        # start (first run, or a restart after an idle shutdown / Terminate) previous_type
+        # IS new_instance_type, so "restoring" re-runs the identical failing configuration
+        # against the same exhausted quota: it cannot succeed, it burns another
+        # delete->update->wait->create cycle inside a Lambda whose timeout already assumes
+        # only one, and it ends by reporting "needs admin help" when nothing was lost.
+        if previous_type == new_instance_type:
+            logger.warning(
+                f"[async] Same-type start of {new_instance_type} failed for {user_id}; "
+                f"nothing to restore (no app was running before)"
+            )
+            recovered = None
+        else:
+            recovered = _restore_previous(space_name, previous_type)
         _record_change_error(
             user_id, previous_type, new_instance_type, str(exc), recovered
         )
@@ -377,8 +463,10 @@ def _apply_async(event):
             "error": str(exc),
         }
 
-    # Persist ONLY after the recreate succeeds — keeps the 409 "already set"
-    # guard meaningful and never records a type that isn't actually running.
+    # Persist ONLY after the recreate succeeds. Two reasons, neither of which is the 409
+    # guard any more (that now reads the live app, not this value): previous_type must stay
+    # a valid rollback target for the except branch above, and instanceType must never
+    # advertise a type that is not actually running — list_sessions prices from it.
     now_iso = datetime.now(timezone.utc).isoformat()
     table = dynamodb.Table(SESSIONS_TABLE_NAME)
     table.update_item(
@@ -388,10 +476,16 @@ def _apply_async(event):
         # this attempt succeeded. Doing it in one call also means there is no window where
         # the new type is recorded while the old error is still attached. REMOVE on an
         # absent attribute is a no-op, so this is safe on the common first-try path.
+        # appStatus / terminatedAt are cleared here too. terminate_session sets
+        # appStatus="stopped" (its sole writer) and list_sessions derives status="offline"
+        # from it, then SKIPS costing offline rows (list_sessions/handler.py:104). So a
+        # restart that left the marker in place would show the admin $0.00 on a box that is
+        # billing — the exact failure terminate_session's docstring says it was written to
+        # eliminate — and terminate_session:63 would refuse a second Terminate with 409.
         UpdateExpression=(
             "SET instanceType = :new_type, "
             "instanceHistory = list_append(if_not_exists(instanceHistory, :empty_list), :history) "
-            "REMOVE lastInstanceChangeError"
+            "REMOVE lastInstanceChangeError, appStatus, terminatedAt"
         ),
         ExpressionAttributeValues={
             ":new_type": new_instance_type,

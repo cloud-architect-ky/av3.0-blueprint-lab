@@ -217,7 +217,10 @@ def _apply_async(event):
     table = dynamodb.Table(SESSIONS_TABLE_NAME)
     table.update_item(
         Key={"userId": user_id},
-        UpdateExpression="SET storageGB = :size",
+        # Same reasoning as change_instance: this recreated the app, so an appStatus
+        # of "stopped" left over from an admin Terminate would make list_sessions
+        # report the now-running box as offline and cost it at $0.00.
+        UpdateExpression="SET storageGB = :size REMOVE appStatus, terminatedAt",
         ExpressionAttributeValues={":size": new_size_gb},
     )
     logger.info(f"[async] Storage resize complete for {user_id}: {new_size_gb} GB")

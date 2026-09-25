@@ -51,6 +51,22 @@ export interface AppStatusResponse {
   // True when failureReason is an AWS capacity shortage (EC2InsufficientCapacity)
   // — the UI should suggest switching to an alternative instance.
   capacityError: boolean;
+  // Why the last instance change failed, written by change_instance's async tail.
+  //
+  // This is the ONLY explanation a failed change produces, and it is the only signal for
+  // the failure mode where NO app exists to describe (create_app itself raised, so
+  // `status` is a bland "NotFound"). The backend has always returned it
+  // (infra/lambda/app_status/handler.py); it was missing from this interface, so the panel
+  // rendered "Waiting for the workspace to be created…" over a recorded, specific failure.
+  lastInstanceChangeError?: {
+    requestedType: string;
+    previousType: string;
+    message: string;
+    // true = rolled back to previousType; false = rollback also failed;
+    // null = nothing to roll back to (a same-type start, so no app was running before).
+    recovered: boolean | null;
+    failedAt: string;
+  } | null;
 }
 
 export class ApiClient {

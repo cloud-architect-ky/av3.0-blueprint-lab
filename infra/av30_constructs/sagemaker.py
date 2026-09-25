@@ -142,11 +142,15 @@ PYEOF
 #        ++ export AV30_PROGRESS_TOKEN=<the participant's token>
 #   2. the heredoc below traces its expanded body as well
 # Those traces land in /aws/sagemaker/<...>/LifecycleConfigOnStart — ONE log group
-# shared by every participant — and the single shared execution role grants
-# logs:GetLogEvents + logs:DescribeLogStreams on /aws/sagemaker/*. So any
-# participant could read any other participant's API token out of the log, and the
-# token does not expire. Verified end to end: role
-# av30lab-sagemaker-execution-role-us-west-2, Sid CloudWatchLogsAccess.
+# shared by every participant — and at the time the single shared execution role GRANTED
+# logs:GetLogEvents + logs:DescribeLogStreams on /aws/sagemaker/*. So any participant
+# could read any other participant's API token out of the log, and the token does not
+# expire. Verified end to end: role av30lab-sagemaker-execution-role-us-west-2, Sid
+# CloudWatchLogsAccess.
+#
+# Both halves are now closed: this script wraps the token handling in `set +x` (below),
+# and GetLogEvents was dropped from CloudWatchLogsAccess. Keep the `set +x` regardless —
+# it is what stops the leak at the source, and the IAM change is only defence in depth.
 set +x
 PROGRESS_ENV=/home/sagemaker-user/.av30-progress.env
 if [ -f "$PROGRESS_ENV" ]; then

@@ -378,8 +378,10 @@ self-run path: [ALPASIM_M10.md](ALPASIM_M10.md), [M10_MANUAL_TEST_RUNBOOK.md](M1
 ### 6.5 Upload notebook templates + scripts (do this LAST, after any notebook edits)
 ```bash
 # <shared> = av30lab-shared-data-<account>-<region>. $AWS_REGION is the value exported in §5 (or: export AWS_REGION=...)
-aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
-aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
+aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION" \
+    --exclude "*__pycache__*" --exclude "*.pyc"
+aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION" \
+    --exclude "*__pycache__*" --exclude "*.pyc"
 ```
 
 > **Re-syncing into a bucket that already holds the pre-renumbering notebooks?**

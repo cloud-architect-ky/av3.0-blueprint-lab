@@ -370,8 +370,10 @@ M10 ノートブック（CPU）は、全参加者向けにこれらの結果を�
 ### 6.5 ノートブックテンプレート + スクリプトのアップロード（これは最後に、ノートブック編集後に行う）
 ```bash
 # <shared> = av30lab-shared-data-<account>-<region>. $AWS_REGION は §5 で export した値（または: export AWS_REGION=...）
-aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
-aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
+aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION" \
+    --exclude "*__pycache__*" --exclude "*.pyc"
+aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION" \
+    --exclude "*__pycache__*" --exclude "*.pyc"
 ```
 
 > **番号変更前のノートブックが既に入っているバケットへ再同期しますか？**

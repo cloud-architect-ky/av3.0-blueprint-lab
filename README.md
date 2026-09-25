@@ -190,14 +190,21 @@ AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    one-time GPU-EC2 reference eval — see docs/en/ADMIN_GUIDE.md §6 and the
 #    per-module deep dives (COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10).
 
-# 7. Stage the nuScenes-mini dataset to S3 (required by M1 / M3 / M7)
+# 7. Stage the nuScenes-mini dataset to S3
+#    Required by M1, M2, M3, M5, M6, M7, M8, M9. M8 hard-fails without the annotation
+#    tables (its cell 4 raises SystemExit per missing table), so this is not optional
+#    for the Training module.
 AWS_REGION="$REGION" ./scripts/stage_nuscenes.sh
 #    Pulls from the public AWS Open Data mirror (no login; nuScenes terms apply).
 
 # 8. Upload notebook templates + helper scripts to the shared bucket
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/" --region "$REGION"
-aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/scripts/" --region "$REGION"
+# --exclude matters: without it a local scripts/__pycache__/*.pyc gets staged and then
+# syncs into EVERY participant workspace (measured: 4 stray .pyc in one region).
+aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/" \
+    --region "$REGION" --exclude "*__pycache__*" --exclude "*.pyc"
+aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/scripts/" \
+    --region "$REGION" --exclude "*__pycache__*" --exclude "*.pyc"
 ```
 
 Then open the **Admin Dashboard URL** printed by `deploy.sh`, log in with the

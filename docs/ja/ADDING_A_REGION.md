@@ -275,8 +275,10 @@ aws cognito-idp describe-user-pool-domain --domain av30lab-admin --region $R
 
 ```bash
 SHARED=av30lab-shared-data-$ACCOUNT-$R
-aws s3 sync notebooks/ "s3://$SHARED/notebook-templates/"        --region $R
-aws s3 sync scripts/   "s3://$SHARED/notebook-templates/scripts/" --region $R
+aws s3 sync notebooks/ "s3://$SHARED/notebook-templates/"        --region $R \
+    --exclude "*__pycache__*" --exclude "*.pyc"
+aws s3 sync scripts/   "s3://$SHARED/notebook-templates/scripts/" --region $R \
+    --exclude "*__pycache__*" --exclude "*.pyc"
 ```
 
 ### 次にデータ — 再ダウンロードではなく、バケット間コピーで

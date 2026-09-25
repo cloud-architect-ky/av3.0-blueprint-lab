@@ -374,8 +374,10 @@ M10 노트북(CPU)은 모든 참가자를 위해 이 결과를 다운로드하�
 ### 6.5 노트북 템플릿 + 스크립트 업로드 (노트북 편집 후 맨 마지막에 실행)
 ```bash
 # <shared> = av30lab-shared-data-<account>-<region>. $AWS_REGION 은 §5에서 export한 값 (또는: export AWS_REGION=...)
-aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION"
-aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION"
+aws s3 sync notebooks/ s3://<shared>/notebook-templates/ --region "$AWS_REGION" \
+    --exclude "*__pycache__*" --exclude "*.pyc"
+aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_REGION" \
+    --exclude "*__pycache__*" --exclude "*.pyc"
 ```
 
 > **재번호 이전 노트북이 이미 들어 있는 버킷에 다시 동기화하나요?**

@@ -437,7 +437,11 @@ echo "  1. Create Cognito admin user: aws cognito-idp admin-create-user --user-p
 # a second region re-seeded the FIRST region's bucket. Both scripts now refuse to guess,
 # and this command carries the region that was actually deployed.
 echo "  2. Stage notebook templates (REQUIRED — provisioning fails without them):"
-echo "       aws s3 sync notebooks/ s3://$SHARED_BUCKET/notebook-templates/ --region $REGION"
-echo "       aws s3 sync scripts/   s3://$SHARED_BUCKET/notebook-templates/scripts/ --region $REGION"
+# --exclude is part of the command, not a nicety: a local scripts/__pycache__ otherwise
+# stages .pyc files that then sync into every participant workspace.
+echo "       aws s3 sync notebooks/ s3://$SHARED_BUCKET/notebook-templates/ --region $REGION \\"
+echo "           --exclude '*__pycache__*' --exclude '*.pyc'"
+echo "       aws s3 sync scripts/   s3://$SHARED_BUCKET/notebook-templates/scripts/ --region $REGION \\"
+echo "           --exclude '*__pycache__*' --exclude '*.pyc'"
 echo "  3. Stage nuScenes:   AWS_REGION=$REGION ./scripts/stage_nuscenes.sh"
 echo "  4. Pre-cache models: AWS_REGION=$REGION HF_TOKEN=xxx ./scripts/cache_models.sh"

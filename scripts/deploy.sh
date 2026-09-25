@@ -89,6 +89,41 @@ fi
 
 cd "$(dirname "$0")/.."
 
+# --- GPU quota pre-flight — BEFORE cdk deploy, and BEFORE the venv ------------------
+#
+# Runs here for two reasons, both measured:
+#
+#   1. BEFORE `cdk deploy`. It used to run at the very end, after ~25 min of deploying.
+#      Learning that the region cannot launch the types the dashboard recommends is only
+#      useful while you can still change region.
+#   2. BEFORE `source infra/.venv/bin/activate`. That venv installs
+#      infra/requirements.txt, which historically did NOT include boto3, and the script
+#      never deactivates it — so the check ran under an interpreter that exits with
+#      "boto3 is required". Combined with a `2>/dev/null` and an `if …; then : fi` that
+#      swallowed the status, the pre-flight README.md advertises was a SILENT NO-OP for
+#      every user on a fresh clone. Measured: 0 lines of output. boto3 is now in
+#      requirements.txt too, but running before the venv means a broken venv cannot
+#      silence this again.
+#
+# Non-fatal on purpose: a shortfall is an admin decision (raise quota, change region, cap
+# the cohort), not a reason to refuse a deploy. But the exit status is REPORTED, never
+# discarded, and stderr is left attached so a missing rate table is visible.
+if [ -x ./scripts/check_quotas.py ]; then
+    echo ""
+    echo ">>> Pre-flight: GPU quota for $REGION (before deploying) ..."
+    if ./scripts/check_quotas.py --region "$REGION" --participants "${PARTICIPANTS:-10}"; then
+        echo "    quota pre-flight: OK for ${PARTICIPANTS:-10} concurrent participant(s)"
+    else
+        rc=$?
+        echo ""
+        echo "    >>> quota pre-flight reported a problem (exit $rc)." >&2
+        echo "        Read the report above BEFORE continuing: a recommended type with" >&2
+        echo "        quota 0 is accepted by SageMaker and then fails to start." >&2
+        echo "        Deploying anyway in 10s — Ctrl-C to stop and fix it first." >&2
+        sleep 10
+    fi
+fi
+
 echo ">>> Step 1/6: CDK Deploy (infrastructure)..."
 cd infra
 if [ ! -d ".venv" ]; then
@@ -387,19 +422,13 @@ else
     echo ">>> Account-wide budget(s): $ACCT_WIDE — account total is monitored."
 fi
 
-# Quota pre-flight. A price existing in this region does NOT mean the account can launch
-# it: ap-northeast-2 sells ml.g6.24xlarge and has Studio quota 0 for it, and four modules
-# recommend that type. Surfacing it here means the admin learns it now, not from a
-# participant mid-workshop. Non-fatal — the deployment itself is fine either way.
-if [ -x ./scripts/check_quotas.py ]; then
-    echo ""
-    echo ">>> GPU quota pre-flight for $REGION ..."
-    if ./scripts/check_quotas.py --region "$REGION" --participants "${PARTICIPANTS:-10}" \
-         2>/dev/null | sed -n '/RECOMMENDS/,$p' | grep -E "QUOTA 0|NOT SOLD|NO QUOTA ROW|TIGHT|BLOCKED|All recommended"; then
-        :
-    fi
-    echo "    (full report: ./scripts/check_quotas.py --region $REGION --participants N)"
-fi
+# The quota pre-flight already ran, BEFORE cdk deploy — see the top of this script.
+# It used to run here, after the deploy, piped through `2>/dev/null | sed | grep` inside
+# an `if …; then : fi`. That discarded stderr, the exit status, and (because the grep was
+# case-sensitive while the report prints lowercase "quota 0 ml.…") most of the signal.
+echo ""
+echo "    Quota pre-flight ran before the deploy. Full report any time:"
+echo "      ./scripts/check_quotas.py --region $REGION --participants N"
 
 echo "Next steps:"
 echo "  1. Create Cognito admin user: aws cognito-idp admin-create-user --user-pool-id $POOL_ID --username admin"

@@ -19,11 +19,59 @@ from av30_constructs.api import ApiConstruct
 from av30_constructs.dashboards import DashboardConstruct
 
 
+def _require_generated_rate_table(region: str) -> None:
+    """Fail at SYNTH if this region has no generated Studio-JupyterLab rate table.
+
+    Without this the failure mode is the worst possible shape: `cdk deploy` SUCCEEDS, and
+    then every Lambda dies at import, because infra/lambda/shared/config.py resolves the
+    table at module scope —
+
+        INSTANCE_RATES = _rates_for_region(AWS_REGION)   # raises UnpricedRegionError
+
+    — and 14 of the 15 handlers import that module, including `token_authorizer` and
+    `create_user`. So the whole API 500s and nobody can even sign in, for a reason that is
+    invisible in the CloudFormation output.
+
+    Only the regions in the generated file are usable. Generate one with:
+
+        ./scripts/refresh_instance_rates.py --region <region> --merge
+
+    This mirrors smd_images.UnsupportedRegionError, which already guards the image ARNs at
+    synth for the same reason: a silent wrong value is worse than a loud refusal. Region is
+    resolved from `-c region=...` / CDK_DEFAULT_REGION before synth, so it is a real string
+    here, not a token — an unresolved token simply misses the table and is reported.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / "lambda" / "shared" / "instance_rates.py"
+    spec = importlib.util.spec_from_file_location("av30_instance_rates_guard", path)
+    if spec is None or spec.loader is None:  # pragma: no cover
+        raise RuntimeError(f"cannot load {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    generated = mod.RATES_BY_REGION
+
+    if region not in generated:
+        raise ValueError(
+            f"No generated Studio-JupyterLab rate table for region {region!r}.\n"
+            f"Deploying anyway would succeed and then 500 the entire API: "
+            f"infra/lambda/shared/config.py resolves INSTANCE_RATES at import, and 14 of "
+            f"15 Lambda handlers import it (including token_authorizer and create_user).\n"
+            f"Generate it FIRST — see docs/en/ADDING_A_REGION.md §2.5:\n"
+            f"    ./scripts/refresh_instance_rates.py --region {region} --merge\n"
+            f"Generated today: {', '.join(sorted(generated))}"
+        )
+
+
 class Av30BlueprintLabStack(cdk.Stack):
     """Core infrastructure stack for AV 3.0 Blueprint Lab."""
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Refuse at synth rather than deploying a stack whose Lambdas cannot import.
+        _require_generated_rate_table(self.region)
 
         # Apply project-level tags.
         #

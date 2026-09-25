@@ -20,7 +20,11 @@ Cognito 풀, 대시보드, 예산을 갖는 독립된 랩입니다. AWS 계정 �
 `ap-northeast-2`에는 무관한 `FAST-stack`이 올라가 있습니다.
 
 ```bash
-export R=ap-northeast-2 ACCOUNT=<aws-account-id>
+export R=ap-northeast-2
+# 계정 번호를 붙여넣지 말고 조회하세요: §3에서 이 값을 EXPECTED_ACCOUNT_ID로
+# 내보내고, scripts/deploy.sh는 불일치 시 배포를 거부합니다("ERROR: account mismatch").
+# 하드코딩하면 그 계정 소유자를 제외한 모든 사람이 차단됩니다.
+export ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 
 aws cloudformation describe-stacks --region $R --stack-name Av30BlueprintLabStack
 aws s3api list-buckets --query "Buckets[?ends_with(Name,'$R')].Name"
@@ -128,7 +132,7 @@ M2/M3과 무거운 네 모듈(M5/M6/M8/M9) 모두 `ml.g5.12xlarge`(서울 쿼터
 ```
 
 참가자 대시보드가 권장하는 타입 중 하나라도 실행할 수 없으면 0이 아닌 코드로
-종료합니다. `deploy.sh`도 배포 마지막에 이를 실행합니다. 이 계정 실측 결과: **두 리전
+종료합니다. `deploy.sh`도 `cdk deploy` **전에** 이를 자동 실행합니다. 이 계정 실측 결과: **두 리전
 모두 동시 5명까지 통과하고, 10명에서는 양쪽 다 통과하지 못합니다** — 한계는 양쪽 모두
 `ml.g5.12xlarge` / `ml.g5.xlarge`의 쿼터 5로 동일하므로, 이 점에서 서울이 불리하지
 않습니다. 이를 감안해 인원을 계획하거나, 그 두 타입의 할당량을 올리세요:
@@ -155,6 +159,36 @@ aws pricing get-products --region us-east-1 --service-code AmazonSageMaker \
 반환하므로 0인 할당량을 올릴 가치가 있습니다. **`eu-west-1`은 그 타입의 Studio 제품을
 하나도 반환하지 않습니다** — 거기서 할당량을 신청해도 헛수고이므로 `g5` 경로로
 돌리세요.
+
+---
+
+## 2.5. 이 리전의 요율 표 생성 — 배포 **전에**
+
+**건너뛰지 말고, §3 뒤에 하지도 마세요.** 사전 생성된 리전은 다섯 개뿐입니다
+(`ap-northeast-1`, `ap-northeast-2`, `eu-west-1`, `us-east-1`, `us-west-2`). 그 외
+리전은 배포가 **성공한 뒤** API 전체가 500을 반환합니다.
+`infra/lambda/shared/config.py`가 **모듈 import 시점**에 `INSTANCE_RATES`를 해석하기
+때문입니다:
+
+```python
+INSTANCE_RATES = _rates_for_region(AWS_REGION)   # UnpricedRegionError 발생
+```
+
+15개 Lambda 핸들러 중 **14개**가 이 모듈을 import합니다 — `token_authorizer`와
+`create_user`도 포함이라 **로그인조차 불가능합니다.** "엔드포인트 하나의 가격이 틀리는"
+문제가 아닙니다.
+
+```bash
+./scripts/refresh_instance_rates.py --region $R --merge   # --merge 는 다른 리전을 보존
+grep -c "\"$R\":" infra/lambda/shared/instance_rates.py  # 1 이 나와야 함
+```
+
+한 번의 조회로 **두 파일**을 씁니다: 위의 Lambda 에셋과 `scripts/av30_instance_rates.py`.
+후자는 §4가 모든 참가자 워크스페이스로 동기화해 노트북 비용 셀이 **이 리전** 가격을
+인용하게 합니다. 따라서 늦게 생성하면 §3 **과** §4를 다시 실행해야 합니다.
+
+`pricing:GetProducts`(Price List API는 us-east-1에만 있어 스크립트가 거기를 호출하고
+`$R`을 필터로 넘깁니다)와 쿼터 코드를 위한 `servicequotas:ListServiceQuotas`가 필요합니다.
 
 ---
 
@@ -315,12 +349,10 @@ us-west-2 원본 버킷에서 실측한 값:
    등장해야 합니다.
 5. `aws cognito-idp describe-user-pool-domain --domain av30lab-admin --region $R` →
    `ACTIVE`, 풀 id가 `$R`로 시작.
-6. **이 리전의 인스턴스 요율이 존재하는지.** 요율이 없으면 Lambda가 import 시점에
-   예외를 던지므로, 표가 없을 때는 잘못된 가격이 아니라 인스턴스 엔드포인트의 500
-   오류로 드러납니다:
+6. **요율 표는 배포 전(§2.5)에 생성되었고** 배포 후에도 남아 있는지:
    ```bash
-   ./scripts/refresh_instance_rates.py --region $R --merge   # if not already generated
-   ./scripts/check_quotas.py --region $R --participants <cohort>
+   grep -c "\"$R\":" infra/lambda/shared/instance_rates.py   # 1 이 나와야 함
+   ./scripts/check_quotas.py --region $R --participants <인원>
    ```
 7. Cognito 관리자를 만들고, hosted UI로 로그인해 참가자 **1명**을 프로비저닝한 뒤,
    워크스페이스가 **비어 있지 않은지** 확인하세요(실측: 객체 **32**개 — 스테이징된

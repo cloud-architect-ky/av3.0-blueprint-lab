@@ -20,7 +20,11 @@ AWS アカウントそのものだけです — そして落とし穴はまさ�
 `ap-northeast-2` には無関係な `FAST-stack` が存在します。
 
 ```bash
-export R=ap-northeast-2 ACCOUNT=<aws-account-id>
+export R=ap-northeast-2
+# アカウント番号は貼り付けずに取得してください: §3 でこの値を EXPECTED_ACCOUNT_ID として
+# エクスポートし、scripts/deploy.sh は不一致ならデプロイを拒否します
+# ("ERROR: account mismatch")。ハードコードすると所有者以外の全員がブロックされます。
+export ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 
 aws cloudformation describe-stacks --region $R --stack-name Av30BlueprintLabStack
 aws s3api list-buckets --query "Buckets[?ends_with(Name,'$R')].Name"
@@ -128,7 +132,7 @@ M2/M3 と重量級の 4 モジュール（M5/M6/M8/M9）はいずれも `ml.g5.1
 ```
 
 参加者ダッシュボードが推奨するタイプのいずれかが実行できない場合、非ゼロで終了します。`deploy.sh`
-もデプロイの最後にこれを実行します。このアカウントでの実測結果: **どちらのリージョンも同時 5 名までは
+も `cdk deploy` の**前に**これを自動実行します。このアカウントでの実測結果: **どちらのリージョンも同時 5 名までは
 合格し、10 名ではどちらも合格しません** — 上限は両リージョンとも `ml.g5.12xlarge` /
 `ml.g5.xlarge` のクォータ 5 で同じなので、この点でソウルが不利ということはありません。これを前提に
 受講者数を計画するか、その 2 タイプのクォータを引き上げてください:
@@ -154,6 +158,37 @@ aws pricing get-products --region us-east-1 --service-code AmazonSageMaker \
 実測: `ap-northeast-2` は実在する `APN2-Studio:JupyterLab-ml.g6.24xlarge` プロダクトを返すため、
 0 というクォータは引き上げる価値があります。**`eu-west-1` はそのタイプの Studio プロダクトを
 0 件返します** — そこでのクォータ申請は無駄です。代わりに `g5` の経路へ誘導してください。
+
+---
+
+## 2.5. このリージョンの料金表を生成 — デプロイの**前に**
+
+**スキップせず、§3 の後にも回さないでください。** 事前生成されているのは 5 リージョンだけです
+(`ap-northeast-1`, `ap-northeast-2`, `eu-west-1`, `us-east-1`, `us-west-2`)。それ以外の
+リージョンではデプロイが**成功した後**に API 全体が 500 を返します。
+`infra/lambda/shared/config.py` が **モジュール import 時**に `INSTANCE_RATES` を解決するためです:
+
+```python
+INSTANCE_RATES = _rates_for_region(AWS_REGION)   # UnpricedRegionError が発生
+```
+
+15 個の Lambda ハンドラのうち **14 個**がこのモジュールを import します —
+`token_authorizer` と `create_user` も含むため、**サインインすらできません**。
+「あるエンドポイントの価格が違う」という話ではありません。
+
+```bash
+./scripts/refresh_instance_rates.py --region $R --merge   # --merge は他リージョンを保持
+grep -c "\"$R\":" infra/lambda/shared/instance_rates.py  # 1 が返るはず
+```
+
+1 回の取得で**2 つのファイル**を書きます: 上記の Lambda アセットと
+`scripts/av30_instance_rates.py`。後者は §4 が全参加者ワークスペースへ同期するため、
+ノートブックのコストセルが**このリージョン**の価格を示します。したがって後から生成すると
+§3 **と** §4 を再実行する必要があります。
+
+`pricing:GetProducts`（Price List API は us-east-1 のみ。スクリプトはそこを呼び、`$R` を
+フィルタとして渡します）と、クォータコード取得のための `servicequotas:ListServiceQuotas`
+が必要です。
 
 ---
 
@@ -316,11 +351,10 @@ API で確認済み）*。
    `$R` だけでなければなりません。
 5. `aws cognito-idp describe-user-pool-domain --domain av30lab-admin --region $R` →
    `ACTIVE` で、プール ID の接頭辞が `$R` であること。
-6. **このリージョン用のインスタンス料金表が存在すること。** 料金表がないと Lambda はインポート時に
-   例外を投げるため、表の欠落は価格の誤りではなくインスタンス系エンドポイントの 500 として現れます:
+6. **料金表はデプロイ前（§2.5）に生成され**、デプロイ後も残っていること:
    ```bash
-   ./scripts/refresh_instance_rates.py --region $R --merge   # if not already generated
-   ./scripts/check_quotas.py --region $R --participants <cohort>
+   grep -c "\"$R\":" infra/lambda/shared/instance_rates.py   # 1 が返るはず
+   ./scripts/check_quotas.py --region $R --participants <人数>
    ```
 7. Cognito 管理者を作成し、ホステッド UI からサインインし、参加者を**1 人**プロビジョニングして、
    ワークスペースが**空でない**ことを確認します（実測: **32** オブジェクト — ステージング済み

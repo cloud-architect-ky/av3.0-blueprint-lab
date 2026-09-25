@@ -20,7 +20,11 @@ Do this first. "Empty region" was already false in this account — `ap-northeas
 an unrelated `FAST-stack`.
 
 ```bash
-export R=ap-northeast-2 ACCOUNT=<aws-account-id>
+export R=ap-northeast-2
+# Resolve YOUR account rather than pasting one: §3 exports this as
+# EXPECTED_ACCOUNT_ID, and scripts/deploy.sh refuses to deploy on a mismatch
+# ("ERROR: account mismatch"), so a hardcoded id blocks everyone but its owner.
+export ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 
 aws cloudformation describe-stacks --region $R --stack-name Av30BlueprintLabStack
 aws s3api list-buckets --query "Buckets[?ends_with(Name,'$R')].Name"
@@ -144,7 +148,7 @@ the generated rate table, and names the modules each shortfall affects:
 ```
 
 It exits non-zero if any type the participant dashboard recommends cannot run. `deploy.sh`
-also runs it at the end of a deployment. Measured for this account at 10 participants:
+also runs it automatically, BEFORE `cdk deploy`. Measured for this account at 10 participants:
 **neither** region passes as configured — `ml.g6.24xlarge` is wanted by four modules and
 allows 2 concurrent in us-west-2 and 0 in ap-northeast-2, and `ml.g5.12xlarge` /
 `ml.g5.xlarge` allow 5. Plan the cohort around that, or raise quota:
@@ -170,6 +174,36 @@ aws pricing get-products --region us-east-1 --service-code AmazonSageMaker \
 Measured: `ap-northeast-2` returns a real `APN2-Studio:JupyterLab-ml.g6.24xlarge`
 product, so its quota of 0 is worth raising. **`eu-west-1` returns zero Studio products
 for that type** — a quota request there would be futile; steer to the `g5` path instead.
+
+---
+
+## 2.5. Generate the rate table for this region — BEFORE you deploy
+
+**Do not skip this, and do not do it after §3.** Only five regions ship pre-generated
+(`ap-northeast-1`, `ap-northeast-2`, `eu-west-1`, `us-east-1`, `us-west-2`). For any
+other region the deploy SUCCEEDS and then the whole API returns 500, because
+`infra/lambda/shared/config.py` resolves `INSTANCE_RATES` at **module import**:
+
+```python
+INSTANCE_RATES = _rates_for_region(AWS_REGION)   # raises UnpricedRegionError
+```
+
+14 of the 15 Lambda handlers import that module — including `token_authorizer` and
+`create_user` — so nobody can even sign in. It is not "wrong prices on one endpoint".
+
+```bash
+./scripts/refresh_instance_rates.py --region $R --merge   # --merge keeps the other regions
+grep -c "\"$R\":" infra/lambda/shared/instance_rates.py  # expect 1
+```
+
+It writes **two** files from one fetch: the Lambda asset above and
+`scripts/av30_instance_rates.py`, which §4 syncs into every participant workspace so the
+notebooks' cost cells quote THIS region. Generating late therefore means re-running §3
+**and** §4, not just this command.
+
+Needs `pricing:GetProducts` (the Price List API lives in us-east-1; the script calls it
+there and passes `$R` as a filter) and `servicequotas:ListServiceQuotas` for the quota
+codes.
 
 ---
 
@@ -330,10 +364,9 @@ storage rate is API-verified)*.
    `$R`.
 5. `aws cognito-idp describe-user-pool-domain --domain av30lab-admin --region $R` →
    `ACTIVE`, pool id prefixed `$R`.
-6. **Instance rates exist for this region.** The Lambdas raise at import without them, so
-   a missing table shows up as 500s on the instance endpoints rather than wrong prices:
+6. **Instance rates were generated BEFORE the deploy** (§2.5) and survived it:
    ```bash
-   ./scripts/refresh_instance_rates.py --region $R --merge   # if not already generated
+   grep -c '"'"$R"'":' infra/lambda/shared/instance_rates.py   # expect 1
    ./scripts/check_quotas.py --region $R --participants <cohort>
    ```
 7. Create a Cognito admin, sign in through the hosted UI, provision **one** participant,

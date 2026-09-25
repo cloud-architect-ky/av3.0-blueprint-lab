@@ -77,14 +77,20 @@ anything**. (Account-specific identifiers have been replaced with placeholders.)
 
 **Admin dashboard.** The admin adds or removes participants here. Each row's
 **Dashboard Link → Copy link** copies that participant's personal dashboard URL to
-hand out, and **Sessions** / **Costs** tabs track live usage.
+hand out, and the read-only **Region** column records the region the profile was
+provisioned in — a Studio domain is regional, so a mis-provisioned participant would
+otherwise look healthy. **Sessions** refreshes every 30 s; **Costs** charts the last
+14 days of daily spend.
 
 ![Admin dashboard](docs/images/admin-dashboard.png)
 
 **Participant dashboard.** Each participant opens their own dashboard to launch
-their SageMaker workspace and run the notebooks. It shows the flow of the 11
-pipeline modules; the participant picks the right instance for each notebook
-(CPU or GPU), starts it, opens the workspace, and runs the notebook.
+their SageMaker workspace and run the notebooks. Its pipeline map lays the 12 modules
+out in five phase columns — **INGEST → CURATE → AUGMENT → TRAIN → VALIDATE** — marks
+each one completed, in progress or locked, and draws an arrow wherever one module's
+output feeds another. One JupyterLab workspace serves every module, so the
+participant points it at the instance the next notebook needs (CPU or GPU), starts
+it, opens the workspace, and runs the notebook.
 
 ![Participant dashboard](docs/images/participant-dashboard.png)
 

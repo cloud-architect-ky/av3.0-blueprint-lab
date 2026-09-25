@@ -65,13 +65,38 @@ class NetworkConstruct(Construct):
     ) -> None:
         super().__init__(scope, construct_id)
 
-        # Private-only VPC across 2 AZs — no public subnets, no NAT
+        # Private-only VPC — no public subnets, no NAT.
+        #
+        # ALL AZs, not 2. A Studio app can only launch in an AZ the domain has a subnet in,
+        # so max_azs directly caps the GPU capacity pool the lab can draw from, and
+        # EC2InsufficientCapacityError is the lab's most common real failure. The GPU types
+        # are NOT offered in every AZ, and the gap was severe at max_azs=2 (measured
+        # 2026-09-25 in account <aws-account-id>, via describe-instance-type-offerings on
+        # availability-zone-id, which is stable across accounts unlike the a/b/c names):
+        #
+        #   ap-northeast-2  g5.12xlarge sold in apne2-az1, az3, az4 — apne2-az2 sells NO
+        #                   g5/g6 at all. max_azs=2 picks az1+az2, so the domain reached
+        #                   1 of 3 GPU AZs and every heavy module competed in ONE AZ.
+        #   us-west-2       g5.12xlarge sold in usw2-az1, az2, az3; max_azs=2 reached 2 of 3.
+        #
+        # Measured consequence, same day: g5.12xlarge, g5.24xlarge AND g6.24xlarge all
+        # returned "temporarily unavailable in supported availability zones [usw2-az2,
+        # usw2-az1]" — the only two the domain had — while quota was 5 and usage 0. Three
+        # types, one shortage, zero alternatives reachable.
+        #
+        # Safe to widen on a LIVE domain: AWS::SageMaker::Domain SubnetIds is documented
+        # "Update requires: No interruption", so the domain is not replaced and its EFS is
+        # not orphaned. Existing subnets keep their CIDRs and logical IDs — CDK allocates
+        # per AZ index and appends, so this adds subnets rather than renumbering them.
+        # Free here: PRIVATE_ISOLATED, nat_gateways=0. The one cost to know about is
+        # vpc_interface_endpoints=True, which places an ENI per subnet — that line roughly
+        # doubles going from 2 AZs to 4.
         self._vpc = ec2.Vpc(
             self,
             "Vpc",
             vpc_name="av30lab-vpc",
             ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
-            max_azs=2,
+            max_azs=99,  # CDK clamps to the region's AZ count (4 in both lab regions)
             nat_gateways=0,
             subnet_configuration=[
                 ec2.SubnetConfiguration(

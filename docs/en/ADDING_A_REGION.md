@@ -110,6 +110,24 @@ search hits for "g6.24xlarge").
 | `ml.m5.xlarge` *training* | `L-CCE2AFA6` | 30 | 30 | M12 |
 | `ml.m5.xlarge` *processing* | `L-0307F515` | 16 | 16 | M11 |
 
+> **Quota is not the only cap — AZ coverage is.** A Studio app can only launch in an
+> availability zone the domain holds a subnet in, and the GPU types are NOT sold in every
+> AZ. Measured 2026-09-25 in this account with
+> `describe-instance-type-offerings --location-type availability-zone-id` (AZ *IDs*, which
+> are stable across accounts — the a/b/c *names* are not):
+>
+> | Region | g5.* sold in | p4d sold in | domain reached (before the `max_azs` fix) |
+> |---|---|---|---|
+> | ap-northeast-2 | apne2-az1, az3, az4 | apne2-az2, az4 | **1 of 3** for g5; p4d shares **zero** AZs with g5 |
+> | us-west-2 | usw2-az1, az2, az3 | all four | 2 of 3 |
+>
+> `apne2-az2` sells no g5 and no g6 at all. The VPC now builds subnets in every AZ
+> (`infra/av30_constructs/network.py`, `max_azs=99`), which fixes this by construction —
+> but it only takes effect on a **redeploy**, and `check_quotas.py` does not yet report
+> coverage. So a type it calls "OK 5" can still fail at app start with
+> `EC2InsufficientCapacityError: … unavailable in supported availability zones [...]`.
+> Measured that exact failure on three types in a row while quota was 5 and usage 0.
+
 **The whole `g6` and `g6e` family is 0 in ap-northeast-2** — not just the 24xlarge. `g7e`
 is 0 in *both* regions.
 
@@ -156,7 +174,9 @@ allows 2 concurrent in us-west-2 and 0 in ap-northeast-2, and `ml.g5.12xlarge` /
 ```bash
 # Must be filed IN the target region. The script prints the exact code for each shortfall.
 aws service-quotas request-service-quota-increase --region $R \
-  --service-code sagemaker --quota-code L-8ACE1754 --desired-value 10
+  --service-code sagemaker --quota-code L-8D2ED7BF --desired-value 10   # ml.g5.12xlarge
+aws service-quotas request-service-quota-increase --region $R \
+  --service-code sagemaker --quota-code L-988CE6C5 --desired-value 10   # ml.g5.xlarge
 ```
 
 **Before requesting, check the instance is offered for Studio in that region at all.**

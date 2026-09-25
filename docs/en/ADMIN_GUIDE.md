@@ -203,9 +203,11 @@ aws service-quotas list-service-quotas --service-code sagemaker --region "$AWS_R
   --query "Quotas[?contains(QuotaName,'Studio JupyterLab Apps') || contains(QuotaName,'for training job') || contains(QuotaName,'for processing job')].{Name:QuotaName,Value:Value,Code:QuotaCode}" \
   --output table
 
-# Request an increase (example: g6.24xlarge apps to 10 for a full room):
+# Request an increase (the two types the dashboard actually recommends, to 10 for a full room):
 aws service-quotas request-service-quota-increase \
-  --service-code sagemaker --quota-code L-8ACE1754 --desired-value 10 --region "$AWS_REGION"
+  --service-code sagemaker --quota-code L-8D2ED7BF --desired-value 10 --region "$AWS_REGION"   # ml.g5.12xlarge
+aws service-quotas request-service-quota-increase \
+  --service-code sagemaker --quota-code L-988CE6C5 --desired-value 10 --region "$AWS_REGION"   # ml.g5.xlarge
 ```
 
 > The quota **codes** above are the same in every region; run these against

@@ -111,6 +111,23 @@ the ACCOUNT, RESOURCE, or ALL levels"라고 말합니다. 즉 *account-level*은
 | `ml.m5.xlarge` *학습* | `L-CCE2AFA6` | 30 | 30 | M12 |
 | `ml.m5.xlarge` *프로세싱* | `L-0307F515` | 16 | 16 | M11 |
 
+> **쿼터만 한계가 아닙니다 — AZ 커버리지도 한계입니다.** Studio 앱은 도메인이 서브넷을
+> 가진 가용 영역에서만 뜨고, GPU 타입은 모든 AZ에서 팔지 않습니다. 2026-09-25 이 계정에서
+> `describe-instance-type-offerings --location-type availability-zone-id`로 실측
+> (AZ *ID* 기준 — a/b/c *이름*은 계정마다 다른 AZ를 가리킵니다):
+>
+> | 리전 | g5.* 판매 AZ | p4d 판매 AZ | 도메인 접근(`max_azs` 수정 전) |
+> |---|---|---|---|
+> | ap-northeast-2 | apne2-az1, az3, az4 | apne2-az2, az4 | g5는 **3개 중 1개**. p4d는 g5와 **공유 AZ 0개** |
+> | us-west-2 | usw2-az1, az2, az3 | 4개 전부 | 3개 중 2개 |
+>
+> `apne2-az2`는 g5도 g6도 하나도 안 팝니다. 이제 VPC가 모든 AZ에 서브넷을 만들어
+> (`infra/av30_constructs/network.py`, `max_azs=99`) 구조적으로 해결되지만, **재배포**해야
+> 적용되고 `check_quotas.py`는 아직 커버리지를 보고하지 않습니다. 따라서 "OK 5"로 표시된
+> 타입도 앱 시작 시
+> `EC2InsufficientCapacityError: … unavailable in supported availability zones [...]`로
+> 실패할 수 있습니다. 쿼터 5 / 사용 0인 상태에서 세 타입 연속 그 실패를 실측했습니다.
+
 **ap-northeast-2에서는 `g6`와 `g6e` 계열 전체가 0입니다** — 24xlarge만이 아닙니다.
 `g7e`는 *두* 리전 모두 0입니다.
 
@@ -140,7 +157,9 @@ M2/M3과 무거운 네 모듈(M5/M6/M8/M9) 모두 `ml.g5.12xlarge`(서울 쿼터
 ```bash
 # Must be filed IN the target region. The script prints the exact code for each shortfall.
 aws service-quotas request-service-quota-increase --region $R \
-  --service-code sagemaker --quota-code L-8ACE1754 --desired-value 10
+  --service-code sagemaker --quota-code L-8D2ED7BF --desired-value 10   # ml.g5.12xlarge
+aws service-quotas request-service-quota-increase --region $R \
+  --service-code sagemaker --quota-code L-988CE6C5 --desired-value 10   # ml.g5.xlarge
 ```
 
 **신청하기 전에, 그 리전에서 해당 인스턴스가 Studio용으로 제공되기는 하는지

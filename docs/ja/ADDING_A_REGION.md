@@ -111,6 +111,24 @@ levels」と述べています。つまり *アカウントレベル* は *リ�
 | `ml.m5.xlarge` *学習* | `L-CCE2AFA6` | 30 | 30 | M12 |
 | `ml.m5.xlarge` *処理* | `L-0307F515` | 16 | 16 | M11 |
 
+> **上限はクォータだけではありません — AZ カバレッジも上限です。** Studio アプリはドメインが
+> サブネットを持つアベイラビリティゾーンでしか起動できず、GPU タイプはすべての AZ で販売されて
+> いません。2026-09-25 にこのアカウントで
+> `describe-instance-type-offerings --location-type availability-zone-id` により実測
+> （AZ *ID* 基準。a/b/c の*名前*はアカウントごとに別の AZ を指します）:
+>
+> | リージョン | g5.* 販売 AZ | p4d 販売 AZ | ドメイン到達（`max_azs` 修正前） |
+> |---|---|---|---|
+> | ap-northeast-2 | apne2-az1, az3, az4 | apne2-az2, az4 | g5 は **3 中 1**。p4d は g5 と**共有 AZ が 0** |
+> | us-west-2 | usw2-az1, az2, az3 | 4 つすべて | 3 中 2 |
+>
+> `apne2-az2` は g5 も g6 も一切販売していません。VPC はすべての AZ にサブネットを作るように
+> なり（`infra/av30_constructs/network.py`, `max_azs=99`）構造的に解消されますが、**再デプロイ**
+> しないと反映されず、`check_quotas.py` はまだカバレッジを報告しません。したがって「OK 5」と
+> 表示されたタイプでもアプリ起動時に
+> `EC2InsufficientCapacityError: … unavailable in supported availability zones [...]`
+> で失敗しえます。クォータ 5 / 使用 0 の状態で 3 タイプ連続でこの失敗を実測しました。
+
 **ap-northeast-2 では `g6` と `g6e` ファミリー全体が 0 です** — 24xlarge だけではありません。`g7e`
 は*両方の*リージョンで 0 です。
 
@@ -140,7 +158,9 @@ M2/M3 と重量級の 4 モジュール（M5/M6/M8/M9）はいずれも `ml.g5.1
 ```bash
 # Must be filed IN the target region. The script prints the exact code for each shortfall.
 aws service-quotas request-service-quota-increase --region $R \
-  --service-code sagemaker --quota-code L-8ACE1754 --desired-value 10
+  --service-code sagemaker --quota-code L-8D2ED7BF --desired-value 10   # ml.g5.12xlarge
+aws service-quotas request-service-quota-increase --region $R \
+  --service-code sagemaker --quota-code L-988CE6C5 --desired-value 10   # ml.g5.xlarge
 ```
 
 **申請する前に、そのインスタンスがそのリージョンで Studio 向けにそもそも提供されているかを

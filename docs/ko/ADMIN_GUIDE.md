@@ -200,9 +200,11 @@ aws service-quotas list-service-quotas --service-code sagemaker --region "$AWS_R
   --query "Quotas[?contains(QuotaName,'Studio JupyterLab Apps') || contains(QuotaName,'for training job') || contains(QuotaName,'for processing job')].{Name:QuotaName,Value:Value,Code:QuotaCode}" \
   --output table
 
-# Request an increase (example: g6.24xlarge apps to 10 for a full room):
+# Request an increase (대시보드가 실제로 권장하는 두 타입을 10으로 — 만석 기준):
 aws service-quotas request-service-quota-increase \
-  --service-code sagemaker --quota-code L-8ACE1754 --desired-value 10 --region "$AWS_REGION"
+  --service-code sagemaker --quota-code L-8D2ED7BF --desired-value 10 --region "$AWS_REGION"   # ml.g5.12xlarge
+aws service-quotas request-service-quota-increase \
+  --service-code sagemaker --quota-code L-988CE6C5 --desired-value 10 --region "$AWS_REGION"   # ml.g5.xlarge
 ```
 
 > 위의 쿼터 **코드**는 모든 리전에서 동일합니다. 실제로 배포할 곳에

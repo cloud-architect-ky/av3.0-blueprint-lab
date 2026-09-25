@@ -121,9 +121,15 @@ Service Quotas 콘솔에서 "**Studio JupyterLab Apps running on**"을 검색하
 *동일*하고(`describe-instance-types`가 둘 다 4 GPU × 22,888 MiB로 보고하므로 모든 GPU당 VRAM
 게이트가 같은 분기를 탑니다), 두 리전 모두에서 더 싸고($7.09 vs $8.34 — us-west-2,
 $8.72 vs $10.26 — ap-northeast-2), 쿼터가 더 높고(us-west-2 5 vs 2, ap-northeast-2 5 vs **0**),
-랩이 실제로 검증한 계열입니다 — M9의 통과 실행(minADE 0.3779, `Status: PASS`)은 g5,
-즉 A10G에서 나왔습니다. 이 가이드의 이전 버전은 `ml.g6.24xlarge`를 "이번 사이클에 검증됨"으로
-적었는데, 그것은 A10G 결과를 잘못 귀속한 것이었습니다. 쿼터가 있다면 p4d/p5는 여전히
+랩이 캡처한 통과 실행 두 건 모두에서 닿을 수 있는 계열입니다. 무엇이 실측인지 정확히
+적습니다 — 이 가이드의 이전 버전이 거꾸로 적었기 때문입니다:
+`examples/notebooks-with-outputs.tar.gz`에 담긴 4-GPU Run-All(M2/M5/M6/M9, M9는 minADE
+0.3805 `Status: PASS`)은 **4× NVIDIA L4**에서 돌았습니다 — 즉 진짜 g6.24xlarge 지오메트리
+**그리고** 실리콘입니다. 그리고 `docs/en/ALPAMAYO_M9.md:181-187`은 M9가 **8× A10G**
+(g5.48xlarge)에서 통과한 것을 따로 기록합니다. 즉 (4 GPU)와 (A10G)가 각각 실측이고
+4×A10G 조합만 미실측인데, 무거운 모듈은 per-GPU VRAM과 GPU 개수 외에 아무것도 분기하지
+않으므로 결과가 갈릴 수 없습니다. g5.12xlarge를 선호하는 이유는 쿼터와 가격이며 검증
+여부가 아닙니다. 쿼터가 있다면 p4d/p5는 여전히
 네이티브 해상도 / 전체 720p 경로로 남습니다.
 
 > **아래 `us-west-2` 열은 당신의 리전이 아닙니다.** 쿼터는 (계정 × 리전) 단위 사실입니다:
@@ -426,7 +432,7 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 1. Admin Dashboard → **Add User** → 테스트 이름 + 이메일 → **Provision**.
 2. 성공 다이얼로그에서 **Participant Dashboard Link**를 복사하세요(내구성 있는
    `?userId=&token=` 링크 — 5분짜리 "Direct workspace URL"이 **아님**).
-3. 그 링크를 새 브라우저에서 열면 → 11개 모듈 노드가 있는 Pipeline Map이 렌더링됩니다.
+3. 그 링크를 새 브라우저에서 열면 → 12개 모듈 노드가 있는 Pipeline Map(M1~M12. M0은 개요 노트북이라 노드가 없습니다)이 렌더링됩니다.
 4. **M2** 클릭 → **Instance Options** → 권장 `ml.g5.12xlarge`가 미리 선택됨 →
    **Apply & Restart** → **Open Workspace** → JupyterLab이 열립니다.
 5. **M1**(CPU)을 엔드투엔드로 실행한 뒤 **M2**(GPU)를 실행 — GPU 이미지가

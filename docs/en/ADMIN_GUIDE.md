@@ -122,9 +122,14 @@ all measured: it has the *identical* geometry to `ml.g6.24xlarge` (`describe-ins
 reports 4 GPUs × 22,888 MiB for both, so every per-GPU module gate takes the same branch),
 it is cheaper in both regions ($7.09 vs $8.34 in us-west-2; $8.72 vs $10.26 in
 ap-northeast-2), it has a higher quota (5 vs 2 in us-west-2, 5 vs **0** in ap-northeast-2),
-and it is the family the lab has actually verified — M9's passing run (minADE 0.3779,
-`Status: PASS`) was on g5, i.e. A10G. An earlier version of this guide called
-`ml.g6.24xlarge` "verified this cycle"; that was a misattribution of an A10G result.
+and both of the lab's captured passes are reachable from it. Be precise about what is
+measured, because an earlier version of this guide had it backwards: the 4-GPU Run-All
+captured in `examples/notebooks-with-outputs.tar.gz` (M2, M5, M6, M9 — M9 at minADE
+0.3805, `Status: PASS`) ran on **4x NVIDIA L4**, i.e. genuinely g6.24xlarge geometry AND
+silicon; `docs/en/ALPAMAYO_M9.md:181-187` separately records M9 passing on **8x A10G**
+(g5.48xlarge). So (4 GPUs) and (A10G) are each measured while the 4xA10G pair is not, and
+no heavy module branches on anything but per-GPU VRAM and GPU count — so it cannot
+diverge. The reason to prefer g5.12xlarge is quota and price, not verification.
 p4d/p5 remain the native-resolution / full-720p path if you have the quota.
 
 > **The `us-west-2` column below is not your region.** Quota is a per-(account × region)
@@ -431,7 +436,7 @@ provisioning + IAM) and [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUN
 1. Admin Dashboard → **Add User** → test name + email → **Provision**.
 2. Copy the **Participant Dashboard Link** from the success dialog (the durable
    `?userId=&token=` link — **not** the 5-minute "Direct workspace URL").
-3. Open that link in a fresh browser → the Pipeline Map with 11 module nodes renders.
+3. Open that link in a fresh browser → the Pipeline Map with 12 module nodes renders (M1-M12; M0 is the overview notebook and has no node).
 4. Click **M2** → **Instance Options** → recommended `ml.g5.12xlarge` preselected →
    **Apply & Restart** → **Open Workspace** → JupyterLab opens.
 5. Run **M1** (CPU) end-to-end, then **M2** (GPU) — confirms the GPU image is

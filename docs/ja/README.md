@@ -12,23 +12,23 @@
 
 ---
 
-## 12 のモジュール
+## 13 のモジュール（M0〜M12）
 
-| モジュール | 内容 | 推奨インスタンス |
-|---|---|---|
-| **M0** | パイプライン概要 — エンドツーエンドのパイプラインを各モジュールにマッピング（コンピュートなし） | `ml.t3.medium`（CPU） |
-| **M1** | データ探索 — 実際の **nuScenes-mini** センサーデータの取り込みと探索、シーンの選択 | `ml.t3.medium`（CPU） |
-| **M2** | Cosmos Reason キャプション生成 — サンプリングしたクリップの VLM キャプション | `ml.g5.12xlarge`（GPU） |
-| **M3** | Cosmos Curator — **NeMo Curator** による動画キュレーション（分割、トランスコード、モーションフィルタ） | `ml.g5.12xlarge`（GPU） |
-| **M4** | OpenSearch セマンティック検索 — キャプション埋め込みに対する k-NN 検索 | `ml.t3.medium`（CPU） |
-| **M5** | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g5.12xlarge`） |
-| **M6** | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g5.12xlarge`） |
-| **M7** | Nerfstudio 3D 再構成 — NeRF / 3D Gaussian Splatting（オプション/デモ） | `ml.g5.xlarge`（GPU） |
-| **M8** | Cosmos Reason LoRA SFT — nuScenes の**人手ラベル**でパラメータ効率ファインチューニング | GPU（`ml.g5.12xlarge`、4× 24 GB でネイティブ解像度を実測） |
-| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU（`ml.g5.12xlarge`） |
-| **M10** | AlpaSim クローズドループ評価 — 本物のクローズドループポリシー評価を可視化 | `ml.t3.medium`（CPU）+ GPU EC2 |
-| **M11** | パイプライン自動化 — 本物の SageMaker Pipeline（Caption→Curate→Augment） | `ml.t3.medium`（CPU）+ 処理ジョブ |
-| **M12** | HyperPod 分散学習 — 本物の 2 ノード `torch.distributed` DDP ジョブ | `ml.t3.medium`（CPU）+ ジョブノード |
+| モジュール | ブログのステージ | 内容 | 推奨インスタンス |
+|---|---|---|---|
+| **M0** | — | パイプライン概要 — エンドツーエンドのパイプラインを各モジュールにマッピング（コンピュートなし） | `ml.t3.medium`（CPU） |
+| **M1** | 1–2 | データ探索 — 実際の **nuScenes-mini** センサーデータの取り込みと探索、シーンの選択 | `ml.t3.medium`（CPU） |
+| **M2** | 3 | Cosmos Reason キャプション生成 — サンプリングしたクリップの VLM キャプション | `ml.g5.12xlarge`（GPU） |
+| **M3** | 3 | Cosmos Curator — **NeMo Curator** による動画キュレーション（分割、トランスコード、モーションフィルタ） | `ml.g5.12xlarge`（GPU） |
+| **M4** | 4 | OpenSearch セマンティック検索 — キャプション埋め込みに対する k-NN 検索 | `ml.t3.medium`（CPU） |
+| **M5** | 5 | Cosmos Transfer — 実クリップの天候・条件拡張 | GPU（`ml.g5.12xlarge`） |
+| **M6** | 5 (ext) | Cosmos Predict — 合成シナリオ（video2world）生成 | GPU（`ml.g5.12xlarge`） |
+| **M7** | 6 | Nerfstudio 3D 再構成 — NeRF / 3D Gaussian Splatting（オプション/デモ） | `ml.g5.xlarge`（GPU） |
+| **M8** | 7 | Cosmos Reason LoRA SFT — nuScenes の**人手ラベル**でパラメータ効率ファインチューニング | GPU（`ml.g5.12xlarge`、4× 24 GB でネイティブ解像度を実測） |
+| **M9** | 7 | Alpamayo VLA — **Alpamayo-1.5-10B** による Vision-Language-Action 推論 + 軌道生成 | GPU（`ml.g5.12xlarge`） |
+| **M10** | 8 | AlpaSim クローズドループ評価 — 本物のクローズドループポリシー評価を可視化 | `ml.t3.medium`（CPU）+ GPU EC2 |
+| **M11** | — (ext) | パイプライン自動化 — 本物の SageMaker Pipeline（Caption→Curate→Augment） | `ml.t3.medium`（CPU）+ 処理ジョブ |
+| **M12** | — (ext) | HyperPod 分散学習 — 本物の 2 ノード `torch.distributed` DDP ジョブ | `ml.t3.medium`（CPU）+ ジョブノード |
 
 推奨の進め方: **M0 → M1 → M2 → M3** の順に進み、その後は合成データ（M5/M6）、ポリシー + シミュレーション（M9/M10）、検索（M4）、本番パターン（M12/M11）へと分岐します。表示されているインスタンスはダッシュボードのデフォルト値であり、各 GPU モジュールには代替インスタンスも用意されています（ダッシュボードはデプロイ先リージョンが販売するタイプのみを提示し、クォータ 0 のタイプは拒否します）。
 

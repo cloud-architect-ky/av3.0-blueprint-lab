@@ -23,23 +23,23 @@
 
 ---
 
-## 12개 모듈
+## 13개 모듈 (M0~M12)
 
-| 모듈 | 하는 일 | 권장 인스턴스 |
-|---|---|---|
-| **M0** | 파이프라인 개요 — 엔드투엔드 파이프라인을 각 모듈에 매핑(컴퓨트 없음) | `ml.t3.medium` (CPU) |
-| **M1** | 데이터 탐색 — 실제 **nuScenes-mini** 센서 데이터 수집 및 탐색, 씬 선택 | `ml.t3.medium` (CPU) |
-| **M2** | Cosmos Reason 캡셔닝 — 샘플링된 클립의 VLM 캡션 생성 | `ml.g5.12xlarge` (GPU) |
-| **M3** | Cosmos Curator — **NeMo Curator** 비디오 큐레이션(분할, 트랜스코딩, 모션 필터링) | `ml.g5.12xlarge` (GPU) |
-| **M4** | OpenSearch 시맨틱 검색 — 캡션 임베딩에 대한 k-NN 검색 | `ml.t3.medium` (CPU) |
-| **M5** | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g5.12xlarge`) |
-| **M6** | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g5.12xlarge`) |
-| **M7** | Nerfstudio 3D 재구성 — NeRF / 3D Gaussian Splatting(선택/데모) | `ml.g5.xlarge` (GPU) |
-| **M8** | Cosmos Reason LoRA SFT — nuScenes **사람 라벨**로 파라미터 효율 파인튜닝 | GPU (`ml.g5.12xlarge`, 4× 24 GB에서 네이티브 해상도 실측) |
-| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU (`ml.g5.12xlarge`) |
-| **M10** | AlpaSim 폐루프 평가 — 진정한 폐루프 정책 평가 시각화 | `ml.t3.medium` (CPU) + GPU EC2 |
-| **M11** | 파이프라인 자동화 — 실제 SageMaker Pipeline(Caption→Curate→Augment) | `ml.t3.medium` (CPU) + 프로세싱 작업 |
-| **M12** | HyperPod 분산 학습 — 실제 2노드 `torch.distributed` DDP 작업 | `ml.t3.medium` (CPU) + 작업 노드 |
+| 모듈 | 블로그 스테이지 | 하는 일 | 권장 인스턴스 |
+|---|---|---|---|
+| **M0** | — | 파이프라인 개요 — 엔드투엔드 파이프라인을 각 모듈에 매핑(컴퓨트 없음) | `ml.t3.medium` (CPU) |
+| **M1** | 1–2 | 데이터 탐색 — 실제 **nuScenes-mini** 센서 데이터 수집 및 탐색, 씬 선택 | `ml.t3.medium` (CPU) |
+| **M2** | 3 | Cosmos Reason 캡셔닝 — 샘플링된 클립의 VLM 캡션 생성 | `ml.g5.12xlarge` (GPU) |
+| **M3** | 3 | Cosmos Curator — **NeMo Curator** 비디오 큐레이션(분할, 트랜스코딩, 모션 필터링) | `ml.g5.12xlarge` (GPU) |
+| **M4** | 4 | OpenSearch 시맨틱 검색 — 캡션 임베딩에 대한 k-NN 검색 | `ml.t3.medium` (CPU) |
+| **M5** | 5 | Cosmos Transfer — 실제 클립에 날씨/조건 증강 | GPU (`ml.g5.12xlarge`) |
+| **M6** | 5 (ext) | Cosmos Predict — 합성 시나리오(video2world) 생성 | GPU (`ml.g5.12xlarge`) |
+| **M7** | 6 | Nerfstudio 3D 재구성 — NeRF / 3D Gaussian Splatting(선택/데모) | `ml.g5.xlarge` (GPU) |
+| **M8** | 7 | Cosmos Reason LoRA SFT — nuScenes **사람 라벨**로 파라미터 효율 파인튜닝 | GPU (`ml.g5.12xlarge`, 4× 24 GB에서 네이티브 해상도 실측) |
+| **M9** | 7 | Alpamayo VLA — **Alpamayo-1.5-10B** 비전-언어-행동 추론 + 궤적 | GPU (`ml.g5.12xlarge`) |
+| **M10** | 8 | AlpaSim 폐루프 평가 — 진정한 폐루프 정책 평가 시각화 | `ml.t3.medium` (CPU) + GPU EC2 |
+| **M11** | — (ext) | 파이프라인 자동화 — 실제 SageMaker Pipeline(Caption→Curate→Augment) | `ml.t3.medium` (CPU) + 프로세싱 작업 |
+| **M12** | — (ext) | HyperPod 분산 학습 — 실제 2노드 `torch.distributed` DDP 작업 | `ml.t3.medium` (CPU) + 작업 노드 |
 
 권장 경로: **M0 → M1 → M2 → M3**, 이후 합성 데이터(M5/M6), 정책 + 시뮬레이션
 (M9/M10), 검색(M4), 프로덕션 패턴(M12/M11)으로 분기합니다. 표시된 인스턴스는

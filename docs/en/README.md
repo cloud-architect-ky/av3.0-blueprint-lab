@@ -23,23 +23,23 @@ Anyone can deploy it into **their own AWS account**.
 
 ---
 
-## The 12 modules
+## The 13 modules (M0-M12)
 
-| Module | What it does | Recommended instance |
-|---|---|---|
-| **M0** | Pipeline overview — maps the end-to-end pipeline to the modules (no compute) | `ml.t3.medium` (CPU) |
-| **M1** | Data Exploration — ingest & explore real **nuScenes-mini** sensor data; select scenes | `ml.t3.medium` (CPU) |
-| **M2** | Cosmos Reason Captioning — VLM captions of sampled clips | `ml.g5.12xlarge` (GPU) |
-| **M3** | Cosmos Curator — **NeMo Curator** video curation (split, transcode, motion-filter) | `ml.g5.12xlarge` (GPU) |
-| **M4** | OpenSearch Semantic Search — k-NN retrieval over caption embeddings | `ml.t3.medium` (CPU) |
-| **M5** | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g5.12xlarge`) |
-| **M6** | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g5.12xlarge`) |
-| **M7** | Nerfstudio 3D Reconstruction — NeRF / 3D Gaussian Splatting (optional/demo) | `ml.g5.xlarge` (GPU) |
-| **M8** | Cosmos Reason LoRA SFT — parameter-efficient fine-tune on nuScenes **human** labels | GPU (`ml.g5.12xlarge`, native-res measured on 4× 24 GB) |
-| **M9** | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU (`ml.g5.12xlarge`) |
-| **M10** | AlpaSim Closed-Loop Eval — visualize genuine closed-loop policy evaluation | `ml.t3.medium` (CPU) + GPU EC2 |
-| **M11** | Pipeline Automation — a real SageMaker Pipeline (Caption→Curate→Augment) | `ml.t3.medium` (CPU) + processing job |
-| **M12** | HyperPod Distributed Training — a real 2-node `torch.distributed` DDP job | `ml.t3.medium` (CPU) + job nodes |
+| Module | Blog stage | What it does | Recommended instance |
+|---|---|---|---|
+| **M0** | — | Pipeline overview — maps the end-to-end pipeline to the modules (no compute) | `ml.t3.medium` (CPU) |
+| **M1** | 1–2 | Data Exploration — ingest & explore real **nuScenes-mini** sensor data; select scenes | `ml.t3.medium` (CPU) |
+| **M2** | 3 | Cosmos Reason Captioning — VLM captions of sampled clips | `ml.g5.12xlarge` (GPU) |
+| **M3** | 3 | Cosmos Curator — **NeMo Curator** video curation (split, transcode, motion-filter) | `ml.g5.12xlarge` (GPU) |
+| **M4** | 4 | OpenSearch Semantic Search — k-NN retrieval over caption embeddings | `ml.t3.medium` (CPU) |
+| **M5** | 5 | Cosmos Transfer — weather/condition augmentation of real clips | GPU (`ml.g5.12xlarge`) |
+| **M6** | 5 (ext) | Cosmos Predict — synthetic scenario (video2world) generation | GPU (`ml.g5.12xlarge`) |
+| **M7** | 6 | Nerfstudio 3D Reconstruction — NeRF / 3D Gaussian Splatting (optional/demo) | `ml.g5.xlarge` (GPU) |
+| **M8** | 7 | Cosmos Reason LoRA SFT — parameter-efficient fine-tune on nuScenes **human** labels | GPU (`ml.g5.12xlarge`, native-res measured on 4× 24 GB) |
+| **M9** | 7 | Alpamayo VLA — **Alpamayo-1.5-10B** vision-language-action inference + trajectory | GPU (`ml.g5.12xlarge`) |
+| **M10** | 8 | AlpaSim Closed-Loop Eval — visualize genuine closed-loop policy evaluation | `ml.t3.medium` (CPU) + GPU EC2 |
+| **M11** | — (ext) | Pipeline Automation — a real SageMaker Pipeline (Caption→Curate→Augment) | `ml.t3.medium` (CPU) + processing job |
+| **M12** | — (ext) | HyperPod Distributed Training — a real 2-node `torch.distributed` DDP job | `ml.t3.medium` (CPU) + job nodes |
 
 Recommended path: **M0 → M1 → M2 → M3**, then branch to synthetic data (M5/M6),
 policy + simulation (M9/M10), search (M4), or production patterns (M12/M11).

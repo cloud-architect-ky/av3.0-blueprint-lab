@@ -64,7 +64,7 @@ aws ssm start-session --target <your-instance-id> --region $AWS_DEFAULT_REGION
 ```bash
 sudo su -
 export PARTICIPANT_ID=<your-id>
-export M10_OUTPUT_PREFIX=users/<your-id>/m7
+export M10_OUTPUT_PREFIX=users/<your-id>/m10
 export OUTPUT_BUCKET=av30lab-user-workspace-$ACCOUNT-$REGION
 export SHARED_BUCKET=av30lab-shared-data-$ACCOUNT-$REGION
 export HF_TOKEN=hf_xxx          # required — for downloading the gated NuRec scene (prerequisite 3)

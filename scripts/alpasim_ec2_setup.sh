@@ -44,7 +44,7 @@
 # USAGE — PARTICIPANT self-run (participant on their own pre-provisioned GPU host,
 # reached via SSM; see docs/M10_PARTICIPANT_SSM_RUNBOOK.md):
 #     export PARTICIPANT_ID=<id>
-#     export M10_OUTPUT_PREFIX=users/<id>/m7
+#     export M10_OUTPUT_PREFIX=users/<id>/m10
 #     export OUTPUT_BUCKET=av30lab-user-workspace-<acct>-<region>
 #     export SHARED_BUCKET=av30lab-shared-data-<acct>-<region>   # hf-cache read
 #     bash scripts/alpasim_ec2_setup.sh
@@ -86,7 +86,7 @@ NRE_IMAGE="${NRE_IMAGE:-nvcr.io/nvidia/nre/nre-ga:26.04}"
 # Output routing. Two modes, decided purely by env (defaults => legacy admin mode):
 #   - ADMIN reference run (default): PARTICIPANT_ID unset, results go to the shared
 #     bucket under m10-reference/ (one run, shared by all participants).
-#   - PARTICIPANT self-run: set PARTICIPANT_ID=<id>, M10_OUTPUT_PREFIX=users/<id>/m7,
+#   - PARTICIPANT self-run: set PARTICIPANT_ID=<id>, M10_OUTPUT_PREFIX=users/<id>/m10,
 #     OUTPUT_BUCKET=<user-workspace-bucket> so each participant writes their OWN
 #     results and they never collide. See docs/M10_PARTICIPANT_SSM_RUNBOOK.md.
 PARTICIPANT_ID="${PARTICIPANT_ID:-}"

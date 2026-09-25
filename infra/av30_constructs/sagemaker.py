@@ -480,8 +480,17 @@ class SageMakerConstruct(Construct):
         # cohort-wide disclosure.
         #
         # DescribeLogStreams is kept: it returns stream NAMES only, not contents, and the
-        # platform uses it. Nothing in this lab reads log CONTENT with the participant
-        # role — the admin dashboard reads logs with its own Lambda roles.
+        # platform uses it. The admin dashboard reads log content with its own Lambda roles.
+        #
+        # ONE NOTEBOOK DID read log content and had to be changed to match: M12 called
+        # `estimator.fit(..., logs="All")`, which makes the SageMaker SDK stream the
+        # training job's log via GetLogEvents. Removing the action here turned that into
+        # an AccessDeniedException that also skipped the cell's `total_train_time`
+        # assignment, so the following cell died on NameError and the job was billed
+        # without producing training_metadata.json. M12 now passes `logs=False`;
+        # describe_training_job already supplies status and billable seconds. If a future
+        # notebook needs live log tailing, change the notebook — do not re-add this action.
+        # Verify with: grep -rn 'logs=' notebooks/  (expect no logs="All")
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="CloudWatchLogsAccess",

@@ -322,9 +322,12 @@ AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh        # re-downloads ~1
 
 > **These two scripts replace only two of the four lines above.** `cache_models.sh` writes
 > `model-cache/` and nothing else; `stage_nuscenes.sh` writes `datasets/`. Neither can
-> produce `hf-cache/` — **no script in this repository can.** That tree is a HuggingFace
-> *offline cache* layout (`models--org--name/snapshots/<sha>/…`), while `cache_models.sh`
-> uses `hf download --local-dir`, which is flat. `m10-reference/` has no producer either.
+> produce `hf-cache/`. That tree is a HuggingFace *offline cache* layout
+> (`models--org--name/snapshots/<sha>/…`), while `cache_models.sh` uses
+> `hf download --local-dir`, which is flat. To build it use **`scripts/cache_hf_tree.sh`**
+> (from `scripts/hf_cache_manifest.tsv`, admin `HF_TOKEN` required); to seed a second
+> region, copying bucket-to-bucket as above is faster and needs no token.
+> `m10-reference/` has no producer — copy it.
 >
 > This is not hypothetical. ap-northeast-2 was seeded on 2026-09-26 by running
 > `cache_models.sh` in place of the block above. It completed cleanly, `deploy.sh` reported

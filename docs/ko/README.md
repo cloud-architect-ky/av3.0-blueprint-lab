@@ -184,7 +184,7 @@ AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    오프라인 캐시는 채우지 않습니다. 6b는 선택이 아닙니다.
 
 # 6b. HuggingFace 오프라인 캐시 seeding — M5, M6, M9, M10에 필수.
-#     이 저장소의 어떤 스크립트도 hf-cache/hub/ 를 만들 수 없습니다.
+#     두 가지 경로가 있고 둘 다 실행 가능한 명령입니다. seeded 리전이 있는지로 고르세요:
 #  이미 다른 리전에서 랩을 운영 중이라면(두 번째 리전 이후의 일반적인 경우):
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 SEEDED=us-west-2                      # 랩이 이미 동작하는 리전
@@ -196,9 +196,11 @@ aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
             --source-region "$SEEDED" --region "$REGION"
 #     hf-cache/hub/ 가 아니라 hf-cache/ 를 동기화하세요 — 그러지 않으면 트리가 한 단계
 #     더 깊게 중첩되고(hub/hub/) M9 데모 클립이 엉뚱한 곳에 놓입니다.
-#  첫 리전이라면 복사할 원본이 없습니다: ADMIN_GUIDE.md §6.3의 일회성 절차를 따르세요
-#  (관리자 HF_TOKEN으로 GPU 앱에서 M5/M6/M9을 각각 한 번 실행한 뒤
-#   /mnt/sagemaker-nvme/hf/hub 를 s3://<shared>/hf-cache/hub/ 로 동기화).
+#  첫 리전이라면(복사할 원본이 없음) — 고정된 매니페스트로 트리를 직접 만듭니다.
+#  GPU도 노트북 실행도 필요 없고, 스크래치 약 65 GiB와 30~60분이 필요합니다:
+AWS_REGION="$REGION" HF_TOKEN="$HF_TOKEN" ./scripts/cache_hf_tree.sh
+#     토큰 없이 무엇을 받을지 미리 보기:  ./scripts/cache_hf_tree.sh --dry-run
+#     M9은 추가로 데모 클립이 필요합니다 — ADMIN_GUIDE.md §6.3.
 #
 # 6c. 검증 — 참가자를 만들기 전에 반드시 exit 0 이어야 합니다. 6b를 건너뛰면
 #     M5/M6/M9/M10이 실행되지 않는 리전이 만들어지는데, 다른 모든 검사는 초록색입니다.

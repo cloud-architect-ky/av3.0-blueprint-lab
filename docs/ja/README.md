@@ -143,7 +143,7 @@ AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    HuggingFace オフラインキャッシュは投入しません。6b は任意ではありません。
 
 # 6b. HuggingFace オフラインキャッシュの投入 — M5、M6、M9、M10 に必須。
-#     このリポジトリのどのスクリプトも hf-cache/hub/ を構築できません。
+#     2 つの経路があり、どちらも実行可能なコマンドです。既存の seeded リージョンの有無で選択:
 #  すでに別リージョンでラボを運用している場合（2 つ目以降の一般的なケース）:
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 SEEDED=us-west-2                      # ラボが既に動作しているリージョン
@@ -155,9 +155,11 @@ aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
             --source-region "$SEEDED" --region "$REGION"
 #     hf-cache/hub/ ではなく hf-cache/ を同期してください — さもないとツリーが 1 階層
 #     深く入れ子になり（hub/hub/）、M9 のデモクリップが誤った場所に置かれます。
-#  最初のリージョンならコピー元がありません: ADMIN_GUIDE.md §6.3 の一度きりの手順に
-#  従ってください（管理者の HF_TOKEN で GPU アプリ上で M5/M6/M9 を各 1 回実行し、
-#  /mnt/sagemaker-nvme/hf/hub を s3://<shared>/hf-cache/hub/ へ同期）。
+#  最初のリージョンなら（コピー元がない） — 固定マニフェストからツリーを構築します。
+#  GPU もノートブック実行も不要、スクラッチ約 65 GiB と 30〜60 分:
+AWS_REGION="$REGION" HF_TOKEN="$HF_TOKEN" ./scripts/cache_hf_tree.sh
+#     トークンなしで取得内容を確認:  ./scripts/cache_hf_tree.sh --dry-run
+#     M9 は追加でデモクリップが必要です — ADMIN_GUIDE.md §6.3。
 #
 # 6c. 検証 — 参加者を作成する前に必ず exit 0 になること。6b を飛ばすと
 #     M5/M6/M9/M10 が動かないリージョンができ、他のすべての検査は緑のままです。

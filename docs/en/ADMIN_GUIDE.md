@@ -343,8 +343,10 @@ pip install huggingface_hub && hf auth login --token "$HF_TOKEN"
 
 ### 6.3 HF offline cache (M5/M6/M9) — the "no participant token" trick
 
-> **No script in this repository builds `hf-cache/hub/`.** Every `hf-cache` reference in
-> `scripts/` reads *from* S3, never writes to it. `cache_models.sh` is not a substitute: it
+> **`cache_models.sh` does NOT build `hf-cache/hub/`** — use `scripts/cache_hf_tree.sh`.
+> Until 2026-09-26 nothing in this repo produced the tree at all: every `hf-cache`
+> reference in `scripts/` read *from* S3 and never wrote to it, so the only recipe was the
+> manual ritual below. `cache_models.sh` is not a substitute: it
 > writes a different prefix (`model-cache/`) in a different layout (flat
 > `hf download --local-dir`, not `models--org--name/snapshots/<sha>/…`). The tree exists
 > only because someone performed the ritual below once, by hand.

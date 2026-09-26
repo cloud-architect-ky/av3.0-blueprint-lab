@@ -198,8 +198,8 @@ AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    cache that M5/M6/M9 read. Step 6b is not optional — see the warning below.
 
 # 6b. Seed the HuggingFace offline cache — REQUIRED for M5, M6, M9, M10.
-#     No script in this repo can build hf-cache/hub/. Which path applies depends on
-#     whether you already have a working region:
+#     Two paths; which applies depends on whether you already have a working region.
+#     Both are runnable commands — neither is "see another document":
 #
 #  IF you already run the lab in another region (the usual case for region #2+):
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
@@ -213,11 +213,12 @@ aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
 #     Sync hf-cache/ — NOT hf-cache/hub/ — or the tree nests one level too deep and
 #     M9's demo clip lands in the wrong place.
 #
-#  IF this is your FIRST region, there is nothing to copy from: follow the one-time
-#  ritual in docs/en/ADMIN_GUIDE.md §6.3 (run M5, M6 and M9 once each on a GPU app
-#  with your admin HF_TOKEN, then sync /mnt/sagemaker-nvme/hf/hub up to
-#  s3://<shared>/hf-cache/hub/, plus M9's demo clip). This is what Step 2b's license
-#  acceptance and the HF_TOKEN above are for.
+#  IF this is your FIRST region (nothing to copy from) — builds the tree from the
+#  pinned manifest. No GPU, no notebook run; needs ~65 GiB scratch and 30-60 min.
+#  This is what Step 2b's license acceptance and the HF_TOKEN above are for:
+AWS_REGION="$REGION" HF_TOKEN="$HF_TOKEN" ./scripts/cache_hf_tree.sh
+#     Preview what it would fetch, without a token:  ./scripts/cache_hf_tree.sh --dry-run
+#     M9 additionally needs its demo clip — docs/en/ADMIN_GUIDE.md §6.3.
 #
 # 6c. VERIFY — do not infer. Must exit 0 BEFORE you provision any participant.
 ./scripts/check_seeding.sh --region "$REGION"        # add --source-region "$SEEDED" to compare checksums
@@ -241,8 +242,9 @@ aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templ
 
 > **Steps 6b and 6c are the two that get skipped, and skipping them ships a broken
 > region.** Every other step here is a runnable command that succeeds; the HuggingFace
-> offline cache is the one artifact no script in this repo produces, so it used to appear
-> only as a prose aside pointing at another document. Measured on 2026-09-26: an
+> offline cache had no producer script at all, so it used to appear only as a prose aside
+> pointing at another document (`scripts/cache_hf_tree.sh` now builds it). Measured on
+> 2026-09-26: an
 > ap-northeast-2 deployment that ran steps 1-8 and skipped 6b came up with **M5, M6, M9
 > and M10 unable to run**. `deploy.sh` reported success, all 15 of its guards were green,
 > and the Day-1 smoke test passed — because it exercises M1 and M2, the only two modules

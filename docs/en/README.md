@@ -192,7 +192,7 @@ AWS_REGION="$REGION" ./scripts/cache_models.sh
 #    cache that M5/M6/M9 read. Step 6b is not optional.
 
 # 6b. Seed the HuggingFace offline cache — REQUIRED for M5, M6, M9, M10.
-#     No script in this repo can build hf-cache/hub/.
+#     Two paths, both runnable. Pick by whether a seeded region already exists:
 #  IF you already run the lab in another region (the usual case for region #2+):
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 SEEDED=us-west-2                      # a region where the lab already works
@@ -203,9 +203,10 @@ aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
             "s3://av30lab-shared-data-$ACCOUNT-$REGION/m10-reference/" \
             --source-region "$SEEDED" --region "$REGION"
 #     Sync hf-cache/ — NOT hf-cache/hub/ — or the tree nests one level too deep.
-#  IF this is your FIRST region there is nothing to copy from: follow the one-time
-#  ritual in ADMIN_GUIDE.md §6.3 (run M5/M6/M9 once each on a GPU app with your admin
-#  HF_TOKEN, then sync /mnt/sagemaker-nvme/hf/hub to s3://<shared>/hf-cache/hub/).
+#  IF this is your FIRST region (nothing to copy from) — builds the tree from the pinned
+#  manifest. No GPU, no notebook run; ~65 GiB scratch, 30-60 min:
+AWS_REGION="$REGION" HF_TOKEN="$HF_TOKEN" ./scripts/cache_hf_tree.sh
+#     M9 additionally needs its demo clip — ADMIN_GUIDE.md §6.3.
 #
 # 6c. VERIFY — must exit 0 BEFORE provisioning anyone. Skipping 6b ships a region
 #     where M5/M6/M9/M10 cannot run, and every other check stays green.

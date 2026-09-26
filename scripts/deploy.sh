@@ -376,7 +376,53 @@ echo "=== Deployment Complete ==="
 echo "Admin Dashboard: $ADMIN_URL"
 echo "API Endpoint:    $API_URL"
 echo ""
-# Staged-template check. The notebook cost cells in M3/M5/M6/M8/M9 read
+# --- Stage notebook templates (repo -> S3) --------------------------------------------
+# This was a MANUAL step printed under "Next steps", and that split of responsibilities bit
+# real deployments twice. create_user copies templates OUT OF
+# s3://<shared>/notebook-templates/ at provisioning time, so a participant created after a
+# notebook change silently received the PREVIOUS notebooks — the copy step is automatic, the
+# publish step was not. Measured 2026-09-26: a brand-new participant got a 9-cell M2 and an
+# M5 whose pre-flight predated its own fix, because nobody had run this sync.
+#
+# The check below did not catch it either: it tests for PRESENCE of two helper files, so a
+# stale-but-present M5 passes.
+#
+# Running it here is also SAFER than printing it. The comment on the Next-steps block records
+# that copy-pasting the printed command into a fresh shell once re-seeded the FIRST region's
+# bucket, because the standalone scripts defaulted to us-west-2. $SHARED_BUCKET and $REGION
+# here are the ones that were actually deployed.
+#
+# --exclude is load-bearing, not tidiness: a local scripts/__pycache__ otherwise stages .pyc
+# files that then sync into every participant workspace.
+#
+# Under `set -e` a failure here aborts the script. That is deliberate: provisioning returns
+# HTTP 500 without these objects, so a deploy that cannot stage them is not a usable deploy.
+if [ -n "${SHARED_BUCKET:-}" ]; then
+    echo ">>> Staging notebook templates -> s3://$SHARED_BUCKET/notebook-templates/"
+    aws s3 sync notebooks/ "s3://$SHARED_BUCKET/notebook-templates/" --region "$REGION" \
+        --exclude '*__pycache__*' --exclude '*.pyc' --only-show-errors
+    aws s3 sync scripts/ "s3://$SHARED_BUCKET/notebook-templates/scripts/" --region "$REGION" \
+        --exclude '*__pycache__*' --exclude '*.pyc' --only-show-errors
+    STAGED_COUNT=$(aws s3 ls "s3://$SHARED_BUCKET/notebook-templates/" --recursive \
+        --region "$REGION" | wc -l | tr -d ' ')
+    echo ">>> Staged. notebook-templates/ now holds $STAGED_COUNT objects."
+    echo ""
+    # Existing participants are NOT refreshed by this. copy_notebook_templates runs once, at
+    # provisioning; their users/<id>/ copy is whatever was staged back then.
+    echo ">>> NOTE: participants provisioned BEFORE this deploy keep the notebooks they were"
+    echo "    given. To hand them the new ones: admin dashboard -> Reset (clears that"
+    echo "    participant's users/<id>/ outputs and re-copies templates), or Delete +"
+    echo "    Add User. Newly added participants get the templates just staged."
+    echo ""
+fi
+
+# Staged-template check — now a POST-condition on the sync above, not the mechanism.
+# It tests for PRESENCE only, which is why it passed while a staged M5 was stale; the sync
+# above is what keeps content current. Kept because head-object also proves the objects are
+# READABLE, which a successful sync does not (a bucket policy or KMS change could break
+# reads without breaking writes).
+#
+# The notebook cost cells in M3/M5/M6/M8/M9 read
 # scripts/av30_instance_rates.py out of the participant workspace to price THIS region. If
 # that file is not staged the conversion is INERT and nothing fails: four notebooks print
 # "[cost] rate table unavailable" and M3 silently falls back to a us-west-2 rate regardless
@@ -432,16 +478,13 @@ echo "      ./scripts/check_quotas.py --region $REGION --participants N"
 
 echo "Next steps:"
 echo "  1. Create Cognito admin user: aws cognito-idp admin-create-user --user-pool-id $POOL_ID --username admin"
-# AWS_REGION is spelled out on purpose. This line used to omit it, and the seeding
-# scripts defaulted to us-west-2 — so copy-pasting it into a fresh shell after deploying
-# a second region re-seeded the FIRST region's bucket. Both scripts now refuse to guess,
-# and this command carries the region that was actually deployed.
-echo "  2. Stage notebook templates (REQUIRED — provisioning fails without them):"
-# --exclude is part of the command, not a nicety: a local scripts/__pycache__ otherwise
-# stages .pyc files that then sync into every participant workspace.
-echo "       aws s3 sync notebooks/ s3://$SHARED_BUCKET/notebook-templates/ --region $REGION \\"
-echo "           --exclude '*__pycache__*' --exclude '*.pyc'"
-echo "       aws s3 sync scripts/   s3://$SHARED_BUCKET/notebook-templates/scripts/ --region $REGION \\"
-echo "           --exclude '*__pycache__*' --exclude '*.pyc'"
-echo "  3. Stage nuScenes:   AWS_REGION=$REGION ./scripts/stage_nuscenes.sh"
-echo "  4. Pre-cache models: AWS_REGION=$REGION HF_TOKEN=xxx ./scripts/cache_models.sh"
+# Notebook templates are no longer listed here: this script stages them itself (see the
+# staging block above). Leaving them as a manual step meant a deploy could finish "green"
+# while the notebooks participants receive were the previous ones.
+#
+# AWS_REGION is spelled out on purpose on the lines below. They used to omit it, and the
+# seeding scripts defaulted to us-west-2 — so copy-pasting into a fresh shell after deploying
+# a second region re-seeded the FIRST region's bucket. Both scripts now refuse to guess, and
+# these commands carry the region that was actually deployed.
+echo "  2. Stage nuScenes:   AWS_REGION=$REGION ./scripts/stage_nuscenes.sh"
+echo "  3. Pre-cache models: AWS_REGION=$REGION HF_TOKEN=xxx ./scripts/cache_models.sh"

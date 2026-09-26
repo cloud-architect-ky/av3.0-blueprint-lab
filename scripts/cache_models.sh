@@ -27,12 +27,20 @@ TEMP_DIR="${TMPDIR:-/tmp}/av30-model-cache"
 
 # Model registry: name | HF repo | S3 prefix | gated flag
 #
+# SCOPE WARNING — read before treating a clean run here as "the region is seeded".
+# This script seeds model-cache/ and NOTHING ELSE. In the four-line seeding block in
+# docs/en/ADDING_A_REGION.md §4 it replaces exactly ONE line; the other three
+# (hf-cache/, m10-reference/, and the datasets/ stage) still have to be done. Running
+# only this script is how ap-northeast-2 came up with M5/M6/M9/M10 broken on
+# 2026-09-26. Verify with scripts/check_seeding.sh, never by this script's exit code.
+#
 # NOTE: Alpamayo-1.5-10B (M9) is intentionally NOT here. M9 loads its weights
 # from the HuggingFace OFFLINE cache tree (hf-cache/hub/), not this flat
 # model-cache, because at runtime it also pulls a hidden Cosmos-Reason2-8B VLM
-# backbone that a flat weights-only copy would miss. The admin populates M9's
-# checkpoints as part of the hf-cache run (see README Step 6b / docs/en/ALPAMAYO_M9.md),
-# so a flat model-cache/alpamayo-1.5/ copy would just be unused dead weight.
+# backbone that a flat weights-only copy would miss. That tree is NOT produced by
+# any script in this repo — see docs/en/ADMIN_GUIDE.md §6.3 for how it comes into
+# being, and docs/en/ALPAMAYO_M9.md for M9's side of it. A flat
+# model-cache/alpamayo-1.5/ copy would just be unused dead weight.
 declare -a MODELS=(
     "Cosmos Reason 1 (7B)|nvidia/Cosmos-Reason1-7B|cosmos-reason1|false"
     "Cosmos Transfer 2.5 (2B)|nvidia/Cosmos-Transfer2.5-2B|cosmos-transfer2.5|true"
@@ -270,6 +278,37 @@ if [ ${#FAILED_MODELS[@]} -gt 0 ]; then
 fi
 echo ""
 echo "  S3 location: s3://$BUCKET/model-cache/"
+echo ""
+# --------------------------------------------------------------------------
+# What this script does NOT seed. Say it out loud.
+# --------------------------------------------------------------------------
+# Measured 2026-09-26: ap-northeast-2 was brought up by running this script, which
+# completed cleanly and reported success — and left a region where M5, M6, M9 and M10
+# could not run, because hf-cache/ was never created. This script writes model-cache/
+# ONLY, and in a flat `hf download --local-dir` layout that is NOT the HuggingFace
+# offline cache tree the Cosmos/Alpamayo runtimes read. A green run here is therefore
+# not evidence that the region is usable, and nothing said so until a participant found
+# out four modules in.
+echo "  !!  NOT SEEDED BY THIS SCRIPT — still required for M5/M6/M9/M10  !!"
+echo ""
+echo "  This script writes model-cache/ only (flat layout, for M2/M8). The Cosmos and"
+echo "  Alpamayo runtimes read a DIFFERENT prefix in a DIFFERENT layout — the HuggingFace"
+echo "  offline cache TREE at hf-cache/hub/ — which NO script in this repo can build."
+echo "  Copy it from a region that already has it:"
+echo ""
+echo "    aws s3 sync s3://av30lab-shared-data-<acct>-<seeded-region>/hf-cache/ \\"
+echo "                s3://$BUCKET/hf-cache/ \\"
+echo "                --source-region <seeded-region> --region $REGION"
+echo ""
+echo "    aws s3 sync s3://av30lab-shared-data-<acct>-<seeded-region>/m10-reference/ \\"
+echo "                s3://$BUCKET/m10-reference/ \\"
+echo "                --source-region <seeded-region> --region $REGION"
+echo ""
+echo "  Sync hf-cache/ and not hf-cache/hub/, so hf-cache/alpamayo-demo/ (M9's demo clip)"
+echo "  and the refs/ files come along."
+echo ""
+echo "  Then verify — do not assume:"
+echo "    ./scripts/check_seeding.sh --region $REGION --source-region <seeded-region>"
 echo ""
 
 # Offer cleanup

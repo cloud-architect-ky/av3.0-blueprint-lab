@@ -65,6 +65,9 @@ set -uo pipefail
 # --------------------------------------------------------------------------
 NVME="${COSMOS_NVME:-/mnt/sagemaker-nvme}"
 WORK="$NVME/cosmos-work"
+# One 0600 sidecar shared by all three env files, so a caller-supplied HF_TOKEN is
+# never written into a world-readable sourced script. See write_hf_token_sidecar.
+HF_TOKEN_FILE="$WORK/.hf_token"
 CONDA_ENV="${COSMOS_CONDA_ENV:-cosmos-t25}"
 PY_VERSION="3.10"
 
@@ -105,14 +108,11 @@ if ! command -v conda &>/dev/null; then
     exit 1
 fi
 
-if [ -z "${HF_TOKEN:-}" ]; then
-    echo "Note: HF_TOKEN not set. That's FINE if the admin pre-cached the Cosmos"
-    echo "      checkpoints to S3 (this script restores them below and runs"
-    echo "      offline — no token needed). Only if that cache is ABSENT do you"
-    echo "      need an HF token whose account accepted the gated licenses"
-    echo "      (Cosmos-Transfer2.5-2B / Cosmos-Predict2.5-2B / Cosmos-Guardrail1)."
-    echo ""
-fi
+# NOTE: there is deliberately no "HF_TOKEN not set — that's probably fine" note
+# here any more. It used to print at this point, BEFORE the S3 cache probe, so it
+# asserted something nothing had checked yet and read as reassurance in exactly the
+# case that cannot work (no cache AND no token). The single verdict is printed after
+# the probe instead, where it is a fact rather than a hope.
 
 mkdir -p "$WORK"
 
@@ -165,16 +165,149 @@ if [ -z "$HF_CACHE_S3" ]; then
     fi
     [ -n "$_shared" ] && HF_CACHE_S3="s3://${_shared}/hf-cache/hub/"
 fi
-if [ -n "$HF_CACHE_S3" ] && aws s3 ls "$HF_CACHE_S3" >/dev/null 2>&1; then
-    echo "[hf-cache] Restoring pre-cached HF checkpoints from $HF_CACHE_S3 ..."
-    mkdir -p "$HF_HOME_DIR/hub"
-    aws s3 sync "$HF_CACHE_S3" "$HF_HOME_DIR/hub/" --only-show-errors \
-        && echo "[hf-cache] Restore complete → offline mode will be used (no HF token needed)." \
-        || echo "[hf-cache] WARNING: restore failed; will fall back to online/token download."
+# Which repos THIS run needs in the restored tree. Keyed off $WHICH rather than one
+# hardcoded glob: `alpamayo` is a different stack, and a check for
+# models--nvidia--Cosmos-* would be satisfied by Cosmos-Reason2-8B while the actual
+# Alpamayo weights were missing. `transfer` needs Predict2.5-2B too — M5's own
+# traceback shows Transfer pulling the Wan2.1 VAE out of nvidia/Cosmos-Predict2.5-2B.
+case "$WHICH" in
+    alpamayo) HF_NEED="models--nvidia--Alpamayo-1.5-10B models--nvidia--Cosmos-Reason2-8B" ;;
+    predict)  HF_NEED="models--nvidia--Cosmos-Predict2.5-2B models--nvidia--Cosmos-Guardrail1" ;;
+    *)        HF_NEED="models--nvidia--Cosmos-Transfer2.5-2B models--nvidia--Cosmos-Predict2.5-2B models--nvidia--Cosmos-Guardrail1" ;;
+esac
+
+# HF_CACHE_OK=1 ONLY when the restore completed and the restored tree holds what this
+# run needs. Absent prefix, AccessDenied, failed sync and partial tree all leave it 0
+# and all funnel into the single gate below — previously each printed its own warning
+# and then continued identically.
+HF_CACHE_OK=0
+HF_CACHE_WHY=""
+if [ -n "$HF_CACHE_S3" ]; then
+    # Capture the probe's stderr instead of discarding it with `2>&1`. "prefix does
+    # not exist" (the ap-northeast-2 case), "AccessDenied" (an IAM problem) and
+    # "Unable to locate credentials" previously all arrived here as the same silent
+    # exit 1, so the message printed afterwards was a guess. An absent prefix exits
+    # non-zero with NO stderr at all, which is itself the distinguishing signal.
+    HF_PROBE_ERR="$(aws s3 ls "$HF_CACHE_S3" 2>&1 >/dev/null)"
+    if [ $? -eq 0 ]; then
+        echo "[hf-cache] Restoring pre-cached HF checkpoints from $HF_CACHE_S3 ..."
+        mkdir -p "$HF_HOME_DIR/hub"
+        if aws s3 sync "$HF_CACHE_S3" "$HF_HOME_DIR/hub/" --only-show-errors; then
+            # Object-count parity catches an INTERRUPTED restore, which is the single
+            # most dangerous state in this script. A PARTIAL tree is strictly worse
+            # than an empty one: the env file's `ls models--nvidia--Cosmos-*` glob
+            # needs only ONE directory to exist to flip HF_HUB_OFFLINE=1, after which
+            # every still-missing checkpoint stops being a download and becomes an
+            # opaque "Local entry not found ... offline mode is enabled" 20 minutes
+            # later. HF offline mode performs no integrity checking at all, so nothing
+            # downstream would ever notice. >= not = : a superset is fine (another
+            # stack's repos may already be cached locally), a subset is not.
+            _s3_n="$(aws s3 ls "$HF_CACHE_S3" --recursive 2>/dev/null \
+                     | awk '$4 !~ /\/$/ {n++} END {print n+0}')"
+            _loc_n="$(find "$HF_HOME_DIR/hub" -type f 2>/dev/null | wc -l | tr -d ' ')"
+            if [ "${_s3_n:-0}" -gt 0 ] && [ "${_loc_n:-0}" -ge "${_s3_n:-0}" ]; then
+                # Shape, not mere presence: each needed repo must have at least one
+                # NON-EMPTY file under it. (This is the cheap on-instance check. The
+                # rigorous source-vs-destination checksum assertion belongs to
+                # scripts/check_seeding.sh, which runs once per region at seed time —
+                # do not mistake one for the other.)
+                # Assign from a command substitution and test the STRING. Do not write
+                # this as `if ! find ... | head -1 | grep -q .`: `set -o pipefail` is
+                # active (:61), and grep -q / head -1 exit as soon as they have their
+                # answer, so find takes SIGPIPE and the pipeline's status becomes 141
+                # precisely WHEN A FILE WAS FOUND — inverting the check and reporting
+                # every present repo as missing.
+                _missing=""
+                for _repo in $HF_NEED; do
+                    _found="$(find "$HF_HOME_DIR/hub/$_repo" -type f -size +0c 2>/dev/null | head -1)"
+                    if [ -z "$_found" ]; then
+                        _missing="$_missing $_repo"
+                    fi
+                done
+                if [ -z "$_missing" ]; then
+                    HF_CACHE_OK=1
+                else
+                    HF_CACHE_WHY="restored tree is missing:$_missing"
+                fi
+            else
+                HF_CACHE_WHY="restore incomplete (${_loc_n:-0} local files vs ${_s3_n:-0} S3 objects)"
+            fi
+        else
+            HF_CACHE_WHY="aws s3 sync from $HF_CACHE_S3 failed"
+        fi
+    elif [ -n "$HF_PROBE_ERR" ]; then
+        HF_CACHE_WHY="cannot read $HF_CACHE_S3 — $(echo "$HF_PROBE_ERR" | head -1)"
+    else
+        HF_CACHE_WHY="no HF cache at $HF_CACHE_S3 (prefix does not exist in this region)"
+    fi
 else
-    echo "[hf-cache] No S3 HF cache at ${HF_CACHE_S3:-<unresolved>} — falling back to online"
-    echo "           download (needs HF_TOKEN + accepted licenses for M5/M6)."
+    HF_CACHE_WHY="could not resolve the shared bucket, so \$HF_CACHE_S3 is unset"
 fi
+
+# --------------------------------------------------------------------------
+# The gate: refuse to continue when we already know the run cannot succeed.
+# --------------------------------------------------------------------------
+# Both halves of the fatal condition are known HERE: no usable offline cache AND no
+# token. The script used to print one warning and then spend 15-20 minutes on `uv
+# sync` before exiting 0 — so the notebook's only check (`if proc.returncode != 0`)
+# passed, the setup cell printed "environment ready", and the participant paid a GPU
+# hour to reach a 4-second failure whose cause was never shown. Exit 2 (not 1) so
+# "precondition not met" stays distinguishable from "a stack failed to verify".
+if [ "$HF_CACHE_OK" -eq 0 ] && [ -z "${HF_TOKEN:-}" ]; then
+    echo ""
+    echo "=== STOP — not starting, because this run cannot succeed ==="
+    echo ""
+    echo "  Reason : $HF_CACHE_WHY"
+    echo "  And    : HF_TOKEN is not set."
+    echo ""
+    echo "  The Cosmos checkpoints are GATED on HuggingFace. With neither the admin's"
+    echo "  pre-cached offline tree nor a token, inference dies seconds after launch"
+    echo "  with 'Access denied. This repository requires approval.' — but inside a"
+    echo "  torchrun child, where the message is easy to miss entirely."
+    echo ""
+    echo "  Fix it one of two ways:"
+    echo ""
+    echo "  A) ADMIN, once per region — seed the offline cache, then re-run this cell."
+    echo "     Participants then need no HuggingFace account at all:"
+    echo "       aws s3 sync s3://av30lab-shared-data-<acct>-<seeded-region>/hf-cache/ \\"
+    echo "                   ${HF_CACHE_S3:-s3://av30lab-shared-data-<acct>-<this-region>/hf-cache/hub/} \\"
+    echo "                   --source-region <seeded-region> --region <this-region>"
+    echo "     Verify with: ./scripts/check_seeding.sh --region <this-region>"
+    echo ""
+    echo "  B) PER PARTICIPANT — accept the licenses (auto-approved, instant) on"
+    echo "     huggingface.co/nvidia/Cosmos-Transfer2.5-2B, /Cosmos-Predict2.5-2B and"
+    echo "     /Cosmos-Guardrail1, then set HF_TOKEN in the notebook's first cell."
+    echo ""
+    echo "  Needed for this run ($WHICH): $HF_NEED"
+    exit 2
+fi
+
+# One verdict line, printed only now that it is a measured fact.
+if [ "$HF_CACHE_OK" -eq 1 ]; then
+    echo "[hf-cache] Offline cache verified for '$WHICH' → running OFFLINE, no HF token needed."
+else
+    echo "[hf-cache] No usable offline cache ($HF_CACHE_WHY)."
+    echo "[hf-cache] Proceeding ONLINE with the supplied HF_TOKEN. This needs the gated"
+    echo "           licenses accepted on that HuggingFace account, and downloads ~20 GB."
+fi
+
+# --------------------------------------------------------------------------
+# write_hf_token_sidecar — persist HF_TOKEN out of band, mode 0600.
+# --------------------------------------------------------------------------
+# The env files are generated with `cat >` under the default umask (0022 on the SMD
+# image), so appending `export HF_TOKEN=...` to one published the token to every
+# local user. Persistence itself is kept rather than dropped: the env file is
+# documented as a standalone entry point (see the header), and it is the only
+# durable carrier of the token across a kernel restart or a fresh terminal — a
+# Python-only token would silently resurrect the gated-repo failure there.
+write_hf_token_sidecar() {
+    [ -z "${HF_TOKEN:-}" ] && return 0
+    # umask inside a subshell so the file is never even briefly group/world readable;
+    # the explicit chmod then also covers a pre-existing file from an earlier run.
+    ( umask 077; printf 'export HF_TOKEN="%s"\n' "$HF_TOKEN" > "$HF_TOKEN_FILE" )
+    chmod 600 "$HF_TOKEN_FILE" 2>/dev/null || true
+    return 0
+}
 
 # --------------------------------------------------------------------------
 # prepare_repo — clone + uv sync + opencv-headless + .so symlinks + env file.
@@ -278,18 +411,29 @@ export LD_LIBRARY_PATH="\$(ls -d "$nvroot"/*/lib 2>/dev/null | paste -sd: -):\${
 export HF_HUB_DISABLE_XET=1
 export HF_HOME="$NVME/hf"
 export UV_CACHE_DIR="$NVME/uv-cache"
+# HF_TOKEN, when the caller supplied one, lives in a 0600 sidecar rather than inline
+# here: this file is written by \`cat >\` under the default umask, so an inline token
+# is world-readable on the instance. Sourced EARLY on purpose — as the file's LAST
+# statement, \`[ -r x ] && . x\` would make the whole env file return 1 whenever no
+# token exists, and M5 does \`source "\$env_file" && cd ...\`, so every token-less
+# (i.e. correctly cached) run would break.
+[ -r "$HF_TOKEN_FILE" ] && . "$HF_TOKEN_FILE"
 # Offline HF: if the admin's pre-cached checkpoints were restored into HF_HOME
 # (see restore step in setup_cosmos_env.sh), force offline so cosmos loads them
 # WITHOUT a token or network. If the cache is absent we leave online mode on so
 # a caller-provided HF_TOKEN can still download as a fallback.
+#
+# NOTE for anyone probing this from Python: the heredoc that writes this file is
+# UNQUOTED, so the literal text "export HF_HUB_OFFLINE=1" is ALWAYS present in the
+# file regardless of the runtime test around it. Testing
+# \`"HF_HUB_OFFLINE=1" in Path(env_file).read_text()\` is therefore always True and
+# tells you nothing. The only valid on-disk test is the same glob used below.
 if [ -d "\$HF_HOME/hub" ] && ls "\$HF_HOME/hub"/models--nvidia--Cosmos-* >/dev/null 2>&1; then
     export HF_HUB_OFFLINE=1
     export TRANSFORMERS_OFFLINE=1
 fi
 EOF
-    if [ -n "${HF_TOKEN:-}" ]; then
-        echo "export HF_TOKEN=\"$HF_TOKEN\"" >> "$env_file"
-    fi
+    write_hf_token_sidecar
 
     # Verify import through the env file.
     echo "--- Verifying $import_name import ($label) ---"
@@ -351,6 +495,9 @@ unset CUDA_HOME LD_LIBRARY_PATH
 export HF_HUB_DISABLE_XET=1
 export HF_HOME="$NVME/hf"
 export UV_CACHE_DIR="$NVME/uv-cache"
+# See the Cosmos env file for why the token is a 0600 sidecar sourced early, not
+# an inline export appended at the end.
+[ -r "$HF_TOKEN_FILE" ] && . "$HF_TOKEN_FILE"
 # Offline HF: if the admin's pre-cached Alpamayo (+ Cosmos-Reason2 backbone)
 # checkpoints were restored into HF_HOME, force offline so the model loads
 # WITHOUT a token or network. Absent cache -> online mode + optional HF_TOKEN.
@@ -359,9 +506,7 @@ if [ -d "\$HF_HOME/hub" ] && ls "\$HF_HOME/hub"/models--nvidia--Alpamayo-* >/dev
     export TRANSFORMERS_OFFLINE=1
 fi
 EOF
-    if [ -n "${HF_TOKEN:-}" ]; then
-        echo "export HF_TOKEN=\"$HF_TOKEN\"" >> "$ALPAMAYO_ENV_FILE"
-    fi
+    write_hf_token_sidecar
 
     # Verify import through the env file.
     echo "[4/4] Verifying alpamayo1_5 import ..."
@@ -391,7 +536,15 @@ fi
 
 echo ""
 if [ "$FAILED" -eq 0 ]; then
-    echo "=== SUCCESS ==="
+    # Qualify the banner. An unconditional "=== SUCCESS ===" is what let the M5 setup
+    # cell print "environment ready" for a run that could not download a single
+    # checkpoint: the repos and venvs really were built, so the banner was true about
+    # the only thing it measured, and false about the thing that mattered.
+    if [ "$HF_CACHE_OK" -eq 1 ]; then
+        echo "=== SUCCESS (offline HF cache verified — no token needed) ==="
+    else
+        echo "=== SUCCESS (repos built; HF downloads will go ONLINE via HF_TOKEN) ==="
+    fi
     echo "Env files written under $WORK:"
     [ -f "$TRANSFER_ENV_FILE" ] && echo "  M5 (Transfer): source $TRANSFER_ENV_FILE  ->  examples/inference.py ... control:edge"
     [ -f "$PREDICT_ENV_FILE" ]  && echo "  M6 (Predict):  source $PREDICT_ENV_FILE  ->  examples/inference.py ... --inference-type=video2world"

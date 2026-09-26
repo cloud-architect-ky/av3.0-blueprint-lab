@@ -488,3 +488,32 @@ echo "  1. Create Cognito admin user: aws cognito-idp admin-create-user --user-p
 # these commands carry the region that was actually deployed.
 echo "  2. Stage nuScenes:   AWS_REGION=$REGION ./scripts/stage_nuscenes.sh"
 echo "  3. Pre-cache models: AWS_REGION=$REGION HF_TOKEN=xxx ./scripts/cache_models.sh"
+# Steps 4-6 were MISSING, and their absence is the whole reason ap-northeast-2 shipped
+# broken (2026-09-26). An operator who followed steps 1-3 verbatim got a region where
+# M5, M6, M9 and M10 could not run: cache_models.sh seeds model-cache/ only, and
+# nothing here even named the other three prefixes. Step 7 is what makes that
+# detectable instead of discoverable-by-participant.
+echo "  4. Copy HF cache:    aws s3 sync s3://av30lab-shared-data-$ACCOUNT_ID-<seeded-region>/hf-cache/ \\"
+echo "                                   s3://$SHARED_BUCKET/hf-cache/ \\"
+echo "                                   --source-region <seeded-region> --region $REGION"
+echo "                       (~115 GiB / ~25-55 min. NO script builds this tree — copying"
+echo "                        from a seeded region is the supported path. cache_models.sh"
+echo "                        writes a DIFFERENT prefix in a DIFFERENT layout and cannot"
+echo "                        produce it. Needed by M5, M6, M9.)"
+echo "  5. Copy M10 ref:     aws s3 sync s3://av30lab-shared-data-$ACCOUNT_ID-<seeded-region>/m10-reference/ \\"
+echo "                                   s3://$SHARED_BUCKET/m10-reference/ \\"
+echo "                                   --source-region <seeded-region> --region $REGION"
+echo "  6. (hf-cache/alpamayo-demo/ comes along with step 4 — that is why step 4 syncs"
+echo "      hf-cache/ and not hf-cache/hub/.)"
+echo "  7. VERIFY before provisioning anyone:"
+echo "                       ./scripts/check_seeding.sh --region $REGION --source-region <seeded-region>"
+
+# Run it now, non-fatally. The real seeding happens AFTER this script returns, so a
+# failure here is expected on a fresh region and must not look like a deploy failure —
+# but printing the result turns "which prefixes still need seeding" into a fact rather
+# than something the operator has to remember to check.
+if [ -x ./scripts/check_seeding.sh ]; then
+    echo ""
+    echo "--- Seeding status right now (informational; seed then re-run step 7) ---"
+    ./scripts/check_seeding.sh --region "$REGION" 2>&1 | sed 's/^/    /' || true
+fi

@@ -320,24 +320,53 @@ AWS_REGION=$R ./scripts/stage_nuscenes.sh                      # public mirror, 
 AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh        # re-downloads ~157 GiB
 ```
 
+> **These two scripts replace only two of the four lines above.** `cache_models.sh` writes
+> `model-cache/` and nothing else; `stage_nuscenes.sh` writes `datasets/`. Neither can
+> produce `hf-cache/` — **no script in this repository can.** That tree is a HuggingFace
+> *offline cache* layout (`models--org--name/snapshots/<sha>/…`), while `cache_models.sh`
+> uses `hf download --local-dir`, which is flat. `m10-reference/` has no producer either.
+>
+> This is not hypothetical. ap-northeast-2 was seeded on 2026-09-26 by running
+> `cache_models.sh` in place of the block above. It completed cleanly, `deploy.sh` reported
+> success, the Day-1 smoke test (M1 + M2 — the only modules that prefix covers) passed, and
+> the region shipped with **M5, M6, M9 and M10 unable to run**. It was found by a
+> participant four modules in, holding a $8.72/hr GPU. Run step 10 below.
+
 Measured from the us-west-2 source bucket:
 
 | Prefix | Size | Objects | Modules that break without it |
 |---|---|---|---|
 | `notebook-templates/` | 0.55 MiB | 31 | **all** — provisioning hard-fails |
 | `datasets/` (nuScenes-mini) | 5.01 GiB | 31,225 | M1, M2, M3, M5, M6, M7, M8, M9 |
-| `model-cache/` | 157.45 GiB | 1,707 | M2, M8, M9 |
+| `model-cache/` | 157.45 GiB | 1,707 | M2, M8 |
 | `hf-cache/` | 115.00 GiB | 481 | M5, M6, M9 |
 | `m10-reference/` | 0.03 GiB | 16 | M10 visualisation |
-| `m8-lora-probe/` | 3 KiB | 1 | no notebook reads it — staged for completeness |
 | **total** | **277.49 GiB** | **33,457** | |
+
+`m8-lora-probe/` (1 object, 3 KiB) is deliberately **not** listed: it is a dated SageMaker
+training-job `sourcedir.tar.gz` from a one-off probe, no notebook reads it, and listing an
+unreachable prefix invites reading the whole table as advisory — which is the reading that
+let `hf-cache/` be skipped.
 
 Verified by reading the notebooks, not assumed: M5 and M6 reach `hf-cache/hub/` indirectly
 through `scripts/setup_cosmos_env.sh`, so a grep for the prefix in those two notebooks finds
-nothing. **Their failure mode without it is not an error** — `setup_cosmos_env.sh` logs
-`WARNING: restore failed; will fall back to online/token download`, and that fallback needs an
-`HF_TOKEN` and accepted gated licences which participants do not have. So an unseeded
-`hf-cache/` turns M5/M6/M9 into a per-participant token hunt, not a clean failure.
+nothing.
+
+**What actually happens without it** (measured, ap-northeast-2, 2026-09-26 — the earlier
+description of this was wrong twice over):
+
+* `setup_cosmos_env.sh` takes the *prefix-absent* branch and logs
+  `No S3 HF cache at <uri> — falling back to online download`. It does **not** log
+  `WARNING: restore failed…`, which is the different, `aws s3 sync`-failed branch. An
+  operator grepping for that string finds nothing.
+* Before the fix this was **not** a "per-participant token hunt" — it was silent. The script
+  exited 0, the notebook printed "environment ready", and 15-20 minutes later M5 died after
+  four seconds inside `torchrun` with a `ChildFailedError` whose only visible advice named
+  CUDA out-of-memory. The HuggingFace 401 was in the captured stderr but outside the 25-line
+  window the notebook printed.
+* The script now **refuses to start** (exit 2) when there is neither a usable cache nor an
+  `HF_TOKEN`, and names both remedies. So today an unseeded region fails in seconds, before
+  any GPU time is spent — but it still fails. Seed the prefix.
 
 Cost: roughly **$5.73 one-time** (transfer + requests) and **$6.94/month** storage in
 ap-northeast-2 *(transfer/request unit prices are list price; the $0.025/GB-mo Seoul
@@ -398,6 +427,23 @@ storage rate is API-verified)*.
    value in §0.
 9. **The region you already had is untouched:** its stack still `UPDATE_COMPLETE`, its
    budget still present, its `apigateway get-account` unchanged.
+10. **The data is actually there — run this before provisioning anyone:**
+
+    ```bash
+    ./scripts/check_seeding.sh --region $R --source-region us-west-2
+    ```
+
+    It must exit 0. Items 1-9 all pass on a region where M5, M6, M9 and M10 cannot run —
+    that is exactly what happened in ap-northeast-2 on 2026-09-26 — because none of them
+    inspects a byte of the 277.49 GiB §4 just told you to copy. The check asserts *tree
+    shape*, not mere presence: it looks for the five `models--nvidia--*` directories the
+    runtime globs actually test, asserts the specific `tokenizer.pth` blob at the commit
+    sha Cosmos pins, and with `--source-region` compares CRC64 checksums and object counts.
+    Presence alone is not sufficient — HuggingFace offline mode does **no** integrity
+    checking, so a 0-byte file reads as a successful download, and a half-finished
+    `aws s3 sync` is *worse* than an empty prefix: one directory is enough to flip
+    `HF_HUB_OFFLINE=1`, after which every still-missing checkpoint becomes an opaque
+    `Local entry not found` instead of a download.
 
 ### A cheap honest smoke test (well under $1)
 

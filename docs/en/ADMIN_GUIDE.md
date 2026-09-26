@@ -342,6 +342,21 @@ pip install huggingface_hub && hf auth login --token "$HF_TOKEN"
 ```
 
 ### 6.3 HF offline cache (M5/M6/M9) — the "no participant token" trick
+
+> **No script in this repository builds `hf-cache/hub/`.** Every `hf-cache` reference in
+> `scripts/` reads *from* S3, never writes to it. `cache_models.sh` is not a substitute: it
+> writes a different prefix (`model-cache/`) in a different layout (flat
+> `hf download --local-dir`, not `models--org--name/snapshots/<sha>/…`). The tree exists
+> only because someone performed the ritual below once, by hand.
+>
+> Consequences, both of which have bitten:
+> * **For a new region, copy it — do not rebuild it.** `aws s3 sync` bucket-to-bucket from a
+>   seeded region (see [ADDING_A_REGION.md](ADDING_A_REGION.md) §4). ap-northeast-2 was
+>   seeded with `cache_models.sh` instead on 2026-09-26 and shipped with M5/M6/M9/M10 dead.
+> * **Verify, never infer.** `./scripts/check_seeding.sh --region <r>` asserts the five
+>   `models--nvidia--*` directories the runtime globs test plus the specific pinned
+>   `tokenizer.pth` blob. A green `cache_models.sh` run proves nothing about this prefix.
+
 M5/M6/M9 load gated checkpoints through HF's **own cache layout** at runtime
 (M9 also pulls a hidden Cosmos-Reason2-8B backbone). The robust way to populate it:
 **run M5, M6, and M9 once each on a GPU JupyterLab app** with your admin token,
@@ -580,7 +595,8 @@ source-builds `gsplat==1.4.0`.
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU app quota not raised — §2a. |
 | M12 job fails at submission (`AccessDeniedException` on `CreateTrainingJob`) | The exec-role's training-job ARN prefix must match the notebook's `JOB_NAME`. The module renumber moved HyperPod M9→M12 and the notebook now submits `av30-m12-distributed-*`; a deployment predating that fix still grants `av30-m9-*` and every submission is denied. The m5.xlarge **job** quota (§2b) is a separate, rarer cause — check the error first: `AccessDenied` = IAM prefix, `ResourceLimitExceeded` = quota. |
 | Participant "No GPU detected" on a GPU instance | CPU image selected — re-Apply via Instance Options. |
-| M5/M6/M9 ask for an HF token | `hf-cache/hub/` not staged (§6.3) — participants fall back to online download. |
+| M5/M6/M9 setup cell stops with "this region has no usable offline HuggingFace cache and no HF_TOKEN" (exit 2) | `hf-cache/hub/` not seeded in **this** region (§6.3). Seed it, then `./scripts/check_seeding.sh --region <r>`. This message is the *fixed* behaviour — before 2026-09-26 the same condition was silent: setup printed "environment ready", then M5 died four seconds into `torchrun` with a `ChildFailedError` that named CUDA out-of-memory. If you still see that older shape, the participant is running a stale staged copy of `setup_cosmos_env.sh`. |
+| M5/M6/M9 fails with `Local entry not found … offline mode is enabled` | The restored cache is **partial** — worse than absent, because one directory is enough to turn offline mode on. Re-seed `hf-cache/` and verify with `check_seeding.sh` (an interrupted `aws s3 sync` is the usual cause; `sync` compares size+mtime, so re-running it does not repair a bad object). |
 | M7 training cell fails on gsplat | Re-run M7 cell 3 (`scripts/setup_gsplat_env.sh`) — the CUDA build is per-session and resets on app restart. §11. |
 | M9 fails to load its clip | demo `.pt` not uploaded to `hf-cache/alpamayo-demo/` (§6.3). |
 | M10 notebook shows nothing | `m10-reference/` reference eval not run (§6.4). |

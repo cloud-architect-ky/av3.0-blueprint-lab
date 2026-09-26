@@ -165,15 +165,28 @@ if [ -z "$HF_CACHE_S3" ]; then
     fi
     [ -n "$_shared" ] && HF_CACHE_S3="s3://${_shared}/hf-cache/hub/"
 fi
+# The PARENT prefix, for the remediation message only. The restore reads hub/, but a
+# seeding sync must copy hf-cache/ -> hf-cache/ so that hf-cache/alpamayo-demo/ and the
+# refs/ files come along. Printing $HF_CACHE_S3 as the destination while the source was
+# hf-cache/ produced hf-cache/hub/hub/ — a nested tree that satisfies the object-count
+# parity check (all 481 objects arrive) and then fails the shape check, i.e. it costs a
+# full ~115 GiB / ~40 min cross-region cycle and lands back at the same STOP screen.
+HF_CACHE_PARENT="${HF_CACHE_S3%hub/}"
 # Which repos THIS run needs in the restored tree. Keyed off $WHICH rather than one
 # hardcoded glob: `alpamayo` is a different stack, and a check for
 # models--nvidia--Cosmos-* would be satisfied by Cosmos-Reason2-8B while the actual
 # Alpamayo weights were missing. `transfer` needs Predict2.5-2B too — M5's own
 # traceback shows Transfer pulling the Wan2.1 VAE out of nvidia/Cosmos-Predict2.5-2B.
+# HF_LICENSE_HINT must stay in step with HF_NEED: the STOP screen tells a participant
+# which licenses to accept, and naming the Cosmos three to an M9 participant sends them
+# to accept the wrong repos and fail again on the next run.
 case "$WHICH" in
-    alpamayo) HF_NEED="models--nvidia--Alpamayo-1.5-10B models--nvidia--Cosmos-Reason2-8B" ;;
-    predict)  HF_NEED="models--nvidia--Cosmos-Predict2.5-2B models--nvidia--Cosmos-Guardrail1" ;;
-    *)        HF_NEED="models--nvidia--Cosmos-Transfer2.5-2B models--nvidia--Cosmos-Predict2.5-2B models--nvidia--Cosmos-Guardrail1" ;;
+    alpamayo) HF_NEED="models--nvidia--Alpamayo-1.5-10B models--nvidia--Cosmos-Reason2-8B"
+              HF_LICENSE_HINT="huggingface.co/nvidia/Alpamayo-1.5-10B and /Cosmos-Reason2-8B," ;;
+    predict)  HF_NEED="models--nvidia--Cosmos-Predict2.5-2B models--nvidia--Cosmos-Guardrail1"
+              HF_LICENSE_HINT="huggingface.co/nvidia/Cosmos-Predict2.5-2B and /Cosmos-Guardrail1," ;;
+    *)        HF_NEED="models--nvidia--Cosmos-Transfer2.5-2B models--nvidia--Cosmos-Predict2.5-2B models--nvidia--Cosmos-Guardrail1"
+              HF_LICENSE_HINT="huggingface.co/nvidia/Cosmos-Transfer2.5-2B, /Cosmos-Predict2.5-2B and /Cosmos-Guardrail1," ;;
 esac
 
 # HF_CACHE_OK=1 ONLY when the restore completed and the restored tree holds what this
@@ -202,10 +215,27 @@ if [ -n "$HF_CACHE_S3" ]; then
             # later. HF offline mode performs no integrity checking at all, so nothing
             # downstream would ever notice. >= not = : a superset is fine (another
             # stack's repos may already be cached locally), a subset is not.
-            _s3_n="$(aws s3 ls "$HF_CACHE_S3" --recursive 2>/dev/null \
-                     | awk '$4 !~ /\/$/ {n++} END {print n+0}')"
-            _loc_n="$(find "$HF_HOME_DIR/hub" -type f 2>/dev/null | wc -l | tr -d ' ')"
-            if [ "${_s3_n:-0}" -gt 0 ] && [ "${_loc_n:-0}" -ge "${_s3_n:-0}" ]; then
+            # -type f OR -type l: HuggingFace's cache stores each snapshot entry as a
+            # SYMLINK into blobs/, so counting regular files only undercounts a perfectly
+            # good tree by every snapshot entry and would reject it. (Dangling links would
+            # also count, which is fine — the shape check below still demands one real
+            # -size +0c file per needed repo, and a symlink to a real blob satisfies it.)
+            _s3_out="$(aws s3 ls "$HF_CACHE_S3" --recursive 2>&1)"
+            _s3_rc=$?
+            _loc_n="$(find "$HF_HOME_DIR/hub" \( -type f -o -type l \) 2>/dev/null | wc -l | tr -d ' ')"
+            _s3_n="$(printf '%s\n' "$_s3_out" | awk '$4 !~ /\/$/ {n++} END {print n+0}')"
+            if [ "$_s3_rc" -ne 0 ]; then
+                # This probe only COUNTS. Treating "could not count" as "incomplete" is a
+                # fail-closed on an informational call — and it is reachable at workshop
+                # scale, since a 503 SlowDown on LIST is exactly what N participants
+                # syncing the same prefix concurrently earn. Skip parity and let the shape
+                # check (which is what actually protects against a partial tree) decide.
+                echo "[hf-cache] Could not verify object count ($(printf '%s' "$_s3_out" | head -1))"
+                echo "           — relying on the tree-shape check instead."
+                _s3_n=0
+                _loc_n=0
+            fi
+            if [ "$_s3_rc" -ne 0 ] || { [ "${_s3_n:-0}" -gt 0 ] && [ "${_loc_n:-0}" -ge "${_s3_n:-0}" ]; }; then
                 # Shape, not mere presence: each needed repo must have at least one
                 # NON-EMPTY file under it. (This is the cheap on-instance check. The
                 # rigorous source-vs-destination checksum assertion belongs to
@@ -217,9 +247,19 @@ if [ -n "$HF_CACHE_S3" ]; then
                 # answer, so find takes SIGPIPE and the pipeline's status becomes 141
                 # precisely WHEN A FILE WAS FOUND — inverting the check and reporting
                 # every present repo as missing.
+                # find -L (FOLLOW symlinks) is required, not cosmetic. HuggingFace's own
+                # cache stores every snapshot entry as a symlink into blobs/, so whenever
+                # HF_HOME was populated by an actual download rather than by the S3
+                # restore — which is exactly what the admin's seeding ritual produces, and
+                # what a token-bearing run produces — a plain `-type f` matches nothing and
+                # a perfectly good tree is rejected. -L gives the semantics we actually
+                # want on all four cases: a real non-empty file matches; a symlink to a
+                # real non-empty blob matches; a DANGLING symlink does not (it is -type l
+                # even under -L); and a 0-byte file or a link to one still fails -size +0c,
+                # so HF's "a 0-byte file counts as downloaded" hazard stays caught.
                 _missing=""
                 for _repo in $HF_NEED; do
-                    _found="$(find "$HF_HOME_DIR/hub/$_repo" -type f -size +0c 2>/dev/null | head -1)"
+                    _found="$(find -L "$HF_HOME_DIR/hub/$_repo" -type f -size +0c 2>/dev/null | head -1)"
                     if [ -z "$_found" ]; then
                         _missing="$_missing $_repo"
                     fi
@@ -253,6 +293,13 @@ fi
 # passed, the setup cell printed "environment ready", and the participant paid a GPU
 # hour to reach a 4-second failure whose cause was never shown. Exit 2 (not 1) so
 # "precondition not met" stays distinguishable from "a stack failed to verify".
+# A token persisted by an earlier run of THIS script lives in the 0600 sidecar, and both
+# generated env files source it — so it is genuinely available to the inference shell.
+# Read it here too, or the gate refuses a run that would have worked (e.g. a second
+# per-stack invocation from a fresh terminal, which this script's own usage header
+# documents). One source of truth for both the gate and the verdict banner.
+# shellcheck disable=SC1090
+[ -r "$HF_TOKEN_FILE" ] && . "$HF_TOKEN_FILE"
 if [ "$HF_CACHE_OK" -eq 0 ] && [ -z "${HF_TOKEN:-}" ]; then
     echo ""
     echo "=== STOP — not starting, because this run cannot succeed ==="
@@ -270,16 +317,35 @@ if [ "$HF_CACHE_OK" -eq 0 ] && [ -z "${HF_TOKEN:-}" ]; then
     echo "  A) ADMIN, once per region — seed the offline cache, then re-run this cell."
     echo "     Participants then need no HuggingFace account at all:"
     echo "       aws s3 sync s3://av30lab-shared-data-<acct>-<seeded-region>/hf-cache/ \\"
-    echo "                   ${HF_CACHE_S3:-s3://av30lab-shared-data-<acct>-<this-region>/hf-cache/hub/} \\"
+    echo "                   ${HF_CACHE_PARENT:-s3://av30lab-shared-data-<acct>-<this-region>/hf-cache/} \\"
     echo "                   --source-region <seeded-region> --region <this-region>"
+    echo "     Sync hf-cache/ — NOT hf-cache/hub/ — or the tree nests one level too deep."
     echo "     Verify with: ./scripts/check_seeding.sh --region <this-region>"
     echo ""
     echo "  B) PER PARTICIPANT — accept the licenses (auto-approved, instant) on"
-    echo "     huggingface.co/nvidia/Cosmos-Transfer2.5-2B, /Cosmos-Predict2.5-2B and"
-    echo "     /Cosmos-Guardrail1, then set HF_TOKEN in the notebook's first cell."
+    echo "     $HF_LICENSE_HINT"
+    echo "     then set HF_TOKEN in the notebook's first cell."
     echo ""
     echo "  Needed for this run ($WHICH): $HF_NEED"
     exit 2
+fi
+
+# The env files' offline switch is decided HERE, from the verified verdict, and
+# interpolated as literal text at write time. It used to be a runtime `ls
+# models--nvidia--Cosmos-*` test inside the generated file, which ANY ONE Cosmos
+# directory satisfies -- so a partial tree plus a token produced the worst combination
+# in the whole system: the gate correctly announced ONLINE, and the env file then forced
+# HF_HUB_OFFLINE=1 anyway, converting every missing checkpoint from a download into an
+# opaque "Local entry not found ... offline mode is enabled" 20 minutes later. Deciding
+# once also means the literal text now appears in the file ONLY when offline mode is
+# really on, so reading the file is no longer self-refuting (the glob remains the
+# preferred test because it does not depend on which env file you look at).
+if [ "$HF_CACHE_OK" -eq 1 ]; then
+    HF_OFFLINE_EXPORTS="export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1"
+else
+    HF_OFFLINE_EXPORTS="# Offline mode deliberately NOT enabled: no verified offline cache for this run,
+# so HuggingFace must be allowed to download using HF_TOKEN."
 fi
 
 # One verdict line, printed only now that it is a measured fact.
@@ -423,15 +489,12 @@ export UV_CACHE_DIR="$NVME/uv-cache"
 # WITHOUT a token or network. If the cache is absent we leave online mode on so
 # a caller-provided HF_TOKEN can still download as a fallback.
 #
-# NOTE for anyone probing this from Python: the heredoc that writes this file is
-# UNQUOTED, so the literal text "export HF_HUB_OFFLINE=1" is ALWAYS present in the
-# file regardless of the runtime test around it. Testing
-# \`"HF_HUB_OFFLINE=1" in Path(env_file).read_text()\` is therefore always True and
-# tells you nothing. The only valid on-disk test is the same glob used below.
-if [ -d "\$HF_HOME/hub" ] && ls "\$HF_HOME/hub"/models--nvidia--Cosmos-* >/dev/null 2>&1; then
-    export HF_HUB_OFFLINE=1
-    export TRANSFORMERS_OFFLINE=1
-fi
+# The line(s) below are interpolated at WRITE time from the verified cache verdict, not
+# evaluated at source time. The previous version tested
+# \`ls \$HF_HOME/hub/models--nvidia--Cosmos-*\` here, which any ONE Cosmos directory
+# satisfies -- so a PARTIAL cache forced offline mode on and turned every missing
+# checkpoint into an opaque "Local entry not found" instead of a download.
+$HF_OFFLINE_EXPORTS
 EOF
     write_hf_token_sidecar
 
@@ -498,13 +561,11 @@ export UV_CACHE_DIR="$NVME/uv-cache"
 # See the Cosmos env file for why the token is a 0600 sidecar sourced early, not
 # an inline export appended at the end.
 [ -r "$HF_TOKEN_FILE" ] && . "$HF_TOKEN_FILE"
-# Offline HF: if the admin's pre-cached Alpamayo (+ Cosmos-Reason2 backbone)
-# checkpoints were restored into HF_HOME, force offline so the model loads
-# WITHOUT a token or network. Absent cache -> online mode + optional HF_TOKEN.
-if [ -d "\$HF_HOME/hub" ] && ls "\$HF_HOME/hub"/models--nvidia--Alpamayo-* >/dev/null 2>&1; then
-    export HF_HUB_OFFLINE=1
-    export TRANSFORMERS_OFFLINE=1
-fi
+# Interpolated at WRITE time from the verified verdict (see the Cosmos env file). The
+# old runtime glob on models--nvidia--Alpamayo-* ignored the Cosmos-Reason2-8B backbone
+# entirely, so a tree with Alpamayo but no backbone forced offline mode on and failed
+# opaquely at model load.
+$HF_OFFLINE_EXPORTS
 EOF
     write_hf_token_sidecar
 

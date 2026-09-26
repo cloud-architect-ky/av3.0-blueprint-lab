@@ -355,10 +355,13 @@ nothing.
 **What actually happens without it** (measured, ap-northeast-2, 2026-09-26 — the earlier
 description of this was wrong twice over):
 
-* `setup_cosmos_env.sh` takes the *prefix-absent* branch and logs
-  `No S3 HF cache at <uri> — falling back to online download`. It does **not** log
-  `WARNING: restore failed…`, which is the different, `aws s3 sync`-failed branch. An
-  operator grepping for that string finds nothing.
+* `setup_cosmos_env.sh` now stops with a `=== STOP ===` block whose first line is
+  `Reason : no HF cache at <uri> (prefix does not exist in this region)`. With an
+  `HF_TOKEN` present it instead proceeds and logs
+  `[hf-cache] No usable offline cache (…)`. Neither of these is the
+  `WARNING: restore failed…` string that earlier revisions of this document told you to
+  grep for — that was always a *different* branch (`aws s3 sync` failed, rather than the
+  prefix being absent), so an operator searching for it found nothing.
 * Before the fix this was **not** a "per-participant token hunt" — it was silent. The script
   exited 0, the notebook printed "environment ready", and 15-20 minutes later M5 died after
   four seconds inside `torchrun` with a `ChildFailedError` whose only visible advice named

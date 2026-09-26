@@ -127,6 +127,20 @@ export interface DeleteUserResult {
   };
 }
 
+export interface ResetWorkspaceResponse {
+  userId: string;
+  message: string;
+  filesDeleted: number;
+  filesCopied: number;
+  // True when the participant's JupyterLab app is still up. Everything a reset does happens
+  // in S3; the participant's home is populated by the notebook-sync lifecycle config, which
+  // runs only at app START. So with appRunning true the reset is real but INVISIBLE to them,
+  // and their kernels still hold any GPU memory. Surfaced because reporting a bare
+  // "Workspace reset successfully" led to a reset being retried as though it had failed.
+  appRunning?: boolean;
+  note?: string;
+}
+
 class AdminApiClient {
   private getHeaders(idToken: string): HeadersInit {
     return {
@@ -247,8 +261,8 @@ class AdminApiClient {
   async resetWorkspace(
     idToken: string,
     userId: string
-  ): Promise<void> {
-    return this.request<void>(
+  ): Promise<ResetWorkspaceResponse> {
+    return this.request<ResetWorkspaceResponse>(
       "POST",
       `/users/${userId}/reset`,
       idToken

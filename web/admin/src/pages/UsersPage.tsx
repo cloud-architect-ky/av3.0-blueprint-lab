@@ -56,8 +56,27 @@ export function UsersPage() {
     if (!idToken) return;
     setResettingUserId(userId);
     try {
-      await apiClient.resetWorkspace(idToken, userId);
-      addFlash({ type: "success", content: "Workspace reset initiated." });
+      const res = await apiClient.resetWorkspace(idToken, userId);
+      // A reset only rewrites S3. If the participant's app is up it still shows the OLD
+      // files and still holds its GPU memory, so saying just "reset" would be misleading.
+      addFlash(
+        res?.appRunning
+          ? {
+              type: "warning",
+              content:
+                `Workspace files replaced in S3 (${res.filesCopied} copied). ` +
+                "Their workspace is STILL RUNNING, so it has the old files and its kernels " +
+                "still hold any GPU memory. It must restart for the new files to appear: " +
+                "Stop space then Run space in SageMaker Studio, or terminate the session " +
+                "from the Sessions tab and have them press Start Workspace.",
+            }
+          : {
+              type: "success",
+              content:
+                `Workspace reset (${res?.filesCopied ?? 0} files staged). ` +
+                "No app is running, so they get the fresh files the next time they start it.",
+            }
+      );
       await fetchUsers();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

@@ -27,6 +27,8 @@ logger.setLevel(logging.INFO)
 
 # Boto3 clients — created at module level for connection reuse
 s3 = boto3.client("s3")
+# Read-only: used at the end to report whether the reset is visible yet.
+sagemaker = boto3.client("sagemaker")
 dynamodb = boto3.resource("dynamodb")
 
 
@@ -149,9 +151,40 @@ def handler(event, context):
     )
     logger.info(f"Reset module progress for user: {user_id}")
 
+    # Is there a RUNNING app? This determines whether the reset is visible yet.
+    #
+    # Everything above happened in S3. The participant's JupyterLab home is populated by the
+    # notebook-sync lifecycle config, which runs ONLY at app start — so a participant whose
+    # app is already up still sees the files they had before this call, and their kernels are
+    # still alive (nothing here stops them). Reporting "Workspace reset successfully" without
+    # saying that led an admin to Reset a participant, see no change, and reasonably conclude
+    # the reset had failed.
+    app_running = False
+    try:
+        resp = sagemaker.describe_app(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            SpaceName=item.get("spaceName", f"{user_id}-space"),
+            AppType="JupyterLab",
+            AppName="default",
+        )
+        app_running = resp.get("Status") in ("Pending", "InService")
+    except Exception as exc:  # noqa: BLE001 — includes ResourceNotFound (no app: normal)
+        logger.info(f"No live app for {user_id}: {exc}")
+
     return {
         "userId": user_id,
         "message": "Workspace reset successfully",
         "filesDeleted": deleted_count,
         "filesCopied": copied_count,
+        "appRunning": app_running,
+        "note": (
+            "The participant's workspace is still running, so it has the OLD files and its "
+            "kernels are still holding any GPU memory. The new files arrive only when the "
+            "app restarts (the notebook-sync lifecycle config runs at app start): have them "
+            "use Stop space then Run space in SageMaker Studio, or terminate the session "
+            "from the Sessions tab and let them press Start Workspace."
+            if app_running else
+            "No app is running, so the participant will get the fresh files the next time "
+            "they start their workspace."
+        ),
     }

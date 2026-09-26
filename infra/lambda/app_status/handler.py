@@ -66,6 +66,31 @@ def handler(event, context):
     # silently not happen. change_instance clears this on the next success.
     change_error = item.get("lastInstanceChangeError")
 
+    # The space's ACTUAL EBS volume size, for the dashboard to display.
+    #
+    # The participant dashboard used to render a per-module literal from
+    # web/user/src/data/pipeline-config.ts, which was never the provisioned volume: a
+    # participant saw "100 GB" in the panel while Studio showed 5 GB for the same space, and
+    # the +50/+200 arithmetic was computed against the fiction. Returning the real number
+    # here is what lets the panel show the volume instead of a wish.
+    #
+    # Best-effort: on any failure return None and let the UI say "unknown" rather than print
+    # a guess. This handler's role has sagemaker:DescribeSpace (api.py).
+    storage_gb = None
+    try:
+        space = sagemaker.describe_space(
+            DomainId=SAGEMAKER_DOMAIN_ID,
+            SpaceName=space_name,
+        )
+        storage_gb = (
+            space.get("SpaceSettings", {})
+            .get("SpaceStorageSettings", {})
+            .get("EbsStorageSettings", {})
+            .get("EbsVolumeSizeInGb")
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"DescribeSpace failed for {space_name}: {exc}")
+
     # Describe the app. A space with no app (never launched, or previous app
     # failed and was auto-deleted) is a normal state — report "NotFound" rather
     # than erroring, so the UI can prompt the user to open the workspace.
@@ -87,6 +112,8 @@ def handler(event, context):
             "capacityError": False,
             "moduleProgress": item.get("moduleProgress", {}),
             "lastInstanceChangeError": change_error,
+            # The space (and its volume) outlive the app, so this is known even here.
+            "storageGB": storage_gb,
         }
 
     status = resp.get("Status")  # Pending | InService | Deleting | Deleted | Failed
@@ -104,4 +131,5 @@ def handler(event, context):
         "capacityError": capacity_error,
         "moduleProgress": item.get("moduleProgress", {}),
         "lastInstanceChangeError": change_error,
+        "storageGB": storage_gb,
     }

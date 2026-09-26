@@ -98,8 +98,11 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 | M11 Pipeline Automation | `ml.t3.medium` | CPU |
 | M12 HyperPod Distributed Training | `ml.t3.medium` | CPU（`ml.m5.xlarge`×2 上で実際の 2 ノード DDP トレーニングジョブを送信。HyperPod 自体は概念的なもの — HYPERPOD_M12.md を参照） |
 
-同じ **Instance Options** パネルで、モジュールのディスクが不足した場合に EBS ストレージ
-（+50 GB / +200 GB）を追加することもできます。
+ワークスペースは **200 GB** の EBS ボリュームで作成され、これは全モジュールをカバーします。
+**Instance Options** パネルには、ボリュームの*実際の*サイズと、そのモジュールの*推奨*容量が
+並べて表示されます — これは別々の数値であり、パネルもそのように区別して表示します。
+ノートブックで実際にディスクが不足した場合は、そこで **+50 GB / +200 GB** を追加できます。
+ボリュームは拡大できますが、**縮小はできません**。
 
 ### 出力品質とコスト — GPU あたりの VRAM ティア（M5 / M6 / M9）
 

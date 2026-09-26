@@ -134,7 +134,12 @@ def handler(event, context):
                 # See list_users: region must be visible or a mis-regioned session
                 # looks identical to a healthy one.
                 "region": item.get("region", ""),
-                "storageGB": item.get("storageGB", 5),
+                # No default. A row without storageGB was provisioned before create_user
+                # started recording it, and its real volume is whatever the domain default
+                # was at the time — not something this handler can know. Defaulting to a
+                # number would assert a size that is wrong for exactly those rows.
+                # (Nothing in web/admin/src renders this yet; it is here for the API.)
+                "storageGB": item.get("storageGB"),
             }
         )
 

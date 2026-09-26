@@ -9,6 +9,8 @@ from pathlib import Path
 
 from constructs import Construct
 
+from av30_constructs import DEFAULT_SPACE_STORAGE_GB
+
 import aws_cdk as cdk
 from aws_cdk import (
     Duration,
@@ -187,6 +189,10 @@ class ApiConstruct(Construct):
             "SMD_CPU_IMAGE_ARN": _smd_cpu_image_arn,
             "SMD_GPU_IMAGE_ARN": _smd_gpu_image_arn,
             "SMD_IMAGE_VERSION_ALIAS": "4.2.1",
+            # Same literal the domain uses for DefaultEbsVolumeSizeInGb, so the Lambdas
+            # agree with the volume that was actually provisioned. See
+            # av30_constructs/__init__.py for why this is imported rather than repeated.
+            "DEFAULT_SPACE_STORAGE_GB": str(DEFAULT_SPACE_STORAGE_GB),
             "NOTEBOOK_LIFECYCLE_CONFIG_ARN": notebook_lifecycle_config_arn,
             # B2 progress tracking: create_user writes this + the participant
             # token into users/<id>/.av30-progress.env so the notebook-sync LCC

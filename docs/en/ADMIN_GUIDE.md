@@ -504,7 +504,17 @@ seeded with the notebook templates, and a personal dashboard link.
 - **Cost control** — a daily budget alarm emails `ADMIN_EMAIL` via SNS; idle
   JupyterLab apps auto-stop after 90 min (`-c idle_timeout_minutes=<60..180>` to
   change). A running cell or terminal job counts as active, so this never kills work
-  in progress. You can **force-terminate** any session from the Sessions tab. Watch for idle p4d boxes (~$25.25/hr).
+  in progress. You can **force-terminate** any session from the Sessions tab. Watch for idle GPU boxes —
+  the rate is per region, so quote your own: `ml.g5.12xlarge` (the default for five modules)
+  is **$8.72/hr** in ap-northeast-2 and $7.09 in us-west-2; `ml.p4d.24xlarge` is **$34.97/hr**
+  in ap-northeast-2 and $25.25 in us-west-2. See `infra/lambda/shared/instance_rates.py` for
+  your region.
+- **Storage cost is per participant and one-way.** Every space is created with a 200 GB gp3
+  volume (`DEFAULT_SPACE_STORAGE_GB` in `infra/av30_constructs/__init__.py`). At
+  $0.0912/GB-month in ap-northeast-2 that is **~$18.24 per participant per month**, billed
+  whether or not the app is running — the idle timer deletes the app, not the volume. AWS does
+  not allow SHRINKING a space's volume, and participants can grow it (+50/+200, ceiling 500 GB),
+  so this only ever goes up until teardown removes the space.
 - **GPU image reminder** — if a participant reports "No GPU detected" on a GPU
   instance, they launched the CPU image; Instance Options → GPU instance → Apply
   re-selects the GPU image.

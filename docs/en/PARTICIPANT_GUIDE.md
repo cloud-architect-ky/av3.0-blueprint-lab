@@ -99,8 +99,11 @@ the GPU image and the notebook-sync for you.
 | M11 Pipeline Automation | `ml.t3.medium` | CPU |
 | M12 HyperPod Distributed Training | `ml.t3.medium` | CPU (submits a real 2-node DDP training job on `ml.m5.xlarge`×2; HyperPod itself is conceptual — see HYPERPOD_M12.md) |
 
-You can also add EBS storage (+50 GB / +200 GB) in the same **Instance Options**
-panel if a module runs out of disk.
+Your workspace is created with a **200 GB** EBS volume, which covers every module. The
+**Instance Options** panel shows the size your volume actually is, plus the capacity that
+module recommends — they are two different numbers and the panel labels them as such. If a
+notebook does run out of disk you can add **+50 GB / +200 GB** there; note that a volume can
+be grown but **never shrunk**.
 
 ### Output quality vs cost — the per-GPU VRAM tiers (M5 / M6 / M9)
 

@@ -67,6 +67,17 @@ SMD_GPU_IMAGE_ARN = _smd_arn("SMD_GPU_IMAGE_ARN", "gpu")
 # so the image can't silently drift across workshop runs.
 SMD_IMAGE_VERSION_ALIAS = os.environ.get("SMD_IMAGE_VERSION_ALIAS", "4.2.1")
 
+# Size of the EBS volume a participant's space is created with, in GB. Injected by CDK from
+# the SAME literal that sets the domain's DefaultEbsVolumeSizeInGb
+# (infra/av30_constructs/sagemaker.py), so the provisioned volume and every Lambda that
+# reasons about it cannot drift apart. Before this existed, expand_storage fell back to a
+# hardcoded 5 while the domain default was separately whatever SageMaker chose.
+#
+# Growing is possible (expand_storage, +50/+200, ceiling MAX_STORAGE_GB). SHRINKING IS NOT —
+# AWS does not allow reducing a space's EBS volume — so this value is a floor for the whole
+# cohort's storage bill, not a starting guess.
+DEFAULT_SPACE_STORAGE_GB = int(os.environ.get("DEFAULT_SPACE_STORAGE_GB", "200"))
+
 # Notebook-sync JupyterLab LCC ARN (the domain default), passed by the stack so
 # apps recreated by change_instance / expand_storage re-run notebook sync + env
 # injection. Empty string => omit the LifecycleConfigArn.

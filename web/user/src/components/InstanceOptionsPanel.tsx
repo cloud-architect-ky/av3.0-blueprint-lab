@@ -16,17 +16,27 @@ import { useTokenAuth } from "../auth/TokenProvider";
 import { ApiError, type AppStatusResponse } from "../api/client";
 
 interface InstanceOptionsPanelProps {
+  // The space's REAL provisioned volume in GB, or null when unknown. Everything about
+  // storage in this panel is computed from this — module.storageGB is only a recommendation.
+  liveStorageGB?: number | null;
   module: ModuleConfig;
   onClose: () => void;
 }
 
 export function InstanceOptionsPanel({
+  liveStorageGB = null,
   module,
   onClose,
 }: InstanceOptionsPanelProps): React.JSX.Element {
   const { userId, apiClient } = useTokenAuth();
   const [selectedInstance, setSelectedInstance] = useState(module.recommendedInstance);
-  const [storageGB, setStorageGB] = useState(module.storageGB);
+  // Baseline = the volume that actually exists. Falling back to module.storageGB only while
+  // the live value is unknown keeps the panel from showing a blank, but it is a fallback,
+  // not the source of truth: sizing against it is exactly the bug this replaces — the panel
+  // showed "100 GB" for a 5 GB space, and +50 GB then sent a delta computed from 100 while
+  // the backend added it to 5.
+  const storageBaseline = liveStorageGB ?? module.storageGB;
+  const [storageGB, setStorageGB] = useState(storageBaseline);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   // Live app status after Apply — polled from the backend so the participant
@@ -137,7 +147,7 @@ export function InstanceOptionsPanel({
   ];
 
   // Storage the user has chosen to add on top of the module default.
-  const storageAdded = storageGB - module.storageGB;
+  const storageAdded = storageGB - storageBaseline;
 
   const firstErrorKey = Object.keys(module.errorHints)[0];
   const firstErrorHint = firstErrorKey ? module.errorHints[firstErrorKey] : null;
@@ -152,7 +162,7 @@ export function InstanceOptionsPanel({
 
   function handleRevert(): void {
     setSelectedInstance(module.recommendedInstance);
-    setStorageGB(module.storageGB);
+    setStorageGB(storageBaseline);
   }
 
   async function handleApply(): Promise<void> {
@@ -352,8 +362,24 @@ export function InstanceOptionsPanel({
           <Box variant="awsui-key-label" margin={{ bottom: "xs" }}>
             Storage (EBS gp3)
           </Box>
-          <Box fontSize="heading-m" fontWeight="bold" margin={{ bottom: "s" }}>
+          <Box fontSize="heading-m" fontWeight="bold">
             {storageGB} GB
+            {storageAdded > 0 && (
+              <Box variant="span" fontSize="body-m" fontWeight="normal">
+                {" "}
+                (now {storageBaseline} GB, +{storageAdded} GB on Apply)
+              </Box>
+            )}
+          </Box>
+          {/* The module's recommendation, kept visibly separate from the volume. Both were
+              the same field before, so the panel could not tell the participant "you have
+              X, this module wants Y" — it just printed Y and called it the volume. */}
+          <Box color="text-body-secondary" fontSize="body-s" margin={{ bottom: "s" }}>
+            {liveStorageGB == null
+              ? `Provisioned size unavailable — recommended for ${module.title}: ${module.storageGB} GB.`
+              : module.storageGB > liveStorageGB
+                ? `${module.title} recommends ${module.storageGB} GB — add more below if a notebook runs out of disk.`
+                : `Recommended for ${module.title}: ${module.storageGB} GB — your volume already covers it.`}
           </Box>
           <ColumnLayout columns={2}>
             <Button

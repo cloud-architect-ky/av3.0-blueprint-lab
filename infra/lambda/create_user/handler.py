@@ -32,6 +32,7 @@ from config import (
     rollback_partial_provision,
     wait_for_user_profile_in_service,
     write_progress_env,
+    DEFAULT_SPACE_STORAGE_GB,
 )
 from errors import ApiError, api_handler
 
@@ -256,6 +257,11 @@ def handler(event, context):
             "createdAt": now.isoformat(),
             "status": "active",
             "moduleProgress": {},
+            # The size create_space just inherited from the domain. Recorded so
+            # list_sessions and expand_storage do not have to guess: before this, nothing
+            # wrote storageGB and expand_storage fell back to a hardcoded 5, which stopped
+            # matching the volume the moment the domain default changed.
+            "storageGB": DEFAULT_SPACE_STORAGE_GB,
             # The ONLY record of which region's domain holds this user's profile. Every
             # later handler resolves its SageMaker/S3 clients from this, so the row is
             # read before teardown starts and deleted last.

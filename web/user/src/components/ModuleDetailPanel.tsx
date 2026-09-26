@@ -24,6 +24,10 @@ interface ModuleDetailPanelProps {
   // clicks "Start Workspace" on the Pipeline Map header: their workspace is stopped, and
   // Apply & Restart inside that modal is what starts it.
   openInstanceOptionsOnMount?: boolean;
+  // The space's real volume in GB (null when unknown). Passed straight through to
+  // InstanceOptionsPanel, which must size against the volume rather than the module's
+  // recommended capacity.
+  liveStorageGB?: number | null;
 }
 
 export function ModuleDetailPanel({
@@ -31,6 +35,7 @@ export function ModuleDetailPanel({
   onClose,
   onStartLab,
   openInstanceOptionsOnMount = false,
+  liveStorageGB = null,
 }: ModuleDetailPanelProps): React.JSX.Element {
   const [showInstanceOptions, setShowInstanceOptions] = useState(
     openInstanceOptionsOnMount
@@ -143,7 +148,16 @@ export function ModuleDetailPanel({
                       </span>
                     ),
                   },
-                  { label: "Storage", value: `${module.storageGB} GB EBS` },
+                  {
+                    label: "Storage (EBS)",
+                    // Show the volume that exists, and the module's recommendation only as
+                    // a hint. This row used to print module.storageGB alone, which read as
+                    // a statement of fact about the volume and was wrong for every module.
+                    value:
+                      liveStorageGB != null
+                        ? `${liveStorageGB} GB provisioned · ${module.storageGB} GB recommended`
+                        : `${module.storageGB} GB recommended`,
+                  },
                   { label: "Est. Duration", value: `${module.estimatedMinutes} minutes` },
                   {
                     label: "Alternatives",
@@ -247,6 +261,7 @@ export function ModuleDetailPanel({
 
       {showInstanceOptions && (
         <InstanceOptionsPanel
+          liveStorageGB={liveStorageGB}
           module={module}
           onClose={() => setShowInstanceOptions(false)}
         />

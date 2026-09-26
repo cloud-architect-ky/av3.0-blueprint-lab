@@ -58,6 +58,13 @@ export interface AppStatusResponse {
   // `status` is a bland "NotFound"). The backend has always returned it
   // (infra/lambda/app_status/handler.py); it was missing from this interface, so the panel
   // rendered "Waiting for the workspace to be created…" over a recorded, specific failure.
+  // The space's ACTUAL provisioned EBS volume, in GB, from describe_space. null when it
+  // could not be read.
+  //
+  // This is NOT pipeline-config.ts's per-module `storageGB`, which is only a recommended
+  // capacity. Conflating the two is what made the panel display "100 GB" for a space whose
+  // real volume was 5 GB, and made the +50/+200 buttons compute against the wrong base.
+  storageGB?: number | null;
   lastInstanceChangeError?: {
     requestedType: string;
     previousType: string;

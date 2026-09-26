@@ -19,6 +19,13 @@ export interface ModuleConfig {
   // and the GPU-image auto-selection keys off the "ml.g*/ml.p*" prefix.
   recommendedInstance: string;
   alternatives: string[];
+  // RECOMMENDED capacity for this module, in GB — NOT the provisioned volume.
+  //
+  // Every space is created at the domain's DefaultEbsVolumeSizeInGb
+  // (DEFAULT_SPACE_STORAGE_GB in infra/av30_constructs/__init__.py), which is the same for
+  // all modules. The panel shows the live size from app-status and uses this only as the
+  // "recommended for this module" hint next to it. It used to be rendered AS the volume,
+  // which is how a 5 GB space came to be displayed as 100 GB.
   storageGB: number;
   estimatedMinutes: number;
   awsAdvantage: string;

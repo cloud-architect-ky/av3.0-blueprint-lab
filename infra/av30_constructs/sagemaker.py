@@ -10,6 +10,8 @@ from pathlib import Path
 
 from constructs import Construct
 
+from av30_constructs import DEFAULT_SPACE_STORAGE_GB
+
 import aws_cdk as cdk
 from aws_cdk import (
     aws_ec2 as ec2,
@@ -817,7 +819,16 @@ class SageMakerConstruct(Construct):
             # DefaultUserSettings.SpaceStorageSettings = null, i.e. no ceiling at all.
             space_storage_settings=sagemaker.CfnDomain.DefaultSpaceStorageSettingsProperty(
                 default_ebs_storage_settings=sagemaker.CfnDomain.DefaultEbsStorageSettingsProperty(
-                    default_ebs_volume_size_in_gb=5,
+                    # 200 GB, matching the largest per-module recommendation in
+                    # web/user/src/data/pipeline-config.ts, so no module needs a mid-lab
+                    # resize. Measured cost: gp3 in ap-northeast-2 is $0.0912/GB-month, so
+                    # 200 GB is ~$18.24 per participant per month — and it CANNOT be
+                    # shrunk, so it is a floor until teardown.
+                    #
+                    # Keep in sync with DEFAULT_SPACE_STORAGE_GB, which is injected into the
+                    # Lambdas from this same value (see api.py). The Lambdas must agree with
+                    # the volume or the dashboard's +50/+200 arithmetic drifts.
+                    default_ebs_volume_size_in_gb=DEFAULT_SPACE_STORAGE_GB,
                     maximum_ebs_volume_size_in_gb=500,
                 )
             ),

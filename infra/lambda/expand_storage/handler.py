@@ -28,7 +28,9 @@ from config import (
     safe_delete_app,
     wait_for_app_deleted,
     wait_for_space_in_service,
+    DEFAULT_SPACE_STORAGE_GB,
 )
+
 from errors import ApiError, api_handler, require_own_user
 
 logger = logging.getLogger()
@@ -108,11 +110,36 @@ def _http_handler(event, context):
         raise ApiError(404, f"User not found: {user_id}")
 
     space_name = item.get("spaceName", f"{user_id}-space")
-    current_storage = int(item.get("storageGB", 5))
     # Preserve the user's current instance type when recreating the app, so a
     # storage expansion does not silently revert a GPU box (and its GPU image
     # + notebook-sync LCC) back to the CPU default.
     instance_type = item.get("instanceType", "ml.t3.medium")
+
+    # Verify the space exists, and take the CURRENT volume size from it.
+    space_info = sagemaker.describe_space(
+        DomainId=SAGEMAKER_DOMAIN_ID,
+        SpaceName=space_name,
+    )
+    logger.info(f"Current space status: {space_info.get('Status')}")
+
+    # Size from the LIVE volume, not from DynamoDB.
+    #
+    # DynamoDB is a record of what this Lambda last did, and it is no longer the only thing
+    # that can change the volume: participants now hold a scoped sagemaker:UpdateSpace on
+    # their own private space (SageMakerOwnPrivateSpaceUpdate in
+    # infra/av30_constructs/sagemaker.py), which is the same API used below. A participant
+    # who resizes from a notebook leaves storageGB stale, and adding to a stale base either
+    # overshoots MAX_STORAGE_GB silently or, worse, SHRINKS the volume — which AWS rejects,
+    # failing the whole resize. describe_space is authoritative; DDB and the provisioning
+    # default are only fallbacks for a space that predates this field.
+    current_storage = int(
+        space_info.get("SpaceSettings", {})
+        .get("SpaceStorageSettings", {})
+        .get("EbsStorageSettings", {})
+        .get("EbsVolumeSizeInGb")
+        or item.get("storageGB")
+        or DEFAULT_SPACE_STORAGE_GB
+    )
 
     # Validate new total does not exceed maximum
     new_size_gb = current_storage + add_gb
@@ -126,13 +153,6 @@ def _http_handler(event, context):
     logger.info(
         f"Expanding storage for {user_id}: {current_storage} GB -> {new_size_gb} GB"
     )
-
-    # Verify the space exists before kicking off the async resize.
-    space_info = sagemaker.describe_space(
-        DomainId=SAGEMAKER_DOMAIN_ID,
-        SpaceName=space_name,
-    )
-    logger.info(f"Current space status: {space_info.get('Status')}")
 
     # Issue the delete SYNCHRONOUSLY (EBS resize requires the app stopped first;
     # also flips the old app to Deleting before we return, so the frontend

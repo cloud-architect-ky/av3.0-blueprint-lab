@@ -51,6 +51,9 @@ function Dashboard(): React.JSX.Element {
   // before the first poll returns. The poll below already fetched this and threw it away,
   // which is why "Open Workspace" used to be offered when there was nothing to open.
   const [workspaceStatus, setWorkspaceStatus] = useState<string | null>(null);
+  // The space's real provisioned volume in GB, from the same poll. null = not known yet or
+  // unreadable; the panel falls back to the module's recommendation only in that case.
+  const [workspaceStorageGB, setWorkspaceStorageGB] = useState<number | null>(null);
   // Counter, not a boolean. Each "start my workspace" request bumps it, and the panel's
   // React key includes it, so EVERY request remounts the panel and its
   // useState(openInstanceOptionsOnMount) actually re-runs.
@@ -82,6 +85,7 @@ function Dashboard(): React.JSX.Element {
         // JSON null if describe_app omits it, so an ANSWERED call could otherwise lock the
         // button to a disabled "Checking workspace…" forever.
         setWorkspaceStatus(s.status ?? "Unknown");
+        setWorkspaceStorageGB(typeof s.storageGB === "number" ? s.storageGB : null);
         const merged: Record<string, ModuleStatus> = {};
         for (const [id, raw] of Object.entries(s.moduleProgress ?? {})) {
           const norm = normalizeStatus(String(raw));
@@ -421,6 +425,7 @@ function Dashboard(): React.JSX.Element {
           // cancelled, React would reuse the mounted panel, and the button would do nothing.
           key={`${selectedModule.id}-${startRequest}`}
           openInstanceOptionsOnMount={startRequestHonoured === startRequest}
+          liveStorageGB={workspaceStorageGB}
           module={selectedModule}
           onClose={handleClosePanel}
           onStartLab={handleStartLab}

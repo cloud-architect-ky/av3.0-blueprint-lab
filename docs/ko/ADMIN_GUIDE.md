@@ -497,7 +497,17 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 - **비용 제어** — 일일 예산 알람이 SNS를 통해 `ADMIN_EMAIL`로 이메일을 보냅니다;
   유휴 JupyterLab 앱은 90분 후 자동 중지됩니다(`-c idle_timeout_minutes=<60..180>`로
   변경). 실행 중인 셀이나 터미널 작업은 활성으로 계산되므로 진행 중인 작업이
-  중단되지 않습니다. Sessions 탭에서 어떤 세션이든 **강제 종료**할 수 있습니다. 유휴 p4d 박스(~$25.25/시간)를 주시하세요.
+  중단되지 않습니다. Sessions 탭에서 어떤 세션이든 **강제 종료**할 수 있습니다. 유휴 GPU 박스를 주시하세요 —
+  단가는 리전별이므로 자기 리전 값을 쓰세요: `ml.g5.12xlarge`(다섯 모듈의 기본값)는
+  ap-northeast-2에서 **$8.72/시간**, us-west-2에서 $7.09이고, `ml.p4d.24xlarge`는
+  ap-northeast-2에서 **$34.97/시간**, us-west-2에서 $25.25입니다.
+  `infra/lambda/shared/instance_rates.py`에서 자기 리전을 확인하세요.
+- **스토리지 비용은 참가자당이고 한 방향으로만 갑니다.** 모든 스페이스는 200 GB gp3 볼륨으로
+  생성됩니다(`infra/av30_constructs/__init__.py`의 `DEFAULT_SPACE_STORAGE_GB`).
+  ap-northeast-2 단가 $0.0912/GB-월 기준 **참가자당 월 ~$18.24**이며, 앱 실행 여부와 무관하게
+  과금됩니다 — 유휴 타이머는 앱을 삭제하고 볼륨은 남깁니다. AWS는 스페이스 볼륨 **축소를
+  허용하지 않고** 참가자가 늘릴 수는 있으므로(+50/+200, 상한 500 GB), 티어다운으로 스페이스를
+  없앨 때까지 올라가기만 합니다.
 - **GPU 이미지 알림** — 참가자가 GPU 인스턴스에서 "No GPU detected"를 보고하면,
   CPU 이미지를 실행한 것입니다; Instance Options → GPU 인스턴스 → Apply를 하면
   GPU 이미지가 다시 선택됩니다.

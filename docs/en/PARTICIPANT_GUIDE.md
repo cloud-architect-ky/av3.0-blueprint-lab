@@ -141,8 +141,13 @@ promptly either way.
 
 ## 3. Open the workspace and run the notebook
 
-1. Click **Open Workspace** (top-right of the dashboard). A fresh JupyterLab tab
-   opens — no extra login.
+1. Look at the button top-right of the dashboard.
+   - **Open Workspace** → click it. A fresh JupyterLab tab opens, no extra login.
+   - **Start Workspace** → your workspace is stopped (this is what you see on your
+     very first login, and after the idle shutdown). Click it: Instance Options opens,
+     check the instance, then **Apply & Restart**. Wait until the button becomes
+     **Open Workspace**, then click that.
+   - **Workspace starting… / Shutting down…** → it is mid-transition; wait.
 2. In the JupyterLab file browser, open the module's notebook (e.g.
    `M2_Cosmos_Reason_Captioning.ipynb`).
 3. Run the cells top to bottom (Shift+Enter, or Run ▸ Run All Cells).
@@ -303,7 +308,8 @@ full architecture and the blog stage → module mapping.
 | "No GPU detected" in a GPU notebook | You're on CPU — Instance Options → GPU instance → Apply & Restart → Open Workspace again. |
 | `EC2InsufficientCapacityError` | Pick the `ml.g6.12xlarge` (or next) alternative in Instance Options. |
 | Workspace link expired / blank | Click **Open Workspace** again from the dashboard for a fresh link. |
-| **Open Workspace** lands on the Studio home page, not JupyterLab | Your workspace is stopped (this is what the 90-minute idle shutdown does). The dashboard restarts it: open any module node → **Instance Options** → **Apply & Restart**, wait for “Workspace running”, then **Open Workspace**. Do **not** use Studio's own **Run space** button — participants are not permitted to modify the space, so it fails with an `UpdateSpace` authorization error. |
+| Top-right button says **Start Workspace** | Your workspace is stopped — normal on first login and after the 90-minute idle shutdown. Click it, check the instance, **Apply & Restart**, then **Open Workspace** when it appears. Your files are on the space's volume and survive the shutdown. |
+| You ended up on the SageMaker Studio page instead of JupyterLab | Go back to your dashboard and use the button there; it is the supported path because it records which instance you used for cost reporting. Studio's own **Run space** / **Open JupyterLab** should work on your own workspace, but if either returns an authorization error, use the dashboard. |
 | Out of disk in a notebook | Instance Options → +50 GB / +200 GB → Apply. |
 | Notebook files missing after instance change | Wait for the restart to finish, then Open Workspace again (notebooks re-sync on start). |
 | "Did I lose my results after changing instances?" | No — results are in S3 and your home directory persists; only the old kernel's memory is cleared. See [What survives an instance change?](#what-survives-an-instance-change). Re-run the new notebook from the top. |

@@ -15,8 +15,11 @@
 
 - **1 つの CDK スタック** (`Av30PlatformStack`) → VPC、KMS で暗号化された S3（共有 + ユーザー
   ごとのワークスペース）、DynamoDB、Cognito、WAF、API Gateway + Lambda、2 つの CloudFront ダッシュボード
-  （管理者用 + ユーザー用）、そしてユーザーごとの実行ロール
-  `av30lab-sagemaker-execution-role` を持つ SageMaker Studio ドメイン。
+  （管理者用 + ユーザー用）、そして参加者全員が**1 つの**実行ロール
+  `av30lab-sagemaker-execution-role` を共有する SageMaker Studio ドメイン（ユーザーごとの
+  ロールではありません）。参加者間の分離は、スペースの所有者を
+  `${sagemaker:UserProfileName}` と比較する IAM 条件によって行われます —
+  `infra/av30_constructs/sagemaker.py` の残存リスクの注記を参照してください。
 - **2 つの S3 バケット**（名前は**あなたの**アカウント + リージョンから導出されます。本ガイドの
   例ではリファレンスデプロイであるアカウント `<aws-account-id>` / `us-west-2` を使用しています。
   ご自身の値に置き換えてください — §1.5 を参照）:
@@ -435,6 +438,17 @@ AlpaSim を自分自身で実行する**ようにしたい場合:
 3. そのリンクを新しいブラウザで開く → 12 個のモジュールノード（M1〜M12。M0 は概要ノートブックでノードを持ちません）を持つ Pipeline Map が表示されます。
 4. **M2** をクリック → **Instance Options** → 推奨の `ml.g5.12xlarge` が事前選択済み →
    **Apply & Restart** → **Open Workspace** → JupyterLab が開きます。
+4b. **スコープ付き IAM 条件が実際に解決されるかを確定（無料、約 1 分）。** そのアプリが
+   実行中の状態で、テストユーザーとして Studio **自体**を開きます（ディープリンクではなく
+   Studio コンソール）。スペースのページで **Run space**、続いて **Open JupyterLab** を
+   クリックし、`sagemaker:UpdateSpace` / `sagemaker:CreatePresignedDomainUrl` に対する
+   `AccessDenied` が出るかを記録します。
+   - **AccessDenied なし** → `${sagemaker:DomainId}` / `${sagemaker:UserProfileName}`
+     のポリシー変数が実行時に解決されます。したがって `CreateApp`/`DeleteApp` を
+     `resources=["*"]` から同じ所有者条件へ狭められます。
+     `infra/av30_constructs/sagemaker.py` の `SageMakerStudioAppLifecycle` 文の注記を参照。
+   - **AccessDenied が出る** → このアカウントでは解決されません。`CreateApp` は広いままにし、
+     参加者にはダッシュボードのボタンを使わせ続けてください。
 5. **M1**（CPU）をエンドツーエンドで実行し、続いて **M2**（GPU）を実行 — GPU イメージが
    自動選択され、モデルキャッシュが解決されることを確認します。
 6. M12/M11 を実行する場合は、テストユーザーとして各 1 回ずつ実行し、ジョブクォータ（§2b）と

@@ -59,13 +59,22 @@ def handler(event, context):
     #
     # When the participant's JupyterLab app is already running, land them INSIDE it
     # (LandingUri "app:JupyterLab:" + SpaceName) instead of on the Studio home page.
-    # Without this the participant arrives at Studio home, has to find their space, and
-    # is one click away from the space page's "Run space" button — which calls
-    # sagemaker:UpdateSpace and fails with AccessDenied, because the participant
-    # execution role deliberately does not have it (see the REMOVED list in
-    # infra/av30_constructs/sagemaker.py). Studio also shows a scary banner there
-    # ("Permission issue detected... include: sagemaker:createPresignedDomainUrl")
-    # for the same reason. Landing in the app avoids that whole page.
+    # Without this the participant arrives at Studio home and has to find their own space
+    # before they can do anything.
+    #
+    # This started life as a PERMISSION workaround: the participant execution role had
+    # neither sagemaker:UpdateSpace (needed by the space page's "Run space") nor
+    # sagemaker:CreatePresignedDomainUrl (needed by Studio's "Open JupyterLab"), so both of
+    # Studio's own buttons failed with AccessDenied and Studio showed a permanent
+    # "Permission issue detected" banner. Both are now granted, scoped to the caller's own
+    # private space / own user profile — see SageMakerOwnPrivateSpaceUpdate and
+    # SageMakerPresignedUrlOwnProfileOnly in infra/av30_constructs/sagemaker.py.
+    #
+    # The deep link is kept anyway, for two reasons that survive the grant: it is simply a
+    # better path (one click into JupyterLab instead of three through Studio), and the
+    # scoped grants depend on ${sagemaker:*} policy variables resolving at request time,
+    # which is documented but not yet confirmed in this account. If they do not resolve, the
+    # statements match nothing and this deep link is again the only working route.
     #
     # Only when the app is LIVE. A LandingUri pointing at an app that does not exist has
     # nowhere to go, so with no app we keep the old behaviour (Studio home) — and the

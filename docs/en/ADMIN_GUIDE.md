@@ -15,8 +15,11 @@ order you'll do it. Participants only need their dashboard link (see
 
 - **One CDK stack** (`Av30PlatformStack`) → VPC, KMS-encrypted S3 (shared + per-user
   workspace), DynamoDB, Cognito, WAF, API Gateway + Lambda, 2 CloudFront dashboards
-  (admin + user), and a SageMaker Studio domain with a per-user execution role
-  `av30lab-sagemaker-execution-role`.
+  (admin + user), and a SageMaker Studio domain whose participants all share ONE
+  execution role, `av30lab-sagemaker-execution-role` (not one role per user). Isolation
+  between participants comes from IAM policy conditions comparing a space's owner against
+  `${sagemaker:UserProfileName}` — see the residual-risk note in
+  `infra/av30_constructs/sagemaker.py`.
 - **Two S3 buckets** (names are derived from **your** account + region — the
   examples in this guide use account `<aws-account-id>` / `us-west-2`, the reference
   deployment; substitute your own — see §1.5):
@@ -443,6 +446,17 @@ provisioning + IAM) and [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUN
 3. Open that link in a fresh browser → the Pipeline Map with 12 module nodes renders (M1-M12; M0 is the overview notebook and has no node).
 4. Click **M2** → **Instance Options** → recommended `ml.g5.12xlarge` preselected →
    **Apply & Restart** → **Open Workspace** → JupyterLab opens.
+4b. **Settle whether the scoped IAM conditions resolve (free, ~1 min).** While that app is
+   running, open Studio *itself* as the test user — the Studio console, not the deep link —
+   go to the space page and click **Run space**, then **Open JupyterLab**. Record whether
+   either returns `AccessDenied` on `sagemaker:UpdateSpace` /
+   `sagemaker:CreatePresignedDomainUrl`.
+   - **No AccessDenied** → the `${sagemaker:DomainId}` / `${sagemaker:UserProfileName}`
+     policy variables resolve live, so `CreateApp`/`DeleteApp` can be narrowed from
+     `resources=["*"]` to the same owner condition. See the note on the
+     `SageMakerStudioAppLifecycle` statement in `infra/av30_constructs/sagemaker.py`.
+   - **AccessDenied** → they do not resolve in this account. Leave `CreateApp` broad, and
+     keep telling participants to use the dashboard's button.
 5. Run **M1** (CPU) end-to-end, then **M2** (GPU) — confirms the GPU image is
    auto-selected and the model cache resolves.
 6. If you're running M12/M11, run one of each once as the test user to confirm the

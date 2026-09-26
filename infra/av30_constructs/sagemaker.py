@@ -312,80 +312,83 @@ class SageMakerConstruct(Construct):
         # EVERY participant shares THIS ONE ROLE — it is the domain's
         # default_user_settings.execution_role and create_user does not override it per
         # profile. So at run time participant A's notebook and participant B's notebook
-        # present an IDENTICAL IAM identity, and nothing in the request context
-        # distinguishes them. That is why `resources=["*"]` below cannot be narrowed by a
-        # condition: isolating peers needs a per-participant PRINCIPAL, and the two
-        # candidate levers do not exist here —
-        #   * sagemaker:ResourceTag/UserId compares a tag on the TARGET resource; there is
-        #     no caller-side value meaning "my id" to compare it against.
-        #   * aws:PrincipalTag/UserId would supply one, but Studio execution roles carry
-        #     no session tags.
-        # Full isolation therefore requires one IAM role per user profile
-        # (CreateUserProfile accepts UserSettings.ExecutionRole) with the userId baked
-        # into the resource ARNs as a literal. That is a deliberate, separate change: it
-        # gives the provisioning Lambda iam:CreateRole/PutRolePolicy/PassRole, which needs
-        # a permissions boundary and adds orphan-role cleanup.
+        # present an IDENTICAL IAM identity.
         #
-        # REMOVED here — everything that let one participant ACT ON or IMPERSONATE another:
-        #   CreatePresignedDomainUrl  opened ANY participant's Studio session. The worst of
-        #                             the set; the dashboard's presigned_url Lambda does
-        #                             this with its own role, so participants never need it.
-        #   DeleteSpace               destroyed any participant's workspace. delete_user's
-        #                             Lambda owns teardown.
-        #   CreateSpace               create_user's Lambda owns provisioning.
-        #   UpdateSpace               change_instance's Lambda owns instance changes.
-        #                             ANSWERING THE OPEN QUESTION THIS COMMENT USED TO ASK:
-        #                             yes, the Studio UI was seen to need it — the space
-        #                             page's "Run space" button calls UpdateSpace to persist
-        #                             the form before CreateApp, so a participant clicking it
-        #                             gets "not authorized to perform: sagemaker:UpdateSpace"
-        #                             (measured in ap-northeast-2, 2026-09-25). It was NOT
-        #                             restored. Restoring it would hand every participant
-        #                             UpdateSpace on resources=["*"] — all participants share
-        #                             this one role, so A could retype B's space onto a
-        #                             $8/hr GPU — and it would bypass the dashboard's quota
-        #                             pre-check and the recorded instanceType that
-        #                             list_sessions prices the admin Costs view from
-        #                             (list_sessions/handler.py). Fixed in the dashboard
-        #                             instead:
-        #                             change_instance's 409 "already set" guard now fires
-        #                             only when an app is actually live, so "Apply" starts
-        #                             the app for the current type (first run, and after an
-        #                             idle shutdown), and presigned_url lands a participant
-        #                             inside a running JupyterLab rather than on the space
-        #                             page. Participants never need to press "Run space".
-        #   ListUserProfiles          the cohort roster — pure targeting value.
-        #   ListDomains               enumeration; only the admin rescue tool used it.
-        #   DeleteTags                unused by any participant path.
+        # An earlier version of this comment claimed that made per-participant isolation
+        # impossible without one IAM role per user profile. THAT WAS WRONG, and the error
+        # participants hit proved it: SageMaker publishes the caller's own identity as the
+        # policy variables ${sagemaker:DomainId} and ${sagemaker:UserProfileName}, and
+        # publishes the target space's owner as the condition key
+        # sagemaker:OwnerUserProfileArn. Comparing the two isolates peers with ONE shared
+        # role. AWS documents exactly this policy for private spaces
+        # ("Give your users access to spaces", SMStudioRestrictSpacesToOwnerUserProfile),
+        # and the AWS ML blog "Implement user-level access control for multi-tenant ML
+        # platforms on Amazon SageMaker AI" names this as the mechanism for a shared domain.
         #
-        # KEPT because a participant genuinely needs them to use their OWN Studio app:
-        #   CreateApp / DeleteApp / DescribeApp / ListApps — launching and stopping the
-        #     JupyterLab app from the Studio UI.
-        #   AddTags — measured: SageMaker auto-tags the App resource on launch, and
-        #     without this CreateApp fails with AccessDenied on AddTags.
-        #   DescribeDomain / DescribeUserProfile / DescribeSpace — sagemaker.get_execution_role()
-        #     resolves the role ARN through these (used by M11 and M12), reading
-        #     /opt/ml/metadata/resource-metadata.json for the domain + space first.
-        #   ListSpaces / ListTags — read paths the SDK and UI use.
+        # The prerequisite is already met: create_user creates every space with
+        # OwnershipSettings.OwnerUserProfileName = <userId> and SharingType = Private
+        # (infra/lambda/create_user/handler.py), verified live on d-izwhae6gmqd8.
         #
-        # RESIDUAL RISK, accepted deliberately for a trusted cohort: the kept Describe*
-        # and List* still see PEER resources, and CreateApp/DeleteApp are not restricted
-        # to the caller's own space. Removing that needs per-participant roles.
+        # Resource ARNs use ${sagemaker:DomainId} rather than the real domain id ON PURPOSE.
+        # This role IS the domain's default execution role, so the domain depends on the
+        # role; referencing domain.attr_domain_id here would invert that and make
+        # CloudFormation reject the stack with a circular dependency. The policy variable
+        # resolves at request time to the caller's own domain, which is the same value.
         #
-        # COST BLAST RADIUS, stated plainly rather than implied: keeping CreateApp on
-        # resources=["*"] means the dashboard is the cost control by CONVENTION, not by
-        # IAM. CreateApp takes a caller-supplied ResourceSpec, so a participant who runs
-        # boto3 from inside their own notebook can ask for an instance type the dashboard
-        # would refuse (VALID_INSTANCE_TYPES is enforced in the Lambda, not here) on any
-        # space in the domain, with no studio_quota_for pre-check and no DynamoDB record —
-        # which also means list_sessions prices it at the recorded type, not the running
-        # one. What limits the damage today is the per-type Studio quota (the heavy types
-        # are 2-5 in both deploy regions) and the daily budget alarm, not this policy.
-        # Closing it properly is the same change as isolating peers: one role per user
-        # profile, with the space ARN baked in.
+        # WHY EACH PARTICIPANT-FACING GRANT EXISTS — measured in ap-northeast-2, 2026-09-26,
+        # by clicking the buttons as a participant:
+        #   UpdateSpace                Studio's space page "Run space" button calls it to
+        #                              persist the form before CreateApp. Without it:
+        #                              "not authorized to perform: sagemaker:UpdateSpace".
+        #   CreatePresignedDomainUrl   Studio's "Open JupyterLab" button calls it for the
+        #                              participant's OWN user profile. Without it the app
+        #                              runs but cannot be opened from Studio, and Studio
+        #                              shows a permanent "Permission issue detected"
+        #                              banner. An earlier comment here asserted
+        #                              participants "never need" this because the
+        #                              dashboard's Lambda mints the URL — true only for the
+        #                              dashboard's own button, not for Studio's.
+        #   CreateApp / DeleteApp      launching and stopping their JupyterLab app.
+        #   AddTags                    SageMaker auto-tags the App on launch; without it
+        #                              CreateApp fails with AccessDenied on AddTags.
+        #
+        # STILL NOT GRANTED, deliberately: CreateSpace and DeleteSpace (create_user /
+        # delete_user own the lifecycle), ListUserProfiles and ListDomains (cohort
+        # enumeration), DeleteTags (unused).
+        #
+        # RESIDUAL RISK, reduced but not zero:
+        #   * Describe*/List* is still resources=["*"], so a participant can SEE peer
+        #     spaces and apps. Narrowing it breaks sagemaker.get_execution_role() (used by
+        #     M11/M12), which resolves the role through
+        #     DescribeDomain/DescribeUserProfile/DescribeSpace. Reads are information
+        #     disclosure inside a trusted cohort, not control.
+        #   * CreateApp/DeleteApp is still resources=["*"] with no owner condition — see
+        #     the long note on that statement for why it is staged rather than scoped now.
+        #     Until it is tightened, a participant who runs boto3 in their notebook can
+        #     start or stop an app on any space in this domain, and can ask for an instance
+        #     type the dashboard would refuse. What bounds the cost today is the per-type
+        #     Studio quota (2-5 for the heavy types in both deploy regions) and the daily
+        #     budget alarm, not this policy.
+
+        _sm_region = cdk.Stack.of(self).region
+        _sm_account = cdk.Stack.of(self).account
+        # The caller's own user-profile ARN, resolved per request. Used both as the resource
+        # of CreatePresignedDomainUrl and as the value the space/app owner must equal.
+        _own_user_profile = (
+            f"arn:aws:sagemaker:{_sm_region}:{_sm_account}:user-profile/"
+            "${sagemaker:DomainId}/${sagemaker:UserProfileName}"
+        )
+        # "this resource belongs to the caller, and it is a private space" — the pair that
+        # turns one shared role into per-participant isolation.
+        _owned_private = {
+            "ArnLike": {"sagemaker:OwnerUserProfileArn": _own_user_profile},
+            "StringEquals": {"sagemaker:SpaceSharingType": "Private"},
+        }
+
+        # Reads: broad on purpose (see RESIDUAL RISK above).
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
-                sid="SageMakerStudioAccess",
+                sid="SageMakerStudioRead",
                 effect=iam.Effect.ALLOW,
                 actions=[
                     "sagemaker:DescribeDomain",
@@ -395,10 +398,100 @@ class SageMakerConstruct(Construct):
                     "sagemaker:ListApps",
                     "sagemaker:ListSpaces",
                     "sagemaker:ListTags",
-                    "sagemaker:CreateApp",
-                    "sagemaker:DeleteApp",
-                    "sagemaker:AddTags",
                 ],
+                resources=["*"],
+            )
+        )
+
+        # Start/stop the participant's app.
+        #
+        # STILL resources=["*"] WITH NO CONDITION, ON PURPOSE — this is the one grant that
+        # must not be gated on an unverified condition. It is the only thing that lets a
+        # participant get a workspace at all, and if the ${sagemaker:*} variables below do
+        # not resolve the way AWS documents, a scoped version here would deny EVERY
+        # participant EVERY app. That is strictly worse than the information disclosure it
+        # would close.
+        #
+        # Measured 2026-09-26 with iam:SimulateCustomPolicy: a statement whose Resource or
+        # Condition value contains ${sagemaker:DomainId} / ${sagemaker:UserProfileName}
+        # evaluates to implicitDeny in the simulator, while the identical statement with
+        # those values spelled out literally evaluates to allowed. The IAM docs for
+        # SimulateCustomPolicy say the simulator "results can differ from your live AWS
+        # environment", and AWS's own reference policy for private spaces uses exactly
+        # these variables, so the most likely reading is that the simulator does not
+        # substitute service-specific variables. "Most likely" is not good enough to put in
+        # front of the workspace-start path.
+        #
+        # TIGHTEN THIS ONCE THE VARIABLES ARE PROVEN LIVE. The two scoped statements below
+        # are the proof: they are additive, so if the variables do NOT resolve they simply
+        # match nothing and today's behaviour is unchanged. When a participant can click
+        # Studio's "Run space" (needs the scoped UpdateSpace) and "Open JupyterLab" (needs
+        # the scoped CreatePresignedDomainUrl) without an AccessDenied, the variables DO
+        # resolve — at that point replace this statement with:
+        #     resources=[f"arn:aws:sagemaker:{region}:{account}:app/${{sagemaker:DomainId}}/*"],
+        #     conditions=_owned_private,
+        # and re-verify that a participant can still start an app.
+        self._execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="SageMakerStudioAppLifecycle",
+                effect=iam.Effect.ALLOW,
+                actions=["sagemaker:CreateApp", "sagemaker:DeleteApp"],
+                resources=["*"],
+            )
+        )
+
+        # Reconfigure their OWN private space (Studio's "Run space" / storage + instance
+        # edits). DeleteSpace is intentionally absent.
+        self._execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="SageMakerOwnPrivateSpaceUpdate",
+                effect=iam.Effect.ALLOW,
+                actions=["sagemaker:UpdateSpace"],
+                resources=[
+                    f"arn:aws:sagemaker:{_sm_region}:{_sm_account}:space/"
+                    "${sagemaker:DomainId}/*"
+                ],
+                conditions=_owned_private,
+            )
+        )
+
+        # Open Studio/JupyterLab as THEMSELVES. The resource IS the scope: a participant
+        # cannot mint a session for another profile, which is what made the unscoped form
+        # the worst grant in the original set.
+        self._execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="SageMakerPresignedUrlOwnProfileOnly",
+                effect=iam.Effect.ALLOW,
+                actions=["sagemaker:CreatePresignedDomainUrl"],
+                resources=[_own_user_profile],
+            )
+        )
+
+        # Explicit DENY so it cannot be satisfied by the Allow above. The UpdateSpace grant
+        # conditions on WHOSE space it is, not on WHAT is being changed, so without this a
+        # participant could flip their own space's RemoteAccess to ENABLED and open a Remote
+        # IDE path to a workspace the lab only ever intends to be reached through the
+        # dashboard's presigned URL. Bounded today (the role has no sagemaker:StartSession),
+        # but the posture change would happen with no admin action and no dashboard record.
+        self._execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="DenyEnablingSpaceRemoteAccess",
+                effect=iam.Effect.DENY,
+                actions=["sagemaker:CreateSpace", "sagemaker:UpdateSpace"],
+                resources=[f"arn:aws:sagemaker:{_sm_region}:{_sm_account}:space/*"],
+                conditions={"StringEquals": {"sagemaker:RemoteAccess": "ENABLED"}},
+            )
+        )
+
+        # AddTags stays broad and unconditional. SageMaker tags the App on launch, and
+        # M11/M12 pass Tags to processing/training jobs; the documented
+        # Null:sagemaker:TaggingAction condition covers only tag-on-create, so adopting it
+        # risks an AccessDenied on a path that is hard to test. Left as-is deliberately.
+        self._execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="SageMakerAddTags",
+                effect=iam.Effect.ALLOW,
+                actions=["sagemaker:AddTags"],
                 resources=["*"],
             )
         )
@@ -702,6 +795,32 @@ class SageMakerConstruct(Construct):
         default_user_settings = sagemaker.CfnDomain.UserSettingsProperty(
             execution_role=self._execution_role.role_arn,
             security_groups=[studio_sg.security_group_id],
+            # SERVICE-SIDE storage ceiling. Keep maximum_ebs_volume_size_in_gb in sync with
+            # MAX_STORAGE_GB in infra/lambda/expand_storage/handler.py (500).
+            #
+            # Why it has to live here and not only in that Lambda: the participant execution
+            # role now has sagemaker:UpdateSpace on its own private space, and UpdateSpace is
+            # the same API expand_storage uses to resize the volume
+            # (expand_storage/handler.py). The IAM statement can condition on WHOSE space it
+            # is, but there is no condition key for the requested EbsVolumeSizeInGb and
+            # policy variables cannot be used with numeric operators — so a participant
+            # running boto3 in their own notebook could ask for the service maximum of 16 TB
+            # and the Lambda's MAX_STORAGE_GB would never be consulted, because the Lambda is
+            # not in that request path.
+            #
+            # The damage would have been hard to undo and hard to see: AWS does not allow
+            # shrinking a space's EBS volume once grown ("after you increase the Space's EBS
+            # volume size, you will not be able to lower it back down"), the volume keeps
+            # billing after the idle timer deletes the app, and list_sessions prices a
+            # session from instanceType only — so the admin Sessions view would not move.
+            # Measured before this change: describe-domain returned
+            # DefaultUserSettings.SpaceStorageSettings = null, i.e. no ceiling at all.
+            space_storage_settings=sagemaker.CfnDomain.DefaultSpaceStorageSettingsProperty(
+                default_ebs_storage_settings=sagemaker.CfnDomain.DefaultEbsStorageSettingsProperty(
+                    default_ebs_volume_size_in_gb=5,
+                    maximum_ebs_volume_size_in_gb=500,
+                )
+            ),
             jupyter_server_app_settings=sagemaker.CfnDomain.JupyterServerAppSettingsProperty(
                 default_resource_spec=sagemaker.CfnDomain.ResourceSpecProperty(
                     sage_maker_image_arn=sagemaker_image_arn,

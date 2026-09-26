@@ -142,8 +142,12 @@ GPU 이미지와 노트북 동기화를 대신 처리합니다.
 
 ## 3. 워크스페이스를 열고 노트북 실행하기
 
-1. **Open Workspace**(대시보드 오른쪽 상단)를 클릭합니다. 새 JupyterLab 탭이
-   열립니다 — 별도 로그인 없음.
+1. 대시보드 오른쪽 상단의 버튼을 봅니다.
+   - **Open Workspace** → 클릭하면 새 JupyterLab 탭이 열립니다(별도 로그인 없음).
+   - **Start Workspace** → 워크스페이스가 멈춘 상태입니다(첫 로그인 때, 그리고 유휴
+     종료 후에 이렇게 보입니다). 클릭하면 Instance Options가 열리니 인스턴스를 확인하고
+     **Apply & Restart**를 누릅니다. 버튼이 **Open Workspace**로 바뀌면 그것을 클릭합니다.
+   - **Workspace starting… / Shutting down…** → 전환 중이므로 기다립니다.
 2. JupyterLab 파일 브라우저에서 해당 모듈의 노트북을 엽니다(예:
    `M2_Cosmos_Reason_Captioning.ipynb`).
 3. 셀을 위에서 아래로 실행합니다(Shift+Enter 또는 Run ▸ Run All Cells).
@@ -303,7 +307,8 @@ M1 (explore, CPU)
 | GPU 노트북에서 "No GPU detected" | CPU에 있는 것입니다 — Instance Options → GPU 인스턴스 → Apply & Restart → Open Workspace 다시 클릭. |
 | `EC2InsufficientCapacityError` | Instance Options에서 `ml.g6.12xlarge`(또는 다음) 대체 인스턴스를 선택합니다. |
 | 워크스페이스 링크 만료 / 빈 화면 | 대시보드에서 **Open Workspace**를 다시 클릭하여 새 링크를 받습니다. |
-| **Open Workspace**가 JupyterLab이 아니라 Studio 홈으로 갈 때 | 워크스페이스가 멈춘 상태입니다(90분 유휴 종료가 이렇게 만듭니다). 대시보드에서 다시 켜세요: 아무 모듈 노드 → **Instance Options** → **Apply & Restart** → “Workspace running”이 되면 **Open Workspace**. Studio의 **Run space** 버튼은 쓰지 마세요 — 참가자는 스페이스를 수정할 권한이 없어 `UpdateSpace` 권한 오류가 납니다. |
+| 오른쪽 상단 버튼이 **Start Workspace** 일 때 | 워크스페이스가 멈춘 상태입니다 — 첫 로그인과 90분 유휴 종료 후에는 정상입니다. 클릭 → 인스턴스 확인 → **Apply & Restart** → **Open Workspace**가 나타나면 클릭. 파일은 스페이스 볼륨에 있어 종료되어도 남습니다. |
+| JupyterLab이 아니라 SageMaker Studio 화면에 도착했을 때 | 대시보드로 돌아가 그쪽 버튼을 쓰세요. 어떤 인스턴스를 썼는지 비용 보고에 기록하는 경로라서 그것이 지원되는 방법입니다. Studio의 **Run space** / **Open JupyterLab**도 자기 워크스페이스에는 동작해야 하지만, 권한 오류가 나면 대시보드를 쓰세요. |
 | 노트북에서 디스크 부족 | Instance Options → +50 GB / +200 GB → Apply. |
 | 인스턴스 변경 후 노트북 파일 누락 | 재시작이 완료될 때까지 기다린 후 Open Workspace를 다시 클릭합니다(시작 시 노트북이 다시 동기화됨). |
 | "인스턴스를 변경한 후 결과를 잃었나요?" | 아니요 — 결과는 S3에 있고 홈 디렉터리는 유지됩니다; 이전 커널의 메모리만 지워집니다. [인스턴스 변경 시 무엇이 유지되나요?](#what-survives-an-instance-change)를 참조하세요. 새 노트북을 위에서부터 다시 실행하세요. |

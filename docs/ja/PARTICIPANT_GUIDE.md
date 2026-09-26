@@ -144,8 +144,13 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 
 ## 3. ワークスペースを開いてノートブックを実行する
 
-1. **Open Workspace**（ダッシュボード右上）をクリックします。新しい JupyterLab タブが
-   開きます — 追加のログインはありません。
+1. ダッシュボード右上のボタンを確認します。
+   - **Open Workspace** → クリックすると新しい JupyterLab タブが開きます（追加のログインなし）。
+   - **Start Workspace** → ワークスペースが停止しています（初回ログイン時、およびアイドル
+     シャットダウン後はこの表示です）。クリックすると Instance Options が開くので、
+     インスタンスを確認して **Apply & Restart**。ボタンが **Open Workspace** に変わったら
+     それをクリックします。
+   - **Workspace starting… / Shutting down…** → 遷移中なので待ちます。
 2. JupyterLab のファイルブラウザで、モジュールのノートブック（例：
    `M2_Cosmos_Reason_Captioning.ipynb`）を開きます。
 3. セルを上から下へ実行します（Shift+Enter、または Run ▸ Run All Cells）。
@@ -304,7 +309,8 @@ SageMaker イメージでは実行されません — カスタムの CUDA ツ�
 | GPU ノートブックで「No GPU detected」 | CPU 上にいます — Instance Options → GPU インスタンス → Apply & Restart → もう一度 Open Workspace。 |
 | `EC2InsufficientCapacityError` | Instance Options で `ml.g6.12xlarge`（または次）の代替を選ぶ。 |
 | ワークスペースリンクが期限切れ／空白 | ダッシュボードからもう一度 **Open Workspace** をクリックして新しいリンクを取得。 |
-| **Open Workspace** が JupyterLab ではなく Studio のホームに着く | ワークスペースが停止しています（90 分のアイドルシャットダウンがこの状態を作ります）。ダッシュボードから起動し直してください: 任意のモジュールノード → **Instance Options** → **Apply & Restart** → 「Workspace running」になったら **Open Workspace**。Studio 側の **Run space** ボタンは使わないでください — 参加者はスペースを変更する権限を持たないため `UpdateSpace` の権限エラーになります。 |
+| 右上のボタンが **Start Workspace** になっている | ワークスペースが停止しています — 初回ログイン時と 90 分のアイドルシャットダウン後は正常です。クリック → インスタンスを確認 → **Apply & Restart** → **Open Workspace** が出たらクリック。ファイルはスペースのボリューム上にあり、シャットダウンしても残ります。 |
+| JupyterLab ではなく SageMaker Studio の画面に着いてしまった | ダッシュボードに戻り、そちらのボタンを使ってください。どのインスタンスを使ったかをコスト集計に記録する経路なので、それが推奨の方法です。Studio 側の **Run space** / **Open JupyterLab** も自分のワークスペースには動作するはずですが、権限エラーが出た場合はダッシュボードを使ってください。 |
 | ノートブックのディスク不足 | Instance Options → +50 GB / +200 GB → Apply。 |
 | インスタンス変更後にノートブックファイルが消えた | 再起動が完了するのを待ってから、もう一度 Open Workspace（ノートブックは起動時に再同期されます）。 |
 | 「インスタンスを変更したら結果を失った？」 | いいえ — 結果は S3 にあり、ホームディレクトリは保持されます。クリアされるのは古いカーネルのメモリだけです。[インスタンス変更後も残るものは？](#what-survives-an-instance-change) を参照。新しいノートブックを上から再実行してください。 |

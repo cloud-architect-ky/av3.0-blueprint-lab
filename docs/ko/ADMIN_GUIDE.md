@@ -15,8 +15,10 @@
 
 - **하나의 CDK 스택** (`Av30PlatformStack`) → VPC, KMS로 암호화된 S3(공유 + 사용자별
   워크스페이스), DynamoDB, Cognito, WAF, API Gateway + Lambda, CloudFront 대시보드 2개
-  (관리자 + 사용자), 그리고 사용자별 실행 역할
-  `av30lab-sagemaker-execution-role`을 갖는 SageMaker Studio 도메인.
+  (관리자 + 사용자), 그리고 참가자 전원이 **하나의** 실행 역할
+  `av30lab-sagemaker-execution-role`을 공유하는 SageMaker Studio 도메인(사용자별 역할이
+  아닙니다). 참가자 간 격리는 스페이스 소유자를 `${sagemaker:UserProfileName}`과 비교하는
+  IAM 조건으로 이루어집니다 — `infra/av30_constructs/sagemaker.py`의 잔여 위험 주석 참조.
 - **S3 버킷 2개** (이름은 **당신의** 계정 + 리전에서 파생됩니다 — 이 가이드의
   예시는 레퍼런스 배포인 계정 `<aws-account-id>` / `us-west-2`를 사용합니다.
   당신의 값으로 치환하세요 — §1.5 참고):
@@ -439,6 +441,16 @@ aws s3 sync scripts/   s3://<shared>/notebook-templates/scripts/ --region "$AWS_
 3. 그 링크를 새 브라우저에서 열면 → 12개 모듈 노드가 있는 Pipeline Map(M1~M12. M0은 개요 노트북이라 노드가 없습니다)이 렌더링됩니다.
 4. **M2** 클릭 → **Instance Options** → 권장 `ml.g5.12xlarge`가 미리 선택됨 →
    **Apply & Restart** → **Open Workspace** → JupyterLab이 열립니다.
+4b. **스코프 IAM 조건이 실제로 해석되는지 확정(무료, ~1분).** 그 앱이 실행 중인 상태에서
+   테스트 사용자로 Studio **자체**를 엽니다(딥링크가 아니라 Studio 콘솔). 스페이스 페이지에서
+   **Run space**, 그다음 **Open JupyterLab**을 클릭하고, `sagemaker:UpdateSpace` /
+   `sagemaker:CreatePresignedDomainUrl`에 대한 `AccessDenied`가 나는지 기록합니다.
+   - **AccessDenied 없음** → `${sagemaker:DomainId}` / `${sagemaker:UserProfileName}`
+     정책 변수가 런타임에 해석됩니다. 따라서 `CreateApp`/`DeleteApp`을 `resources=["*"]`에서
+     같은 소유자 조건으로 좁힐 수 있습니다. `infra/av30_constructs/sagemaker.py`의
+     `SageMakerStudioAppLifecycle` 문장에 붙은 주석을 보세요.
+   - **AccessDenied 발생** → 이 계정에서는 해석되지 않습니다. `CreateApp`은 넓은 상태로
+     두고, 참가자에게는 계속 대시보드 버튼을 쓰게 합니다.
 5. **M1**(CPU)을 엔드투엔드로 실행한 뒤 **M2**(GPU)를 실행 — GPU 이미지가
    자동 선택되고 모델 캐시가 해석되는지 확인합니다.
 6. M12/M11을 실행한다면, 테스트 사용자로 각각 한 번씩 실행하여 작업

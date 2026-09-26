@@ -174,9 +174,12 @@ def _http_handler(event, context):
     #   * the frontend treats 409 as a no-op and starts polling GET /app-status, which
     #     stays "NotFound" forever because nothing created an app;
     #   * the Studio UI's own "Run space" button calls sagemaker:UpdateSpace, which the
-    #     participant execution role deliberately does not have (see the REMOVED list in
-    #     infra/av30_constructs/sagemaker.py) — the participant saw
+    #     participant execution role did not have at the time — the participant saw
     #     "Error updating space ... not authorized to perform: sagemaker:UpdateSpace".
+    #     A SCOPED UpdateSpace (own private space only) was granted afterwards
+    #     (SageMakerOwnPrivateSpaceUpdate in infra/av30_constructs/sagemaker.py), so that
+    #     escape hatch may now work. This fall-through remains the supported path because it
+    #     is the one that records instanceType, which the admin cost view prices from.
     # Verified against the live domain: space InService on ml.t3.medium, list-apps [].
     #
     # The same gate also locked participants out after every idle shutdown: SageMaker

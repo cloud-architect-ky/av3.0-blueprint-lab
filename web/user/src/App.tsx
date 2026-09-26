@@ -46,6 +46,24 @@ function Dashboard(): React.JSX.Element {
   const [displayName, setDisplayName] = useState<string | null>(null);
   // B2: live per-module status from the DDB session row (canonical long ids).
   const [liveProgress, setLiveProgress] = useState<Record<string, ModuleStatus>>({});
+  // SageMaker app lifecycle for THIS participant's one JupyterLab space:
+  // "InService" | "Pending" | "Deleting" | "Deleted" | "Failed" | "NotFound", or null
+  // before the first poll returns. The poll below already fetched this and threw it away,
+  // which is why "Open Workspace" used to be offered when there was nothing to open.
+  const [workspaceStatus, setWorkspaceStatus] = useState<string | null>(null);
+  // Counter, not a boolean. Each "start my workspace" request bumps it, and the panel's
+  // React key includes it, so EVERY request remounts the panel and its
+  // useState(openInstanceOptionsOnMount) actually re-runs.
+  //
+  // A boolean here was a silent dead end: the participant clicks Start Workspace (flag
+  // true, modal opens), clicks the modal's Cancel — which only clears the modal's own local
+  // showInstanceOptions, never this flag — and clicks Start Workspace again. The flag was
+  // already true, so the key was unchanged, so React reused the mounted panel and the modal
+  // never reopened. The primary call to action became a no-op.
+  const [startRequest, setStartRequest] = useState(0);
+  // Which start request the panel should honour by opening Instance Options on mount. Null
+  // when the panel was opened by clicking a module node (configure, not start).
+  const [startRequestHonoured, setStartRequestHonoured] = useState<number | null>(null);
 
   // Fetch identity + live module progress on mount, then poll (and on window
   // focus) so a module completing in the notebook flips its node without a
@@ -59,6 +77,11 @@ function Dashboard(): React.JSX.Element {
         const s = await apiClient.getAppStatus(userId);
         if (!active) return;
         setDisplayName(s.name || userId);
+        // "Unknown", never null: null is the "not asked yet" sentinel that disables the
+        // header button. app_status does `status = resp.get("Status")`, which serialises to
+        // JSON null if describe_app omits it, so an ANSWERED call could otherwise lock the
+        // button to a disabled "Checking workspace…" forever.
+        setWorkspaceStatus(s.status ?? "Unknown");
         const merged: Record<string, ModuleStatus> = {};
         for (const [id, raw] of Object.entries(s.moduleProgress ?? {})) {
           const norm = normalizeStatus(String(raw));
@@ -66,7 +89,16 @@ function Dashboard(): React.JSX.Element {
         }
         setLiveProgress(merged);
       } catch {
-        if (active) setDisplayName((prev) => prev ?? userId);
+        if (!active) return;
+        setDisplayName((prev) => prev ?? userId);
+        // Do NOT leave workspaceStatus at null on a failed poll. null means "not asked
+        // yet" and DISABLES the header button, so a participant whose app-status call keeps
+        // failing would sit on a permanently disabled "Checking workspace…" — a dead end
+        // this change would otherwise have introduced. "Unknown" keeps the button usable:
+        // it offers Start Workspace, which opens Instance Options, and that is safe either
+        // way (a same-type Apply against an already-running app is the 409 the panel
+        // already absorbs as a no-op).
+        setWorkspaceStatus((prev) => prev ?? "Unknown");
       }
     };
 
@@ -93,7 +125,53 @@ function Dashboard(): React.JSX.Element {
 
   const handleModuleSelect = useCallback((module: ModuleConfig) => {
     setSelectedModule(module);
+    setStartRequestHonoured(null);
   }, []);
+
+  // Is there a workspace to open? "Pending" deliberately counts as NOT openable: the app
+  // exists but no server is listening yet, so a deep link lands on a route nothing answers.
+  const workspaceRunning = workspaceStatus === "InService";
+  const workspaceStarting = workspaceStatus === "Pending";
+  // Deleting is NOT starting — it is the idle timer or a restart tearing the app down, and
+  // labelling it "Workspace starting…" told the participant to wait for something that was
+  // never going to happen. Own label, still disabled until teardown finishes.
+  const workspaceStopping = workspaceStatus === "Deleting";
+
+  // The module whose Instance Options to open when the participant asks to start a stopped
+  // workspace: the one they are on, else the first unfinished one, else M1. The instance is
+  // workspace-wide (one JupyterLab space serves every module), so any module's panel sets
+  // the same thing — this just picks the least surprising one.
+  // COST-CRITICAL. This must not resolve to a GPU module for a participant who has not
+  // asked for one.
+  //
+  // create_user seeds the DDB row with moduleProgress: {} (create_user/handler.py), so on
+  // day one liveProgress is EMPTY and mergedModules falls back to the static seeds in
+  // pipeline-config.ts — where m02-cosmos-reason is seeded "in-progress" purely so the map
+  // looks alive in a screenshot. "First in-progress module" therefore resolved to m02, whose
+  // recommendedInstance is ml.g5.12xlarge: $8.718/hr in ap-northeast-2. One click on the
+  // header button would have opened Apply & Restart preselected on that, for someone who
+  // had run nothing. The old dead-end behaviour at least cost $0.
+  //
+  // So: trust the seeds only when the backend has actually reported progress. With no real
+  // progress, start from the first module (M1, ml.t3.medium).
+  const hasRealProgress = Object.keys(liveProgress).length > 0;
+  const startFromModule = useMemo(
+    () =>
+      (hasRealProgress
+        ? mergedModules.find((m) => m.status === "in-progress") ??
+          mergedModules.find((m) => m.status !== "completed")
+        : undefined) ?? mergedModules[0],
+    [mergedModules, hasRealProgress]
+  );
+
+  const handleStartWorkspace = useCallback(() => {
+    setSelectedModule(startFromModule);
+    setStartRequest((n) => {
+      const next = n + 1;
+      setStartRequestHonoured(next);
+      return next;
+    });
+  }, [startFromModule]);
 
   const handleClosePanel = useCallback(() => {
     setSelectedModule(null);
@@ -107,6 +185,20 @@ function Dashboard(): React.JSX.Element {
     setOpeningWorkspace(true);
     setWorkspaceError(null);
     try {
+      // Re-check RIGHT NOW instead of trusting a snapshot up to POLL_MS (20s) old. In that
+      // window the app can vanish two ordinary ways — the idle timer deletes it, or the
+      // participant just hit Apply & Restart, whose first step is deleting the app — and
+      // opening a presigned URL with no app lands them on exactly the Studio page this
+      // change exists to keep them away from.
+      const live = await apiClient.getAppStatus(userId);
+      setWorkspaceStatus(live.status ?? "Unknown");
+      if (live.status !== "InService") {
+        setWorkspaceError(
+          "Your workspace is not running right now, so there is nothing to open. " +
+            "Use Start Workspace to bring it up."
+        );
+        return;
+      }
       const { presignedUrl } = await apiClient.getWorkspaceUrl(userId);
       window.open(presignedUrl, "_blank", "noopener,noreferrer");
     } catch (e) {
@@ -118,13 +210,28 @@ function Dashboard(): React.JSX.Element {
     }
   }, [userId, apiClient]);
 
-  // Per-module "Start Lab" routes to the same fresh-URL flow (moduleId unused
-  // because a single JupyterLab space serves every module).
+  // The detail panel's "Re-run Lab" / "Resume Lab" button. moduleId is unused because a
+  // single JupyterLab space serves every module.
+  //
+  // It had the SAME dead end as the header button: it opened a presigned URL
+  // unconditionally, so with no app running the participant landed on the Studio home page
+  // with nothing they were allowed to click. Route to the workspace only when there is one;
+  // otherwise open Instance Options, which is where Apply & Restart starts it.
   const handleStartLab = useCallback(
-    (_moduleId: string) => {
-      void handleOpenWorkspace();
+    (moduleId: string) => {
+      if (workspaceRunning) {
+        void handleOpenWorkspace();
+        return;
+      }
+      const target = mergedModules.find((m) => m.id === moduleId);
+      if (target) setSelectedModule(target);
+      setStartRequest((n) => {
+        const next = n + 1;
+        setStartRequestHonoured(next);
+        return next;
+      });
     },
-    [handleOpenWorkspace]
+    [workspaceRunning, handleOpenWorkspace, mergedModules]
   );
 
   return (
@@ -156,15 +263,43 @@ function Dashboard(): React.JSX.Element {
                   <Badge color="grey">
                     {totalCount - completedCount - inProgressCount} Locked
                   </Badge>
-                  <Button
-                    variant="primary"
-                    iconName="external"
-                    loading={openingWorkspace}
-                    disabled={!isAuthenticated || openingWorkspace}
-                    onClick={() => void handleOpenWorkspace()}
-                  >
-                    Open Workspace
-                  </Button>
+                  {/* One button, three truths. It used to always say "Open Workspace"
+                      and always be enabled, so a participant who had not started an
+                      instance yet was sent to the SageMaker Studio home page — where the
+                      only visible action ("Run space") is one a participant is not
+                      permitted to perform. Now the label follows the live app status. */}
+                  {workspaceRunning ? (
+                    <Button
+                      variant="primary"
+                      iconName="external"
+                      loading={openingWorkspace}
+                      disabled={!isAuthenticated || openingWorkspace}
+                      onClick={() => void handleOpenWorkspace()}
+                    >
+                      Open Workspace
+                    </Button>
+                  ) : workspaceStarting ? (
+                    <Button variant="primary" loading disabled>
+                      Workspace starting…
+                    </Button>
+                  ) : workspaceStopping ? (
+                    <Button variant="primary" loading disabled>
+                      Shutting down…
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      iconName="caret-right-filled"
+                      disabled={!isAuthenticated || workspaceStatus === null}
+                      onClick={handleStartWorkspace}
+                    >
+                      {/* Demo mode never starts the poll (no userId/token), so
+                          "Checking workspace…" would describe a request never made. */}
+                      {isAuthenticated && workspaceStatus === null
+                        ? "Checking workspace…"
+                        : "Start Workspace"}
+                    </Button>
+                  )}
                 </SpaceBetween>
               }
             >
@@ -281,6 +416,11 @@ function Dashboard(): React.JSX.Element {
       {/* Detail Panel Overlay */}
       {selectedModule && (
         <ModuleDetailPanel
+          // Remount on every module change AND every start request. The nonce is what makes
+          // a repeat click work: a boolean would leave the key unchanged after the modal was
+          // cancelled, React would reuse the mounted panel, and the button would do nothing.
+          key={`${selectedModule.id}-${startRequest}`}
+          openInstanceOptionsOnMount={startRequestHonoured === startRequest}
           module={selectedModule}
           onClose={handleClosePanel}
           onStartLab={handleStartLab}

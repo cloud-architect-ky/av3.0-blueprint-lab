@@ -20,14 +20,21 @@ interface ModuleDetailPanelProps {
   module: ModuleConfig;
   onClose: () => void;
   onStartLab: (moduleId: string) => void;
+  // Open the Instance Options modal as soon as this panel mounts. Set when the participant
+  // clicks "Start Workspace" on the Pipeline Map header: their workspace is stopped, and
+  // Apply & Restart inside that modal is what starts it.
+  openInstanceOptionsOnMount?: boolean;
 }
 
 export function ModuleDetailPanel({
   module,
   onClose,
   onStartLab,
+  openInstanceOptionsOnMount = false,
 }: ModuleDetailPanelProps): React.JSX.Element {
-  const [showInstanceOptions, setShowInstanceOptions] = useState(false);
+  const [showInstanceOptions, setShowInstanceOptions] = useState(
+    openInstanceOptionsOnMount
+  );
 
   const statusType = module.status === "completed"
     ? "success"

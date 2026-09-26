@@ -312,5 +312,6 @@ M1 (explore, CPU)
 | 오른쪽 상단 버튼이 **Start Workspace** 일 때 | 워크스페이스가 멈춘 상태입니다 — 첫 로그인과 90분 유휴 종료 후에는 정상입니다. 클릭 → 인스턴스 확인 → **Apply & Restart** → **Open Workspace**가 나타나면 클릭. 파일은 스페이스 볼륨에 있어 종료되어도 남습니다. |
 | JupyterLab이 아니라 SageMaker Studio 화면에 도착했을 때 | 대시보드로 돌아가 그쪽 버튼을 쓰세요. 어떤 인스턴스를 썼는지 비용 보고에 기록하는 경로라서 그것이 지원되는 방법입니다. Studio의 **Run space** / **Open JupyterLab**도 자기 워크스페이스에는 동작해야 하지만, 권한 오류가 나면 대시보드를 쓰세요. |
 | 노트북에서 디스크 부족 | Instance Options → +50 GB / +200 GB → Apply. |
+| M5 / M6 가 "GPU MEMORY IS ALREADY IN USE BY ANOTHER PROCESS" 로 멈춤 | **M2**나 **M8**을 실행한 뒤라면 정상입니다. 두 노트북은 7B 모델을 모든 GPU에 걸쳐 올리고 커널이 끝날 때까지 붙잡으며, M5/M6은 카드당 거의 전부가 필요합니다. 이제 중단 메시지가 메모리를 쥔 PID를 나열합니다. 해당 노트북을 열어 마지막 **Release the GPUs** 셀을 실행한 뒤 여기서 Run All Cells 하면 됩니다 — 커널 종료는 필요 없습니다. |
 | 인스턴스 변경 후 노트북 파일 누락 | 재시작이 완료될 때까지 기다린 후 Open Workspace를 다시 클릭합니다(시작 시 노트북이 다시 동기화됨). |
 | "인스턴스를 변경한 후 결과를 잃었나요?" | 아니요 — 결과는 S3에 있고 홈 디렉터리는 유지됩니다; 이전 커널의 메모리만 지워집니다. [인스턴스 변경 시 무엇이 유지되나요?](#what-survives-an-instance-change)를 참조하세요. 새 노트북을 위에서부터 다시 실행하세요. |

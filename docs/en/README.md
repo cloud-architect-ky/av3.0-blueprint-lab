@@ -188,9 +188,28 @@ aws cognito-idp admin-create-user \
 
 # 6. Pre-cache NVIDIA models to S3 (background, 30–60 min)
 AWS_REGION="$REGION" ./scripts/cache_models.sh
-#    M5/M6/M9 additionally need an offline HF cache, M9 a demo clip, and M10 a
-#    one-time GPU-EC2 reference eval — see ADMIN_GUIDE.md §6 and the
-#    per-module deep dives (COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10).
+#    This seeds model-cache/ ONLY (M2, M8). It does NOT seed the HuggingFace offline
+#    cache that M5/M6/M9 read. Step 6b is not optional.
+
+# 6b. Seed the HuggingFace offline cache — REQUIRED for M5, M6, M9, M10.
+#     No script in this repo can build hf-cache/hub/.
+#  IF you already run the lab in another region (the usual case for region #2+):
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+SEEDED=us-west-2                      # a region where the lab already works
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/hf-cache/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/hf-cache/" \
+            --source-region "$SEEDED" --region "$REGION"       # ~115 GiB, 25-55 min
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/m10-reference/" \
+            --source-region "$SEEDED" --region "$REGION"
+#     Sync hf-cache/ — NOT hf-cache/hub/ — or the tree nests one level too deep.
+#  IF this is your FIRST region there is nothing to copy from: follow the one-time
+#  ritual in ADMIN_GUIDE.md §6.3 (run M5/M6/M9 once each on a GPU app with your admin
+#  HF_TOKEN, then sync /mnt/sagemaker-nvme/hf/hub to s3://<shared>/hf-cache/hub/).
+#
+# 6c. VERIFY — must exit 0 BEFORE provisioning anyone. Skipping 6b ships a region
+#     where M5/M6/M9/M10 cannot run, and every other check stays green.
+./scripts/check_seeding.sh --region "$REGION"
 
 # 7. Stage the nuScenes-mini dataset to S3 (required by M1 / M3 / M7)
 AWS_REGION="$REGION" ./scripts/stage_nuscenes.sh

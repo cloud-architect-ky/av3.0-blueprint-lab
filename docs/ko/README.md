@@ -180,9 +180,29 @@ aws cognito-idp admin-create-user \
 
 # 6. NVIDIA 모델을 S3에 사전 캐싱(백그라운드, 30–60분)
 AWS_REGION="$REGION" ./scripts/cache_models.sh
-#    M5/M6/M9은 추가로 오프라인 HF 캐시가 필요하고, M9은 데모 클립이, M10은
-#    일회성 GPU-EC2 레퍼런스 평가가 필요합니다 — docs/ko/ADMIN_GUIDE.md §6 및
-#    모듈별 심화 문서(COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10)를 참고하세요.
+#    이 스크립트는 model-cache/만 채웁니다(M2, M8). M5/M6/M9이 읽는 HuggingFace
+#    오프라인 캐시는 채우지 않습니다. 6b는 선택이 아닙니다.
+
+# 6b. HuggingFace 오프라인 캐시 seeding — M5, M6, M9, M10에 필수.
+#     이 저장소의 어떤 스크립트도 hf-cache/hub/ 를 만들 수 없습니다.
+#  이미 다른 리전에서 랩을 운영 중이라면(두 번째 리전 이후의 일반적인 경우):
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+SEEDED=us-west-2                      # 랩이 이미 동작하는 리전
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/hf-cache/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/hf-cache/" \
+            --source-region "$SEEDED" --region "$REGION"       # 약 115 GiB, 25~55분
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/m10-reference/" \
+            --source-region "$SEEDED" --region "$REGION"
+#     hf-cache/hub/ 가 아니라 hf-cache/ 를 동기화하세요 — 그러지 않으면 트리가 한 단계
+#     더 깊게 중첩되고(hub/hub/) M9 데모 클립이 엉뚱한 곳에 놓입니다.
+#  첫 리전이라면 복사할 원본이 없습니다: ADMIN_GUIDE.md §6.3의 일회성 절차를 따르세요
+#  (관리자 HF_TOKEN으로 GPU 앱에서 M5/M6/M9을 각각 한 번 실행한 뒤
+#   /mnt/sagemaker-nvme/hf/hub 를 s3://<shared>/hf-cache/hub/ 로 동기화).
+#
+# 6c. 검증 — 참가자를 만들기 전에 반드시 exit 0 이어야 합니다. 6b를 건너뛰면
+#     M5/M6/M9/M10이 실행되지 않는 리전이 만들어지는데, 다른 모든 검사는 초록색입니다.
+./scripts/check_seeding.sh --region "$REGION"
 
 # 7. nuScenes-mini 데이터셋을 S3에 스테이징(M1 / M3 / M7에서 필요)
 AWS_REGION="$REGION" ./scripts/stage_nuscenes.sh

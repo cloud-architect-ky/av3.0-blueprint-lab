@@ -139,9 +139,29 @@ aws cognito-idp admin-create-user \
 
 # 6. NVIDIA モデルを S3 に事前キャッシュ（バックグラウンド、30〜60 分）
 AWS_REGION="$REGION" ./scripts/cache_models.sh
-#    M5/M6/M9 は追加でオフライン HF キャッシュが、M9 はデモクリップが、M10 は
-#    一度きりの GPU-EC2 リファレンス評価が必要です — docs/ja/ADMIN_GUIDE.md §6 および
-#    モジュール別の詳細解説（COSMOS_M5_M6、ALPAMAYO_M9、ALPASIM_M10）を参照してください。
+#    このスクリプトは model-cache/ のみ（M2、M8）を投入します。M5/M6/M9 が読む
+#    HuggingFace オフラインキャッシュは投入しません。6b は任意ではありません。
+
+# 6b. HuggingFace オフラインキャッシュの投入 — M5、M6、M9、M10 に必須。
+#     このリポジトリのどのスクリプトも hf-cache/hub/ を構築できません。
+#  すでに別リージョンでラボを運用している場合（2 つ目以降の一般的なケース）:
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+SEEDED=us-west-2                      # ラボが既に動作しているリージョン
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/hf-cache/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/hf-cache/" \
+            --source-region "$SEEDED" --region "$REGION"       # 約 115 GiB、25〜55 分
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/m10-reference/" \
+            --source-region "$SEEDED" --region "$REGION"
+#     hf-cache/hub/ ではなく hf-cache/ を同期してください — さもないとツリーが 1 階層
+#     深く入れ子になり（hub/hub/）、M9 のデモクリップが誤った場所に置かれます。
+#  最初のリージョンならコピー元がありません: ADMIN_GUIDE.md §6.3 の一度きりの手順に
+#  従ってください（管理者の HF_TOKEN で GPU アプリ上で M5/M6/M9 を各 1 回実行し、
+#  /mnt/sagemaker-nvme/hf/hub を s3://<shared>/hf-cache/hub/ へ同期）。
+#
+# 6c. 検証 — 参加者を作成する前に必ず exit 0 になること。6b を飛ばすと
+#     M5/M6/M9/M10 が動かないリージョンができ、他のすべての検査は緑のままです。
+./scripts/check_seeding.sh --region "$REGION"
 
 # 7. nuScenes-mini データセットを S3 にステージング（M1 / M3 / M7 で必須）
 AWS_REGION="$REGION" ./scripts/stage_nuscenes.sh

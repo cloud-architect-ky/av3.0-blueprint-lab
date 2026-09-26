@@ -194,9 +194,33 @@ aws cognito-idp admin-create-user \
 
 # 6. Pre-cache NVIDIA models to S3 (background, 30–60 min)
 AWS_REGION="$REGION" ./scripts/cache_models.sh
-#    M5/M6/M9 additionally need an offline HF cache, M9 a demo clip, and M10 a
-#    one-time GPU-EC2 reference eval — see docs/en/ADMIN_GUIDE.md §6 and the
-#    per-module deep dives (COSMOS_M5_M6, ALPAMAYO_M9, ALPASIM_M10).
+#    This seeds model-cache/ ONLY (M2, M8). It does NOT seed the HuggingFace offline
+#    cache that M5/M6/M9 read. Step 6b is not optional — see the warning below.
+
+# 6b. Seed the HuggingFace offline cache — REQUIRED for M5, M6, M9, M10.
+#     No script in this repo can build hf-cache/hub/. Which path applies depends on
+#     whether you already have a working region:
+#
+#  IF you already run the lab in another region (the usual case for region #2+):
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+SEEDED=us-west-2                      # a region where the lab already works
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/hf-cache/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/hf-cache/" \
+            --source-region "$SEEDED" --region "$REGION"       # ~115 GiB, 25-55 min
+aws s3 sync "s3://av30lab-shared-data-$ACCOUNT-$SEEDED/m10-reference/" \
+            "s3://av30lab-shared-data-$ACCOUNT-$REGION/m10-reference/" \
+            --source-region "$SEEDED" --region "$REGION"
+#     Sync hf-cache/ — NOT hf-cache/hub/ — or the tree nests one level too deep and
+#     M9's demo clip lands in the wrong place.
+#
+#  IF this is your FIRST region, there is nothing to copy from: follow the one-time
+#  ritual in docs/en/ADMIN_GUIDE.md §6.3 (run M5, M6 and M9 once each on a GPU app
+#  with your admin HF_TOKEN, then sync /mnt/sagemaker-nvme/hf/hub up to
+#  s3://<shared>/hf-cache/hub/, plus M9's demo clip). This is what Step 2b's license
+#  acceptance and the HF_TOKEN above are for.
+#
+# 6c. VERIFY — do not infer. Must exit 0 BEFORE you provision any participant.
+./scripts/check_seeding.sh --region "$REGION"        # add --source-region "$SEEDED" to compare checksums
 
 # 7. Stage the nuScenes-mini dataset to S3
 #    Required by M1, M2, M3, M5, M6, M7, M8, M9. M8 hard-fails without the annotation
@@ -214,6 +238,17 @@ aws s3 sync notebooks/ "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templ
 aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templates/scripts/" \
     --region "$REGION" --exclude "*__pycache__*" --exclude "*.pyc"
 ```
+
+> **Steps 6b and 6c are the two that get skipped, and skipping them ships a broken
+> region.** Every other step here is a runnable command that succeeds; the HuggingFace
+> offline cache is the one artifact no script in this repo produces, so it used to appear
+> only as a prose aside pointing at another document. Measured on 2026-09-26: an
+> ap-northeast-2 deployment that ran steps 1-8 and skipped 6b came up with **M5, M6, M9
+> and M10 unable to run**. `deploy.sh` reported success, all 15 of its guards were green,
+> and the Day-1 smoke test passed — because it exercises M1 and M2, the only two modules
+> `cache_models.sh` covers. The first thing to notice was a participant four modules in,
+> holding a $8.72/hr GPU. `check_seeding.sh` (6c) is what makes that state visible in
+> seconds instead.
 
 Then open the **Admin Dashboard URL** printed by `deploy.sh`, log in with the
 email + temporary password from Step 5, provision a test user, and open the

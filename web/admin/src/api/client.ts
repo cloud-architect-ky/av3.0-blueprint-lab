@@ -4,10 +4,30 @@ export interface User {
   userId: string;
   name: string;
   email: string;
-  status: "active" | "idle" | "offline" | "provisioning";
+  /**
+   * Auth/lifecycle state from the session row. "deleting" and "delete-failed" are
+   * written by delete_user's two paths: the request path marks the row before handing
+   * the teardown to an async self-invocation, and the tail either removes the row or
+   * leaves it as "delete-failed" with lastDeleteError set.
+   */
+  status:
+    | "active"
+    | "idle"
+    | "offline"
+    | "provisioning"
+    | "deleting"
+    | "delete-failed";
   module: string;
   workspaceUrl: string;
   createdAt: string;
+  /**
+   * Why the last teardown stopped, present only alongside status "delete-failed".
+   * Load-bearing rather than cosmetic: the teardown runs asynchronously, so there is no
+   * HTTP response left to carry the reason, and an incomplete OpenSearch Serverless
+   * cleanup leaves a collection billing at its 2-OCU floor. Pressing Delete again
+   * retries — every step swallows ResourceNotFound, so it resumes where it stopped.
+   */
+  lastDeleteError?: string;
   // Durable participant token used to build the user dashboard link. Optional
   // because rows provisioned before this field was added won't have it.
   participantToken?: string;
@@ -97,11 +117,28 @@ export interface TerminateSessionResult {
   detail?: string;
 }
 
-/** Body of DELETE /users/{id}. */
+/**
+ * Body of DELETE /users/{id}.
+ *
+ * `deleted` is FALSE on the happy path. The route only starts the teardown: it issues
+ * the app delete, marks the row "deleting" and hands the rest to an async
+ * self-invocation, because the full teardown measured 32.5s for a user with a running
+ * GPU app and API Gateway's REST integration is capped at 29s. Watch GET /users for the
+ * row to disappear (success) or turn "delete-failed" (with lastDeleteError).
+ *
+ * `filesDeleted` and `aoss` therefore only appear on legacy synchronous responses;
+ * neither is available when the work has merely been dispatched.
+ */
 export interface DeleteUserResult {
   deleted: boolean;
   userId: string;
-  filesDeleted: number;
+  filesDeleted?: number;
+  /** True when the teardown was handed to the async tail rather than completed here. */
+  async?: boolean;
+  /** True when a teardown for this user was already running; nothing new was started. */
+  alreadyInProgress?: boolean;
+  /** Whether an app was actually running and had to be shut down first. */
+  appWasRunning?: boolean;
   /**
    * OpenSearch Serverless teardown, which is deliberately best-effort so an AOSS
    * hiccup cannot block the SageMaker/S3/DynamoDB teardown. `complete: false` means a

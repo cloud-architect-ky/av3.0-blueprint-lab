@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useRef } from "react";
 import {
   Box,
   Button,
@@ -11,7 +11,7 @@ import {
   Table,
   TextFilter,
 } from "@cloudscape-design/components";
-import { apiClient, User } from "../api/client";
+import { apiClient, ApiError, User } from "../api/client";
 import { participantLink } from "../config";
 import { useAuth } from "../auth/CognitoProvider";
 import { FlashContext } from "../App";
@@ -19,6 +19,12 @@ import { ProvisionModal } from "../components/ProvisionModal";
 import { BulkUploadModal } from "../components/BulkUploadModal";
 
 const PAGE_SIZE = 20;
+
+// Delete runs asynchronously server-side; these bound the wait for its outcome.
+// The deadline exceeds the backend's worst case (app 240s + space 180s + profile 180s
+// = 600s) so a slow-but-healthy teardown is reported as done, not as a timeout.
+const DELETE_POLL_MS = 5_000;
+const DELETE_POLL_DEADLINE_MS = 12 * 60 * 1_000;
 
 export function UsersPage() {
   const { idToken } = useAuth();
@@ -51,6 +57,17 @@ export function UsersPage() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  // Stops delete polling when this page unmounts. A teardown can outlive the admin's
+  // visit to the Users tab, and the loop would otherwise keep refetching and writing
+  // state for a component nobody is looking at.
+  const pollCancelled = useRef(false);
+  useEffect(() => {
+    pollCancelled.current = false;
+    return () => {
+      pollCancelled.current = true;
+    };
+  }, []);
 
   const handleReset = async (userId: string) => {
     if (!idToken) return;
@@ -86,33 +103,110 @@ export function UsersPage() {
     }
   };
 
+  /**
+   * Poll GET /users until the row for `userId` disappears (teardown finished) or turns
+   * "delete-failed" (teardown stopped, reason on the row).
+   *
+   * Needed because DELETE /users/{id} no longer completes the work: it dispatches an
+   * async teardown and returns in under a second. The response therefore cannot say
+   * whether the delete succeeded — only the row can.
+   *
+   * A listUsers failure mid-poll is skipped rather than fatal: the teardown is running
+   * server-side regardless, so one failed refresh is not an outcome.
+   */
+  const waitForDeletion = async (
+    token: string,
+    userId: string
+  ): Promise<{ outcome: "gone" | "failed" | "timeout" | "cancelled"; error?: string }> => {
+    const deadline = Date.now() + DELETE_POLL_DEADLINE_MS;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, DELETE_POLL_MS));
+      if (pollCancelled.current) return { outcome: "cancelled" };
+      let latest: User[];
+      try {
+        latest = await apiClient.listUsers(token);
+      } catch {
+        continue;
+      }
+      if (pollCancelled.current) return { outcome: "cancelled" };
+      setUsers(latest);
+      const row = latest.find((u) => u.userId === userId);
+      if (!row) return { outcome: "gone" };
+      if (row.status === "delete-failed") {
+        return { outcome: "failed", error: row.lastDeleteError };
+      }
+    }
+    return { outcome: "timeout" };
+  };
+
+  /**
+   * Delete a user and follow the teardown to its actual end.
+   *
+   * MEASURED (2026-09-26): the old version reported a COMPLETE, CORRECT delete as
+   * "Delete failed". The teardown ran on the request path and took 32.5s for a user whose
+   * GPU app was up, against API Gateway's 29s integration cap, so the browser got a 504
+   * four seconds before the Lambda succeeded. The modal stayed open and the list was never
+   * refreshed (both happened only inside the try), so the admin re-clicked Delete and got
+   * "404 User not found" — the row had already gone. Three times.
+   *
+   * So: the modal closes and the list refreshes on EVERY outcome, a 404 counts as already
+   * deleted rather than an error, and success is decided by the row disappearing.
+   */
   const handleDelete = async (user: User) => {
     if (!idToken) return;
     setDeletingUserId(user.userId);
+    setConfirmDeleteUser(null);
     try {
       const res = await apiClient.deleteUser(idToken, user.userId);
-      // The OpenSearch Serverless teardown is best-effort and CAN fail while the rest
-      // of the delete succeeds. Reporting an unconditional "deleted" here hid exactly
-      // that case, leaving a collection billing at its 2-OCU floor with nothing on
-      // screen to say so. Show the AWS error codes and point at the sweeper.
-      if (res?.aoss && res.aoss.complete === false) {
+
+      // Defensive: a browser holding an older bundle can reach a backend that still
+      // completed the teardown synchronously. Then there is nothing to wait for.
+      if (res?.deleted) {
+        addFlash({ type: "success", content: `User ${user.name} deleted.` });
+        await fetchUsers();
+        return;
+      }
+
+      addFlash({
+        type: "info",
+        content: res?.alreadyInProgress
+          ? `A delete for ${user.name} was already running; waiting for it to finish.`
+          : `Deleting ${user.name}. Shutting down their workspace, space and profile ` +
+            `takes about a minute${res?.appWasRunning ? " — their app was running" : ""}.`,
+      });
+      await fetchUsers(); // flip the row to "deleting" without waiting for the first poll
+
+      const { outcome, error } = await waitForDeletion(idToken, user.userId);
+      if (outcome === "gone") {
+        addFlash({ type: "success", content: `User ${user.name} deleted.` });
+      } else if (outcome === "failed") {
+        addFlash({
+          type: "error",
+          content:
+            `Deleting ${user.name} stopped partway: ${error || "reason not recorded"} ` +
+            `Press Delete again to resume — every step is idempotent.`,
+        });
+      } else if (outcome === "timeout") {
         addFlash({
           type: "warning",
           content:
-            `User ${user.name} deleted, but the OpenSearch Serverless cleanup did not ` +
-            `complete (${res.aoss.reasons.join(", ") || "unknown"}). Collection ` +
-            `"${res.aoss.collection}" may still exist and bill. ConflictException is ` +
-            `normal right after a delete — run scripts/teardown.sh to sweep it. ` +
-            `Anything else (e.g. AccessDeniedException) needs attention.`,
+            `Still deleting ${user.name} after several minutes. It is running in the ` +
+            `background; reload this page to see the result.`,
         });
-      } else {
-        addFlash({ type: "success", content: `User ${user.name} deleted.` });
       }
-      setConfirmDeleteUser(null);
-      await fetchUsers();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      addFlash({ type: "error", content: `Delete failed: ${message}` });
+      // 404 = the row is already gone, which for a delete is the goal, not a failure.
+      // This is the exact banner the admin saw after a delete that had succeeded.
+      if (err instanceof ApiError && err.statusCode === 404) {
+        addFlash({
+          type: "info",
+          content: `${user.name} was already deleted. Refreshing the list.`,
+        });
+      } else {
+        addFlash({ type: "error", content: `Delete failed: ${message}` });
+      }
+      await fetchUsers();
     } finally {
       setDeletingUserId(null);
     }
@@ -125,7 +219,10 @@ export function UsersPage() {
       case "idle":
         return "warning";
       case "provisioning":
+      case "deleting":
         return "in-progress";
+      case "delete-failed":
+        return "error";
       default:
         return "stopped";
     }
@@ -214,10 +311,21 @@ export function UsersPage() {
           {
             id: "status",
             header: "Status",
+            // lastDeleteError is shown INLINE, not as a flash: the teardown is async, so
+            // the reason arrives long after any request the admin made, and a failed
+            // OpenSearch Serverless cleanup keeps billing at its 2-OCU floor until
+            // someone acts on it. It has to stay on screen.
             cell: (u) => (
-              <StatusIndicator type={statusType(u.status)}>
-                {u.status}
-              </StatusIndicator>
+              <SpaceBetween size="xxxs">
+                <StatusIndicator type={statusType(u.status)}>
+                  {u.status}
+                </StatusIndicator>
+                {u.status === "delete-failed" && u.lastDeleteError ? (
+                  <Box fontSize="body-s" color="text-status-error">
+                    {u.lastDeleteError}
+                  </Box>
+                ) : null}
+              </SpaceBetween>
             ),
             sortingField: "status",
           },

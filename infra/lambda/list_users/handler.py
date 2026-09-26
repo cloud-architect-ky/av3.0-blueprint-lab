@@ -72,6 +72,13 @@ def handler(event, context):
                 # storage and cost all live somewhere else. "" for rows provisioned
                 # before the attribute existed.
                 "region": item.get("region", ""),
+                # Why the last teardown stopped, set only with status "delete-failed".
+                # delete_user hands its slow tail to an async self-invocation, so there
+                # is no HTTP response left to report a failure through — this row IS the
+                # report. Omitting it would leave a user stuck in a failed-delete state
+                # with nothing on screen to say why, and an incomplete OpenSearch
+                # Serverless cleanup billing at its 2-OCU floor.
+                "lastDeleteError": item.get("lastDeleteError", ""),
             }
         )
 

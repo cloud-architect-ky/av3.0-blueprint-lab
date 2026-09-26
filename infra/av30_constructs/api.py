@@ -221,11 +221,17 @@ class ApiConstruct(Construct):
         reset_workspace_fn = self._create_lambda(
             "ResetWorkspaceFn", handler_dir="reset_workspace", environment=shared_env
         )
+        # 15-min timeout + retry_attempts=0 for the same reason as change_instance
+        # below: delete_user returns fast and self-invokes the slow teardown tail.
+        # That tail waits out three sequential SageMaker deletions (app 240s + space
+        # 180s + profile 180s = 600s worst case), which the old 5-min timeout would
+        # kill part-way through — leaving an orphaned space or profile behind.
         delete_user_fn = self._create_lambda(
             "DeleteUserFn",
             handler_dir="delete_user",
             environment=shared_env,
-            timeout=Duration.minutes(5),
+            timeout=Duration.minutes(15),
+            retry_attempts=0,
         )
         bulk_provision_fn = self._create_lambda(
             "BulkProvisionFn",
@@ -361,17 +367,21 @@ class ApiConstruct(Construct):
         for fn in sagemaker_admin_functions:
             fn.add_to_role_policy(sagemaker_policy)
 
-        # Self-invoke (async): change_instance / expand_storage return fast on
-        # the request path and self-invoke with InvocationType='Event' to run
-        # the slow delete->wait->update->wait->create tail (avoids the 29s API
-        # Gateway 504). Grant each function permission to invoke ITSELF. Build
-        # the ARN from the LITERAL function name (not fn.function_arn) to avoid a
-        # Role<->Function circular reference: referencing fn.function_arn would
-        # make the role's policy depend on the function while the function
-        # already depends on the role.
+        # Self-invoke (async): change_instance / expand_storage / delete_user return
+        # fast on the request path and self-invoke with InvocationType='Event' to run
+        # their slow tail (avoids the 29s API Gateway 504). Grant each function
+        # permission to invoke ITSELF. Build the ARN from the LITERAL function name
+        # (not fn.function_arn) to avoid a Role<->Function circular reference:
+        # referencing fn.function_arn would make the role's policy depend on the
+        # function while the function already depends on the role.
+        #
+        # The literal names must match _create_lambda's function_name exactly. A typo
+        # here is silent at synth AND at deploy: it only surfaces as an AccessDenied
+        # inside the handler, at which point the tail never runs at all.
         for fn, fn_name in (
             (change_instance_fn, "av30-change-instance"),
             (expand_storage_fn, "av30-expand-storage"),
+            (delete_user_fn, "av30-delete-user"),
         ):
             self_arn = stack.format_arn(
                 service="lambda",

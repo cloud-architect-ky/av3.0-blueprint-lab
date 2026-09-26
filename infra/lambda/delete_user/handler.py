@@ -11,12 +11,39 @@ Tears down everything create_user provisioned, in dependency order:
 
 This is a HARD delete and cannot be undone. Every SageMaker step is idempotent
 (ResourceNotFound is swallowed) so a retry after a partial failure resumes cleanly.
+
+Split into a fast synchronous request path and an asynchronous continuation, for
+the same reason change_instance is:
+
+* Sync path (`_http_handler`): look the user up, issue delete_app (instant,
+  async server-side), mark the row `deleting`, self-invoke with
+  InvocationType='Event' and return immediately.
+
+* Async path (`_delete_async`): the three sequential SageMaker waits (app 240s +
+  space 180s + profile 180s) plus AOSS/S3/DynamoDB. Needs the function's full
+  timeout, which is why api.py gives it 15 minutes.
+
+MEASURED (ap-northeast-2, 2026-09-26) — why this had to change: the teardown ran
+entirely on the request path and took 32.5s for a user whose GPU app was running,
+while API Gateway's REST integration is capped at 29s. The browser got a 504 with
+no CORS headers 4s before the Lambda succeeded, so a COMPLETE, CORRECT delete was
+reported to the admin as a failure. They then clicked Delete again three times and
+got "404 User not found" each time — the row was already gone. An earlier delete of
+a user with no running app finished in 22.5s and looked fine, so the bug only
+appeared once a real workshop instance was up: the more expensive the resource, the
+more likely the delete looks broken.
+
+`status = "deleting"` is load-bearing beyond display: token_authorizer requires
+`status == "active"`, so writing it revokes the participant's dashboard token the
+moment teardown starts.
 """
 
+import json
 import logging
 import os
 import sys
 import time
+from datetime import datetime, timezone
 
 import boto3
 
@@ -39,9 +66,17 @@ sagemaker = boto3.client("sagemaker")
 s3 = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 aoss = boto3.client("opensearchserverless")
+lambda_client = boto3.client("lambda")  # for the async self-invoke
 
 # App type for user compute (JupyterLab spaces, matching create_user).
 APP_TYPE = "JupyterLab"
+
+# How long a row may sit in `deleting` before a repeat Delete is allowed to dispatch
+# a fresh teardown. Must exceed the async path's worst case (app 240s + space 180s +
+# profile 180s = 600s) so a healthy in-flight delete is never duplicated, and stay
+# under the function's 15-min timeout so a genuinely dead invocation is recoverable
+# from the UI instead of needing a console visit.
+STALE_DELETE_SECONDS = 720
 
 
 def cleanup_aoss(user_id: str) -> dict:
@@ -216,9 +251,55 @@ def delete_user_workspace(user_id: str) -> int:
     return deleted_count
 
 
-@api_handler
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _deleting_age_seconds(started_iso) -> float:
+    """Seconds since a teardown was marked in-flight; +inf when unknown.
+
+    Unknown (missing/unparseable timestamp) returns infinity ON PURPOSE: that means
+    "treat as stale, allow a retry". The opposite default would make a row whose
+    timestamp we cannot read permanently undeletable from the UI.
+    """
+    if not started_iso:
+        return float("inf")
+    try:
+        started = datetime.fromisoformat(str(started_iso))
+    except ValueError:
+        return float("inf")
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - started).total_seconds()
+
+
+def _record_delete_failure(user_id: str, message: str) -> None:
+    """Leave the row visible with the reason, so a failed teardown is not silent.
+
+    Never raises: it is called from the async path's except block, and a failure to
+    record a failure must not replace it with a different one.
+    """
+    try:
+        dynamodb.Table(SESSIONS_TABLE_NAME).update_item(
+            Key={"userId": user_id},
+            UpdateExpression="SET #s = :s, lastDeleteError = :e",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={":s": "delete-failed", ":e": message[:900]},
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Could not record delete failure for {user_id}: {e}")
+
+
 def handler(event, context):
-    """Permanently delete a workshop user and all of their resources."""
+    """Dispatch: async continuation vs. synchronous HTTP request."""
+    if isinstance(event, dict) and event.get("_async_delete"):
+        return _delete_async(event)
+    return _http_handler(event, context)
+
+
+@api_handler
+def _http_handler(event, context):
+    """Sync request path: validate, issue the app delete, self-invoke, return fast."""
     path_params = event.get("pathParameters") or {}
     user_id = path_params.get("id") or path_params.get("userId")
 
@@ -237,14 +318,102 @@ def handler(event, context):
 
     space_name = item.get("spaceName", f"{user_id}-space")
 
-    # 1. Delete the JupyterLab app, then wait for it to fully shut down.
-    #    safe_delete_app tolerates "no app" and "app previously failed +
-    #    auto-deleted" (ValidationException).
-    if safe_delete_app(sagemaker, SAGEMAKER_DOMAIN_ID, space_name, APP_TYPE):
-        logger.info(f"Deleting app for space: {space_name}")
-        wait_for_app_deleted(space_name)
+    # Repeat click while a teardown is already running: report it instead of starting a
+    # second one. Two concurrent teardowns race on the same space — the loser calls
+    # delete_space on a space already DELETING, which is not a ResourceNotFound and so
+    # would surface as a hard failure on a delete that is in fact succeeding.
+    if item.get("status") == "deleting":
+        age = _deleting_age_seconds(item.get("deleteStartedAt"))
+        if age < STALE_DELETE_SECONDS:
+            logger.info(f"Delete already in progress for {user_id} ({age:.0f}s ago)")
+            return {
+                "deleted": False,
+                "async": True,
+                "alreadyInProgress": True,
+                "userId": user_id,
+            }
+        logger.warning(
+            f"Previous delete for {user_id} started {age:.0f}s ago and never "
+            "finished; dispatching a fresh teardown"
+        )
+
+    # Issue the app delete SYNCHRONOUSLY (instant, async server-side) so the app flips
+    # to Deleting before we return. safe_delete_app tolerates "no app" and "app
+    # previously failed + auto-deleted" (ValidationException).
+    app_was_running = safe_delete_app(
+        sagemaker, SAGEMAKER_DOMAIN_ID, space_name, APP_TYPE
+    )
+    if app_was_running:
+        logger.info(f"Issued app delete for space: {space_name}")
     else:
         logger.warning(f"No live app for space: {space_name}, proceeding")
+
+    # Mark the row before handing off. Also revokes the participant's dashboard token
+    # (token_authorizer requires status == "active"), which is what we want: their
+    # workspace is being torn down. lastDeleteError is cleared so a retry after a
+    # failure does not keep showing the old reason.
+    table.update_item(
+        Key={"userId": user_id},
+        UpdateExpression=(
+            "SET #s = :s, deleteStartedAt = :t REMOVE lastDeleteError"
+        ),
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={":s": "deleting", ":t": _now_iso()},
+    )
+
+    lambda_client.invoke(
+        FunctionName=context.invoked_function_arn,
+        InvocationType="Event",
+        Payload=json.dumps(
+            {
+                "_async_delete": True,
+                "userId": user_id,
+                "spaceName": space_name,
+            }
+        ).encode("utf-8"),
+    )
+    logger.info(f"Dispatched async teardown for {user_id}")
+
+    return {
+        "deleted": False,
+        "async": True,
+        "userId": user_id,
+        "appWasRunning": app_was_running,
+    }
+
+
+def _delete_async(event):
+    """Slow continuation: wait out the SageMaker deletes, then AOSS, S3 and the row.
+
+    Not @api_handler-decorated: there is no HTTP caller to answer.
+
+    DELIBERATELY DOES NOT RAISE. Lambda retries a failed async invocation twice by
+    default, and a retry mid-teardown would call delete_space/delete_user_profile
+    against resources already in DELETING — not a ResourceNotFound, so it would fail
+    differently on every attempt. A handled failure returns normally (no retry) and is
+    recorded on the row as `delete-failed` + lastDeleteError, where the admin can see
+    it and press Delete again: every step swallows ResourceNotFound, so the retry
+    resumes from wherever the first attempt stopped.
+    """
+    user_id = event["userId"]
+    space_name = event["spaceName"]
+
+    logger.info(f"[async] Tearing down {user_id}")
+
+    try:
+        return _teardown(user_id, space_name)
+    except Exception as e:  # noqa: BLE001 — see docstring
+        logger.error(f"[async] Teardown failed for {user_id}: {e}")
+        _record_delete_failure(user_id, f"{type(e).__name__}: {e}")
+        return {"deleted": False, "userId": user_id, "error": str(e)}
+
+
+def _teardown(user_id: str, space_name: str) -> dict:
+    """The teardown proper, in dependency order. Called only from _delete_async."""
+    table = dynamodb.Table(SESSIONS_TABLE_NAME)
+
+    # 1. The app delete was already issued on the request path; wait for it to finish.
+    wait_for_app_deleted(space_name)
 
     # 2. Delete the space (only possible once the app is gone).
     try:
@@ -273,6 +442,38 @@ def handler(event, context):
     # 5. Delete the user's S3 workspace files.
     files_deleted = delete_user_workspace(user_id)
     logger.info(f"Deleted {files_deleted} S3 objects for user: {user_id}")
+
+    # An orphaned AOSS collection bills at a 2-OCU floor indefinitely, so incomplete
+    # cleanup must not vanish with the row. It used to ride back in the HTTP response as
+    # a warning flash; on the async path there is no response to carry it, so the ROW is
+    # the warning — kept as delete-failed, with Delete re-running the (idempotent) sweep.
+    #
+    # ConflictException is EXCLUDED because it is the NORMAL outcome: delete_collection is
+    # async, and the three policies cannot be dropped until the collection leaves DELETING.
+    # Treating it as a failure would leave a ghost row after every delete of a participant
+    # who ran M4 — an alarm that always fires is one nobody reads. teardown.sh's global
+    # AOSS sweep is the documented backstop for exactly that case.
+    blocking = [r for r in aoss_result["reasons"] if "ConflictException" not in r]
+    if blocking:
+        reason = (
+            f"OpenSearch Serverless cleanup incomplete ({', '.join(blocking)}). "
+            f'Collection "{aoss_result["collection"]}" may still exist and bill. '
+            "Everything else was deleted; press Delete again to retry the sweep."
+        )
+        logger.error(f"[async] {user_id}: {reason}")
+        _record_delete_failure(user_id, reason)
+        return {
+            "deleted": False,
+            "userId": user_id,
+            "filesDeleted": files_deleted,
+            "aoss": aoss_result,
+            "error": reason,
+        }
+    if aoss_result["reasons"]:
+        logger.warning(
+            f"[async] {user_id}: AOSS policies still referenced by the DELETING "
+            f"collection ({', '.join(aoss_result['reasons'])}); teardown.sh sweeps them"
+        )
 
     # 6. Delete the DynamoDB session row (last, so a mid-teardown retry can
     #    still look the user up and resume).

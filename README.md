@@ -77,6 +77,30 @@ anything**. (Account-specific identifiers have been replaced with placeholders.)
 > `M9`→M12, `M10`→M7; M0–M3 and M11 are unchanged. The new **M8** (Cosmos Reason
 > LoRA SFT) is not in the bundle — it has no captured run yet.
 
+**Verified end-to-end run.** The table below is a measured record, not a claim — every
+number came from the deployed account after the run finished.
+
+| | |
+|---|---|
+| Region | `ap-northeast-2` (Seoul) |
+| Instance | `ml.g5.12xlarge` — 4× A10G, 96 GB total |
+| Space volume | 200 GB (the domain default) |
+| Date | 2026-09-27 |
+| Modules | **M0 → M12, all 12 progress markers `completed`**, no module halted |
+| Outputs | 72 objects across `m1`–`m12` in the participant workspace (M8 the largest at 154.5 MiB) |
+
+`m10` has no prefix of its own on purpose: M10 is a visualizer over the admin's
+`m10-reference/` eval, so it writes nothing per participant.
+
+Four prerequisites were required to get there, and each was a real failure first — treat
+them as part of the setup, not as trivia:
+
+1. `hf-cache/` seeded **in this region** (README step 6b). Without it M5/M6/M9 die seconds
+   into `torchrun` on a gated-repo refusal.
+2. The 200 GB space volume. The old 5 GB default runs out during the Cosmos builds.
+3. `USE_TORCH=1` in M2/M4/M8, which keeps TensorFlow out of the transformers import chain.
+4. Awareness that M7 downgrades `protobuf` for the rest of the app session (M7 now says so).
+
 **Admin dashboard.** The admin adds or removes participants here. Each row's
 **Dashboard Link → Copy link** copies that participant's personal dashboard URL to
 hand out, and the read-only **Region** column records the region the profile was

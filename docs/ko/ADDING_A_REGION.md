@@ -304,24 +304,50 @@ AWS_REGION=$R ./scripts/stage_nuscenes.sh                      # 공개 미러, 
 AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh        # 약 157 GiB 재다운로드
 ```
 
+> **이 두 스크립트는 위 4줄 중 2줄만 대체합니다.** `cache_models.sh`는 `model-cache/`만,
+> `stage_nuscenes.sh`는 `datasets/`만 씁니다. 둘 중 무엇도 `hf-cache/`를 만들지 못하고,
+> 그 트리를 만드는 것은 **`scripts/cache_hf_tree.sh`** 입니다(관리자 `HF_TOKEN` 필요).
+> `hf-cache/`는 HuggingFace *오프라인 캐시* 레이아웃(`models--org--name/snapshots/<sha>/…`)인데
+> `cache_models.sh`는 `hf download --local-dir`의 평면 구조를 씁니다. `m10-reference/`도
+> 생산 스크립트가 없으니 복사해야 합니다.
+>
+> 가정이 아닙니다. 2026-09-26에 ap-northeast-2를 위 블록 대신 `cache_models.sh`로 시딩했고,
+> 스크립트는 깔끔하게 끝났고 `deploy.sh`도 성공을 보고했고 Day-1 스모크 테스트(M1 + M2 —
+> 그 프리픽스가 커버하는 유일한 두 모듈)도 통과했는데, 리전은 **M5·M6·M9·M10이 실행되지 않는
+> 상태로** 출하됐습니다. 참가자가 네 모듈 진행한 뒤에야 발견됐습니다. 아래 10번을 실행하세요.
+
 us-west-2 원본 버킷에서 실측한 값:
 
 | 프리픽스 | 크기 | 객체 수 | 없으면 깨지는 모듈 |
 |---|---|---|---|
 | `notebook-templates/` | 0.55 MiB | 31 | **전부** — 프로비저닝이 즉시 실패 |
 | `datasets/` (nuScenes-mini) | 5.01 GiB | 31,225 | M1, M2, M3, M5, M6, M7, M8, M9 |
-| `model-cache/` | 157.45 GiB | 1,707 | M2, M8, M9 |
+| `model-cache/` | 157.45 GiB | 1,707 | M2, M8 |
 | `hf-cache/` | 115.00 GiB | 481 | M5, M6, M9 |
 | `m10-reference/` | 0.03 GiB | 16 | M10 시각화 |
-| `m8-lora-probe/` | 3 KiB | 1 | 읽는 노트북이 없음 — 완전성을 위해 스테이징 |
 | **합계** | **277.49 GiB** | **33,457** | |
+
+`m8-lora-probe/`(1객체, 3 KiB)는 **의도적으로 제외**했습니다. 일회성 probe가 남긴 날짜 붙은
+SageMaker 학습 잡 `sourcedir.tar.gz`이고 읽는 노트북이 없으며, 도달 불가한 프리픽스를 표에
+올리면 표 전체를 참고용으로 읽게 만듭니다 — 그 독법이 `hf-cache/`를 건너뛰게 한 원인입니다.
 
 추측이 아니라 노트북을 읽어서 확인한 사항: M5와 M6은 `scripts/setup_cosmos_env.sh`를
 통해 `hf-cache/hub/`를 **간접적으로** 사용하므로, 두 노트북에서 프리픽스를 grep해도
-나오지 않습니다. **없을 때의 실패 방식이 에러가 아닙니다** — `setup_cosmos_env.sh`는
-`WARNING: restore failed; will fall back to online/token download`를 남기고, 그 폴백은
-참가자에게 없는 `HF_TOKEN`과 gated 라이선스 동의를 요구합니다. 즉 `hf-cache/`를
-시딩하지 않으면 M5/M6/M9은 깔끔한 실패가 아니라 참가자별 토큰 구하기로 변합니다.
+나오지 않습니다. **없을 때 실제로 일어나는 일**(실측, ap-northeast-2, 2026-09-26 — 이전 서술은 두 군데가
+틀렸습니다):
+
+* `setup_cosmos_env.sh`는 이제 `=== STOP ===` 블록으로 멈추고 첫 줄이
+  `Reason : no HF cache at <uri> (prefix does not exist in this region)` 입니다. `HF_TOKEN`이
+  있으면 대신 진행하며 `[hf-cache] No usable offline cache (…)`를 남깁니다. 어느 쪽도 이전
+  판이 grep하라고 했던 `WARNING: restore failed…`가 아닙니다 — 그건 항상 *다른* 분기
+  (`aws s3 sync` 실패)였고, 그 문자열을 찾는 운영자는 아무것도 못 찾습니다.
+* 수정 전에는 **참가자별 토큰 구하기가 아니라 침묵**이었습니다. 스크립트가 exit 0으로 끝나
+  노트북이 "environment ready"를 출력하고, 15~20분 뒤 M5가 `torchrun` 안에서 4초 만에
+  `ChildFailedError`로 죽는데 유일하게 보이는 조언이 CUDA out-of-memory였습니다. HuggingFace
+  401은 캡처된 stderr에 있었지만 노트북이 출력한 25줄 창 밖이었습니다.
+* 이제는 사용 가능한 캐시도 `HF_TOKEN`도 없으면 **시작 자체를 거부**하고(exit 2) 두 가지
+  해결책을 알려줍니다. 즉 시딩되지 않은 리전은 GPU 시간을 쓰기 전에 몇 초 만에 실패합니다 —
+  그래도 실패입니다. 프리픽스를 시딩하세요.
 
 비용: ap-northeast-2에서 대략 **1회성 $5.73**(전송 + 요청)과 스토리지 **$6.94/month**
 *(전송/요청 단가는 정가이며, 서울 스토리지 요율 $0.025/GB-mo는 API로 확인했습니다)*.
@@ -382,6 +408,22 @@ us-west-2 원본 버킷에서 실측한 값:
    변하지 않았는지.
 9. **이미 있던 리전이 그대로인지:** 그 스택은 여전히 `UPDATE_COMPLETE`, 예산은 여전히
    존재, `apigateway get-account`도 그대로.
+
+10. **데이터가 실제로 있는지 — 참가자를 만들기 전에 실행:**
+
+    ```bash
+    ./scripts/check_seeding.sh --region $R --source-region us-west-2
+    ```
+
+    반드시 exit 0 이어야 합니다. 1~9번은 **M5·M6·M9·M10이 실행되지 않는 리전에서도 전부
+    통과합니다** — 2026-09-26 ap-northeast-2에서 정확히 그랬습니다 — 어느 항목도 §4가 복사하라고
+    한 277.49 GiB의 바이트를 한 개도 검사하지 않기 때문입니다. 이 검사는 *존재*가 아니라 *트리
+    모양*을 단정합니다: 런타임 glob이 실제로 테스트하는 `models--nvidia--*` 디렉터리 5개, Cosmos가
+    고정한 커밋 sha의 `tokenizer.pth` blob, 그리고 `--source-region`을 주면 CRC64 체크섬과 객체 수
+    대조까지. 존재만으로는 불충분합니다 — HuggingFace 오프라인 모드는 무결성 검사를 **전혀** 하지
+    않아 0바이트 파일도 성공한 다운로드로 읽고, 중단된 `aws s3 sync`는 빈 프리픽스보다 **더
+    나쁩니다**: 디렉터리 하나만 있어도 `HF_HUB_OFFLINE=1`이 켜지고, 그러면 여전히 없는
+    체크포인트가 다운로드가 아니라 불투명한 `Local entry not found`로 바뀝니다.
 
 ### 저렴하고 정직한 스모크 테스트 ($1 훨씬 아래)
 

@@ -401,8 +401,64 @@ if [ -n "${SHARED_BUCKET:-}" ]; then
     echo ">>> Staging notebook templates -> s3://$SHARED_BUCKET/notebook-templates/"
     aws s3 sync notebooks/ "s3://$SHARED_BUCKET/notebook-templates/" --region "$REGION" \
         --exclude '*__pycache__*' --exclude '*.pyc' --only-show-errors
-    aws s3 sync scripts/ "s3://$SHARED_BUCKET/notebook-templates/scripts/" --region "$REGION" \
-        --exclude '*__pycache__*' --exclude '*.pyc' --only-show-errors
+    # scripts/ is staged as an EXPLICIT ALLOW-LIST, not a whole-directory sync.
+    #
+    # Whatever lands here is synced into EVERY participant's home directory by the
+    # notebook-sync lifecycle config. A plain `aws s3 sync scripts/` therefore handed each
+    # participant deploy.sh, teardown.sh, cache_models.sh and check_seeding.sh — measured in
+    # users/0926-ky-s8g6e6/scripts/ on 2026-09-27. They cannot successfully RUN them (the
+    # execution role has no CloudFormation/IAM rights), but shipping a file called
+    # teardown.sh into a workshop attendee's home directory is indefensible, and the noise
+    # buries the six files they actually need.
+    #
+    # ALLOW-list, not deny-list: with a deny-list every new admin script leaks by default,
+    # which is exactly how these four got there. The list below was derived by grepping the
+    # notebooks for what they actually LOAD (sys.path.insert + import, or `bash <script>`)
+    # rather than what they merely mention in a message string — cache_models.sh,
+    # refresh_instance_rates.py and stage_nuscenes.sh appear only inside printed "Admin:"
+    # hints and are NOT needed here.
+    #
+    # Two entries are non-obvious and must not be pruned:
+    #   * alpasim_ec2_setup.sh  — docs/en/M10_PARTICIPANT_SSM_RUNBOOK.md:76 does
+    #     `aws s3 cp s3://$SHARED_BUCKET/notebook-templates/scripts/alpasim_ec2_setup.sh`,
+    #     so removing it breaks M10's participant self-run path.
+    #   * alpamayo_save_clip.py — ADMIN_GUIDE §6.3 runs it from a GPU JupyterLab terminal.
+    #
+    # Getting this list WRONG fails late and confusingly: the notebooks fall back to
+    # `aws s3 cp .../notebook-templates/scripts/<file>` with check=True, so a missing entry
+    # surfaces as a CalledProcessError in the middle of a module. If you add a notebook that
+    # needs a new helper, add it here in the same commit.
+    echo ">>> Staging participant scripts (allow-list) ..."
+    for _s in av30_progress.py \
+              av30_instance_rates.py \
+              setup_cosmos_env.sh \
+              setup_gsplat_env.sh \
+              setup_nemo_curator_env.sh \
+              alpamayo_infer.py \
+              alpamayo_save_clip.py \
+              alpasim_ec2_setup.sh
+    do
+        if [ ! -f "scripts/$_s" ]; then
+            echo "ERROR: scripts/$_s is in the staging allow-list but does not exist." >&2
+            echo "       A participant notebook will fail on its S3 fallback. Fix the" >&2
+            echo "       allow-list in this script or restore the file." >&2
+            exit 1
+        fi
+        aws s3 cp "scripts/$_s" \
+            "s3://$SHARED_BUCKET/notebook-templates/scripts/$_s" \
+            --region "$REGION" --only-show-errors
+    done
+    # Remove admin-only scripts that earlier whole-directory syncs already published.
+    # Scoped to the exact filenames rather than a prefix delete, so a helper that is not in
+    # the allow-list yet is never destroyed by accident.
+    for _s in deploy.sh teardown.sh cache_models.sh cache_hf_tree.sh check_seeding.sh \
+              check_quotas.py stage_nuscenes.sh refresh_instance_rates.py \
+              hf_cache_manifest.tsv grab_gpu_instance.py patch_notebooks.py \
+              renumber_modules.py
+    do
+        aws s3 rm "s3://$SHARED_BUCKET/notebook-templates/scripts/$_s" \
+            --region "$REGION" >/dev/null 2>&1 || true
+    done
     STAGED_COUNT=$(aws s3 ls "s3://$SHARED_BUCKET/notebook-templates/" --recursive \
         --region "$REGION" | wc -l | tr -d ' ')
     echo ">>> Staged. notebook-templates/ now holds $STAGED_COUNT objects."

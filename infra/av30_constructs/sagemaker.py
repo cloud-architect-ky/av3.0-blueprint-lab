@@ -260,9 +260,22 @@ class SageMakerConstruct(Construct):
             iam.PolicyStatement(
                 sid="SharedDataHfCacheWrite",
                 effect=iam.Effect.ALLOW,
+                # PutObject ONLY — deliberately no s3:DeleteObject.
+                #
+                # Put is load-bearing: ADMIN_GUIDE §6.3's seeding ritual runs
+                # `aws s3 sync /mnt/sagemaker-nvme/hf/hub s3://<shared>/hf-cache/hub/` and
+                # `aws s3 cp ... hf-cache/alpamayo-demo/` from a GPU JupyterLab terminal,
+                # i.e. under THIS role. Neither command deletes (sync only deletes with
+                # --delete), so Delete was never needed for it.
+                #
+                # Delete is removed because the prefix stopped being scratch space: it now
+                # holds the 115 GiB / 481-object offline cache that M5, M6 and M9 all read.
+                # With Delete granted, ONE participant running
+                # `aws s3 rm --recursive s3://<shared>/hf-cache/` takes the whole cohort
+                # down — recovery is versioned but only per version-id, and neither bucket
+                # has a lifecycle configuration. Rebuilding costs ~$2.5 and ~1 hour.
                 actions=[
                     "s3:PutObject",
-                    "s3:DeleteObject",
                 ],
                 resources=[
                     f"{shared_data_bucket.bucket_arn}/hf-cache/*",

@@ -23,6 +23,20 @@ to disagree with the actual volume — the domain created 5 GB while
 # (expand_storage, ceiling MAX_STORAGE_GB = 500).
 DEFAULT_SPACE_STORAGE_GB = 200
 
-# NOTE for whoever adds the next one: SMD_IMAGE_VERSION_ALIAS ("4.2.1") is currently a
-# literal in BOTH infra/av30_constructs/api.py and infra/lambda/shared/config.py. It has the
-# same drift hazard and belongs here too; left alone here only to keep this change scoped.
+# SageMaker Distribution image version the dashboard and the Lambdas must agree on.
+#
+# This was the "next one" the note here used to point at: the literal "4.2.1" lived in BOTH
+# infra/av30_constructs/api.py (as the SMD_IMAGE_VERSION_ALIAS env value) and
+# infra/lambda/shared/config.py (as the os.environ.get fallback). Same drift hazard as the
+# storage constant above, and the failure is quieter: if the two disagree, the Lambda that
+# builds a space's ResourceSpec asks for a different image than the one the rest of the lab
+# was verified against, and nothing reports a mismatch — the app just starts on an image
+# whose CUDA/conda layout the setup scripts were never tested on.
+#
+# 4.2.1 is the version this lab is verified on. Do NOT use "latest": the alias floats, so a
+# silent upstream bump would change the image under a cohort mid-workshop.
+#
+# config.py keeps `os.environ.get("SMD_IMAGE_VERSION_ALIAS", "4.2.1")`. That fallback is
+# defence in depth for a Lambda invoked without the env var, NOT a second source of truth —
+# api.py injects this value, and this file is where the number changes.
+SMD_IMAGE_VERSION_ALIAS = "4.2.1"

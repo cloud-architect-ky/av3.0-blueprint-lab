@@ -255,11 +255,11 @@ This is the heart of the guide — **which modules need admin work vs. run thems
 | M2 Cosmos Reason | GPU g5.12xlarge (or g6.24xlarge) | Pre-cache model to `model-cache/` (§6.2) | — |
 | M3 Cosmos Curator | GPU g5.12xlarge (or g6.24xlarge) | (uses M2 output; no extra cache) | — |
 | M4 OpenSearch | CPU t3.medium | (uses M2 output; no extra cache) | — |
-| M5 Cosmos Transfer | GPU g6.24xlarge (or p4d.24xlarge for 720p) | HF **offline cache** to `hf-cache/hub/` (§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
-| M6 Cosmos Predict | GPU g6.24xlarge (or p4d.24xlarge for native) | HF offline cache (§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M5 Cosmos Transfer | GPU g5.12xlarge (or p4d.24xlarge for 720p) | HF **offline cache** to `hf-cache/hub/` (§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M6 Cosmos Predict | GPU g5.12xlarge (or p4d.24xlarge for native) | HF offline cache (§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
 | M7 Nerfstudio | GPU g5.xlarge (or g6.xlarge) | gsplat CUDA build runs per-session via `scripts/setup_gsplat_env.sh` (§11) | See §11 below |
-| M8 Cosmos Reason SFT | GPU g6.24xlarge (or g7e.2xlarge) | (reuses M2's `model-cache/cosmos-reason1/`; no extra cache) | — |
-| M9 Alpamayo VLA | GPU g6.24xlarge (or p4d.24xlarge) | HF offline cache **+ demo clip** (§6.3) | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
+| M8 Cosmos Reason SFT | GPU g5.12xlarge (or g6.24xlarge) | (reuses M2's `model-cache/cosmos-reason1/`; no extra cache) | — |
+| M9 Alpamayo VLA | GPU g5.12xlarge (or p4d.24xlarge) | HF offline cache **+ demo clip** (§6.3) | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
 | M10 AlpaSim | CPU t3.medium (visualizer) | **Run reference eval on EC2 once** (§6.4) | [ALPASIM_M10.md](ALPASIM_M10.md) |
 | M11 Pipeline | CPU t3.medium (runs real SageMaker Pipeline) | none (job quota §2b) | [PIPELINE_M11.md](PIPELINE_M11.md) |
 | M12 HyperPod | CPU t3.medium (submits real DDP job) | none (job quota §2b) | [HYPERPOD_M12.md](HYPERPOD_M12.md) |
@@ -267,6 +267,35 @@ This is the heart of the guide — **which modules need admin work vs. run thems
 **Bottom line:** the required one-time admin caches are **nuScenes (M1) + model-cache
 (M2) + hf-cache (M5/M6/M9) + M9 demo clip**, plus the **M10 reference run** if you're
 running M10. M12 and M11 need **no cache** — just the job quotas in §2b.
+
+---
+
+### 4b. One-minute check that unlocks a real IAM tightening (free)
+
+`CreateApp` / `DeleteApp` are currently granted on `resources=["*"]` for the shared
+execution role. That means a participant with a terminal can create or delete an app on
+**someone else's** space via the CLI (the dashboard offers no such path). Narrowing it to
+an owner condition on `${sagemaker:UserProfileName}` is the fix — but only if that policy
+variable actually resolves at request time, and **you cannot find that out by simulation**:
+
+* `iam:SimulateCustomPolicy` does **not** substitute `${sagemaker:*}` variables. It returns
+  `implicitDeny` for every case containing one, and `allowed` with literals — so it says
+  nothing either way.
+* Assuming the role from outside Studio does not help either: with no app context the
+  variable is empty, and an unresolved variable in a `Resource` matches nothing, so the
+  request fails closed. Also uninformative.
+
+The only reliable test is the live one, and it costs nothing:
+
+1. Open a participant's Studio space **as that participant** (or from the admin console
+   acting on their profile) and click **Run space**, then **Open JupyterLab**.
+2. **No `AccessDenied`** ⇒ the variables resolve at request time ⇒ it is safe to change
+   `CreateApp`/`DeleteApp` in `infra/av30_constructs/sagemaker.py` from `resources=["*"]`
+   to the same owner condition already used by `SageMakerOwnPrivateSpaceUpdate`.
+3. An `AccessDenied` ⇒ do **not** narrow it. Unresolved policy variables fail closed, so
+   tightening without this evidence locks every participant out of their own workspace.
+
+Record the outcome here when you run it, so the next admin does not have to re-derive it.
 
 ---
 

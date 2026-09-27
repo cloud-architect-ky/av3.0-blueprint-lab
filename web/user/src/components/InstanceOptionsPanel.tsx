@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   ColumnLayout,
+  ExpandableSection,
   Flashbar,
   Header,
   Modal,
@@ -149,8 +150,17 @@ export function InstanceOptionsPanel({
   // Storage the user has chosen to add on top of the module default.
   const storageAdded = storageGB - storageBaseline;
 
-  const firstErrorKey = Object.keys(module.errorHints)[0];
-  const firstErrorHint = firstErrorKey ? module.errorHints[firstErrorKey] : null;
+  // module.errorHints is a STATIC per-module troubleshooting reference keyed by exception
+  // name ("CalledProcessError", "EmptyManifest", ...). Every module has at least one, so
+  // rendering it as a warning Flashbar made an alarm that fired on EVERY open — and the one
+  // it showed was Object.keys(...)[0], an arbitrary entry unrelated to anything that had
+  // happened. A banner that is always on is a banner nobody reads, which is precisely the
+  // failure mode that let a real hf-cache warning scroll past unnoticed for 20 minutes.
+  //
+  // So it is reference material now, not an alert: listed in full, labelled by exception
+  // name, collapsed by default. Warning Flashbars are reserved for LIVE conditions — see
+  // changeError (lastInstanceChangeError) further down, which is a real one.
+  const errorHintEntries = Object.entries(module.errorHints);
 
   function handleInstanceChange(detail: RadioGroupProps.ChangeDetail): void {
     setSelectedInstance(detail.value);
@@ -317,19 +327,21 @@ export function InstanceOptionsPanel({
           ]}
         />
 
-        {/* Error Hints Banner */}
-        {firstErrorHint && (
-          <Flashbar
-            items={[
-              {
-                type: "warning",
-                header: `Common issue: ${firstErrorKey}`,
-                content: firstErrorHint,
-                dismissible: false,
-                id: "error-hint",
-              },
-            ]}
-          />
+        {/* Troubleshooting reference — collapsed, not an alert. See errorHintEntries. */}
+        {errorHintEntries.length > 0 && (
+          <ExpandableSection
+            headerText={`Troubleshooting ${module.id.toUpperCase()} (${errorHintEntries.length})`}
+            variant="footer"
+          >
+            <SpaceBetween size="s">
+              {errorHintEntries.map(([name, hint]) => (
+                <Box key={name}>
+                  <Box variant="awsui-key-label">{name}</Box>
+                  <Box variant="p">{hint}</Box>
+                </Box>
+              ))}
+            </SpaceBetween>
+          </ExpandableSection>
         )}
 
         {/* Recommended Instance */}

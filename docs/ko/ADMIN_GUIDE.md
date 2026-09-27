@@ -251,11 +251,11 @@ aws service-quotas request-service-quota-increase \
 | M2 Cosmos Reason | GPU g5.12xlarge (또는 g6.24xlarge) | 모델을 `model-cache/`에 프리캐시(§6.2) | — |
 | M3 Cosmos Curator | GPU g5.12xlarge (또는 g6.24xlarge) | (M2 출력 사용; 추가 캐시 없음) | — |
 | M4 OpenSearch | CPU t3.medium | (M2 출력 사용; 추가 캐시 없음) | — |
-| M5 Cosmos Transfer | GPU g6.24xlarge (720p는 p4d.24xlarge) | HF **오프라인 캐시**를 `hf-cache/hub/`로(§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
-| M6 Cosmos Predict | GPU g6.24xlarge (네이티브는 p4d.24xlarge) | HF 오프라인 캐시(§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M5 Cosmos Transfer | GPU g5.12xlarge (720p는 p4d.24xlarge) | HF **오프라인 캐시**를 `hf-cache/hub/`로(§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M6 Cosmos Predict | GPU g5.12xlarge (네이티브는 p4d.24xlarge) | HF 오프라인 캐시(§6.3) | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
 | M7 Nerfstudio | GPU g5.xlarge (또는 g6.xlarge) | gsplat CUDA 빌드가 `scripts/setup_gsplat_env.sh`를 통해 세션마다 실행(§11) | 아래 §11 참고 |
-| M8 Cosmos Reason SFT | GPU g6.24xlarge (또는 g7e.2xlarge) | (M2의 `model-cache/cosmos-reason1/` 재사용; 추가 캐시 없음) | — |
-| M9 Alpamayo VLA | GPU g6.24xlarge (또는 p4d.24xlarge) | HF 오프라인 캐시 **+ 데모 클립**(§6.3) | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
+| M8 Cosmos Reason SFT | GPU g5.12xlarge (또는 g6.24xlarge) | (M2의 `model-cache/cosmos-reason1/` 재사용; 추가 캐시 없음) | — |
+| M9 Alpamayo VLA | GPU g5.12xlarge (또는 p4d.24xlarge) | HF 오프라인 캐시 **+ 데모 클립**(§6.3) | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
 | M10 AlpaSim | CPU t3.medium (비주얼라이저) | **EC2에서 레퍼런스 평가 1회 실행**(§6.4) | [ALPASIM_M10.md](ALPASIM_M10.md) |
 | M11 Pipeline | CPU t3.medium (실제 SageMaker Pipeline 실행) | 없음 (작업 쿼터 §2b) | [PIPELINE_M11.md](PIPELINE_M11.md) |
 | M12 HyperPod | CPU t3.medium (실제 DDP 작업 제출) | 없음 (작업 쿼터 §2b) | [HYPERPOD_M12.md](HYPERPOD_M12.md) |
@@ -264,6 +264,31 @@ aws service-quotas request-service-quota-increase \
 (M2) + hf-cache(M5/M6/M9) + M9 데모 클립**이며, M10을 실행한다면 여기에
 **M10 레퍼런스 실행**이 추가됩니다. M12와 M11은 **캐시가 필요 없습니다** — §2b의 작업
 쿼터만 있으면 됩니다.
+
+---
+
+### 4b. 실제 IAM 축소를 여는 1분 확인 (무료)
+
+현재 공용 실행 역할에 `CreateApp` / `DeleteApp` 이 `resources=["*"]` 로 부여돼 있습니다. 즉 터미널을
+가진 참가자가 CLI로 **남의** 스페이스에 앱을 만들거나 지울 수 있습니다(대시보드에는 그런 경로가
+없습니다). `${sagemaker:UserProfileName}` 소유자 조건으로 좁히는 것이 해법인데, 그 정책 변수가
+요청 시점에 실제로 치환되어야만 가능하고 **시뮬레이션으로는 알 수 없습니다**:
+
+* `iam:SimulateCustomPolicy` 는 `${sagemaker:*}` 변수를 치환하지 **않습니다**. 변수가 들어간 모든
+  케이스에 `implicitDeny` 를, 리터럴에는 `allowed` 를 돌려주므로 어느 쪽 증거도 되지 못합니다.
+* Studio 밖에서 역할을 assume 해도 마찬가지입니다. 앱 컨텍스트가 없어 변수가 비고, `Resource` 안의
+  미해결 변수는 아무것도 매칭하지 않아 fail-closed 로 떨어집니다. 역시 정보가 없습니다.
+
+유일하게 믿을 수 있는 검사는 라이브 검사이고, 비용은 0입니다:
+
+1. 참가자 스페이스를 **그 참가자로** 열고 **Run space**, 이어서 **Open JupyterLab** 을 클릭합니다.
+2. **`AccessDenied` 가 없으면** ⇒ 요청 시점에 변수가 치환됨 ⇒ `infra/av30_constructs/sagemaker.py` 의
+   `CreateApp`/`DeleteApp` 을 `resources=["*"]` 에서 `SageMakerOwnPrivateSpaceUpdate` 가 이미 쓰는
+   소유자 조건으로 바꿔도 안전합니다.
+3. **`AccessDenied` 가 나면** 좁히지 **마세요**. 미해결 정책 변수는 fail-closed 이므로, 이 증거 없이
+   조이면 참가자 전원이 자기 워크스페이스에서 락아웃됩니다.
+
+실행했으면 결과를 여기에 기록해서 다음 관리자가 다시 유도하지 않게 하세요.
 
 ---
 
@@ -337,6 +362,21 @@ pip install huggingface_hub && hf auth login --token "$HF_TOKEN"
 ```
 
 ### 6.3 HF 오프라인 캐시 (M5/M6/M9) — "참가자 토큰 불필요" 트릭
+
+> **`cache_models.sh`는 `hf-cache/hub/`를 만들지 않습니다** — `scripts/cache_hf_tree.sh`를 쓰세요.
+> 2026-09-26까지는 이 레포의 무엇도 그 트리를 생산하지 못했습니다: `scripts/` 안의 모든 `hf-cache`
+> 참조가 S3에서 *읽는* 쪽이었고 쓰는 쪽이 없어서, 유일한 레시피가 아래 수동 절차였습니다.
+> `cache_models.sh`는 대체가 아닙니다 — 다른 프리픽스(`model-cache/`)에 다른 레이아웃(평면
+> `hf download --local-dir`, `models--org--name/snapshots/<sha>/…`이 아님)으로 씁니다.
+>
+> 결과적으로 두 가지가 실제로 물렸습니다:
+> * **새 리전에는 재구축이 아니라 복사.** 시딩된 리전에서 버킷 간 `aws s3 sync`
+>   ([ADDING_A_REGION.md](ADDING_A_REGION.md) §4). 2026-09-26에 ap-northeast-2를 `cache_models.sh`로
+>   시딩했고 M5/M6/M9/M10이 죽은 상태로 출하됐습니다.
+> * **추론하지 말고 검증.** `./scripts/check_seeding.sh --region <r>`가 런타임 glob이 테스트하는
+>   `models--nvidia--*` 디렉터리 5개와 고정된 `tokenizer.pth` blob을 단정합니다.
+>   `cache_models.sh`가 초록불로 끝난 것은 이 프리픽스에 대해 아무것도 증명하지 않습니다.
+
 M5/M6/M9은 런타임에 HF의 **자체 캐시 레이아웃**을 통해 게이트된 체크포인트를 로드합니다
 (M9은 숨겨진 Cosmos-Reason2-8B 백본도 가져옵니다). 이를 견고하게 채우는 방법:
 당신의 관리자 토큰으로 **GPU JupyterLab 앱에서 M5, M6, M9을 각각 한 번씩 실행**한 뒤,
@@ -572,7 +612,8 @@ PARTICIPANT_GUIDE가 서술하는 선택적 개념 + 데이터 준비 데모로 
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU 앱 쿼터가 증설되지 않음 — §2a. |
 | M12 작업이 제출에서 실패 (`CreateTrainingJob`에 `AccessDeniedException`) | exec-role의 training-job ARN 프리픽스가 노트북 `JOB_NAME`과 일치해야 합니다. 모듈 재번호로 HyperPod가 M9→M12로 옮겨져 노트북은 `av30-m12-distributed-*`를 제출하는데, 그 수정 이전 배포는 여전히 `av30-m9-*`만 허용해 모든 제출이 거부됩니다. m5.xlarge **작업** 쿼터(§2b)는 별개의 드문 원인입니다 — 에러를 먼저 보세요: `AccessDenied`는 IAM 프리픽스, `ResourceLimitExceeded`는 쿼터. |
 | GPU 인스턴스에서 참가자 "No GPU detected" | CPU 이미지가 선택됨 — Instance Options로 다시 Apply. |
-| M5/M6/M9이 HF 토큰을 요구 | `hf-cache/hub/`가 스테이징되지 않음(§6.3) — 참가자가 온라인 다운로드로 폴백. |
+| M5/M6/M9 설정 셀이 "this region has no usable offline HuggingFace cache and no HF_TOKEN"으로 멈춤(exit 2) | 이 리전에 `hf-cache/hub/`가 시딩되지 않음(§6.3). 시딩 후 `./scripts/check_seeding.sh --region <r>`. 이 메시지는 *고쳐진* 동작입니다 — 2026-09-26 전에는 같은 조건이 침묵이었고, 설정 셀이 "environment ready"를 출력한 뒤 M5가 `torchrun`에서 4초 만에 `ChildFailedError`로 죽으며 CUDA out-of-memory를 지목했습니다. 아직 그 옛 형태가 보이면 참가자가 낡은 스테이징 `setup_cosmos_env.sh`를 쓰는 중입니다. |
+| M5/M6/M9이 `Local entry not found … offline mode is enabled`로 실패 | 복원된 캐시가 **부분적**입니다. 중단된 `aws s3 sync`가 흔한 원인이고 — **같은 sync를 다시 돌리세요**, 이어서 없거나 크기가 다른 것을 재복사합니다. `sync`가 못 잡는 건 크기는 맞고 내용이 틀린 객체입니다(size+mtime 비교). `check_seeding.sh --source-region <seeded>`가 CRC64 불일치를 보고하면 그 객체만 지우고 다시 sync하세요. |
 | M9이 클립 로드에 실패 | 데모 `.pt`가 `hf-cache/alpamayo-demo/`에 업로드되지 않음(§6.3). |
 | M10 노트북이 아무것도 표시하지 않음 | `m10-reference/` 레퍼런스 평가가 실행되지 않음(§6.4). |
 | M7 트레이닝 셀이 gsplat에서 실패 | M7 셀 3(`scripts/setup_gsplat_env.sh`) 재실행 — CUDA 빌드는 세션별이며 앱 재시작 시 리셋됨. §11. |

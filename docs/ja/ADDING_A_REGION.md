@@ -307,24 +307,53 @@ AWS_REGION=$R ./scripts/stage_nuscenes.sh                      # 公開ミラー
 AWS_REGION=$R HF_TOKEN=hf_... ./scripts/cache_models.sh        # 約 157 GiB を再ダウンロード
 ```
 
+> **この 2 つのスクリプトは上の 4 行のうち 2 行しか置き換えません。** `cache_models.sh` は
+> `model-cache/` だけ、`stage_nuscenes.sh` は `datasets/` だけを書き込みます。どちらも
+> `hf-cache/` を作れず、そのツリーを構築するのは **`scripts/cache_hf_tree.sh`** です
+> （管理者の `HF_TOKEN` が必要）。`hf-cache/` は HuggingFace の*オフラインキャッシュ*
+> レイアウト（`models--org--name/snapshots/<sha>/…`）ですが、`cache_models.sh` は
+> `hf download --local-dir` のフラットな構造を使います。`m10-reference/` にも生成
+> スクリプトはないのでコピーしてください。
+>
+> 仮定の話ではありません。2026-09-26 に ap-northeast-2 を上のブロックの代わりに
+> `cache_models.sh` でシードし、スクリプトは正常終了し `deploy.sh` も成功を報告し Day-1 の
+> スモークテスト（M1 + M2 — そのプレフィックスがカバーする唯一の 2 モジュール）も通過した
+> のに、リージョンは **M5・M6・M9・M10 が動かない状態で**出荷されました。参加者が 4 つ
+> モジュールを進めてから判明しました。下の 10 を実行してください。
+
 us-west-2 のソースバケットでの実測値:
 
 | プレフィックス | サイズ | オブジェクト数 | 欠けると壊れるモジュール |
 |---|---|---|---|
 | `notebook-templates/` | 0.55 MiB | 31 | **すべて** — プロビジョニングが即座に失敗 |
 | `datasets/`（nuScenes-mini） | 5.01 GiB | 31,225 | M1, M2, M3, M5, M6, M7, M8, M9 |
-| `model-cache/` | 157.45 GiB | 1,707 | M2, M8, M9 |
+| `model-cache/` | 157.45 GiB | 1,707 | M2, M8 |
 | `hf-cache/` | 115.00 GiB | 481 | M5, M6, M9 |
 | `m10-reference/` | 0.03 GiB | 16 | M10 の可視化 |
-| `m8-lora-probe/` | 3 KiB | 1 | 読み込むノートブックはない — 完全性のためのステージング |
 | **合計** | **277.49 GiB** | **33,457** | |
+
+`m8-lora-probe/`（1 オブジェクト、3 KiB）は**意図的に除外**しています。一度きりの probe が
+残した日付付きの SageMaker 学習ジョブ `sourcedir.tar.gz` で、読み込むノートブックはなく、
+到達できないプレフィックスを表に載せると表全体を参考情報として読ませてしまいます — その
+読み方が `hf-cache/` を飛ばさせた原因です。
 
 推測ではなくノートブックを読んで確認した点: M5 と M6 は `scripts/setup_cosmos_env.sh` を通じて
 `hf-cache/hub/` を**間接的に**参照するため、この 2 つのノートブックでプレフィックスを grep しても
-見つかりません。**欠けたときの失敗の仕方がエラーではありません** — `setup_cosmos_env.sh` は
-`WARNING: restore failed; will fall back to online/token download` を出力し、そのフォールバックは
-参加者が持っていない `HF_TOKEN` と gated ライセンス同意を要求します。つまり `hf-cache/` を
-シードしないと、M5/M6/M9 はきれいな失敗ではなく参加者ごとのトークン探しに変わります。
+見つかりません。**欠けたときに実際に起こること**（実測、ap-northeast-2、2026-09-26 — 以前の記述は 2 か所
+誤っていました）:
+
+* `setup_cosmos_env.sh` は現在 `=== STOP ===` ブロックで停止し、その 1 行目は
+  `Reason : no HF cache at <uri> (prefix does not exist in this region)` です。`HF_TOKEN` が
+  あれば代わりに続行し `[hf-cache] No usable offline cache (…)` を出力します。いずれも以前の
+  版が grep せよと書いていた `WARNING: restore failed…` ではありません — それは常に*別の*
+  分岐（`aws s3 sync` の失敗）で、その文字列を探す運用者は何も見つけられません。
+* 修正前は**参加者ごとのトークン探しではなく、沈黙**でした。スクリプトは exit 0 で終わり
+  ノートブックは "environment ready" を表示し、15〜20 分後に M5 が `torchrun` の中で 4 秒で
+  `ChildFailedError` により停止し、唯一見えた助言は CUDA out-of-memory でした。HuggingFace の
+  401 はキャプチャされた stderr にありましたが、ノートブックが表示した 25 行の窓の外でした。
+* 現在は使用可能なキャッシュも `HF_TOKEN` もない場合、**起動そのものを拒否**し（exit 2）
+  2 つの解決策を示します。つまりシードされていないリージョンは GPU 時間を使う前に数秒で
+  失敗します — それでも失敗です。プレフィックスをシードしてください。
 
 コスト: ap-northeast-2 でおよそ**一度きりの $5.73**（転送 + リクエスト）と、ストレージが
 **月 $6.94** です*（転送/リクエストの単価は定価。ソウルのストレージ単価 $0.025/GB-月 は
@@ -385,6 +414,23 @@ API で確認済み）*。
    いないこと。
 9. **元からあったリージョンが無傷であること:** そのスタックは引き続き `UPDATE_COMPLETE`、予算も
    残っており、`apigateway get-account` も変わっていないこと。
+
+10. **データが実際に存在すること — 参加者を作成する前に実行:**
+
+    ```bash
+    ./scripts/check_seeding.sh --region $R --source-region us-west-2
+    ```
+
+    必ず exit 0 になること。1〜9 は **M5・M6・M9・M10 が動かないリージョンでもすべて通過します**
+    — 2026-09-26 の ap-northeast-2 がまさにそれでした — どの項目も §4 がコピーせよと告げた
+    277.49 GiB のバイトを 1 つも検査しないためです。この検査は*存在*ではなく*ツリーの形*を
+    アサートします: ランタイムの glob が実際にテストする `models--nvidia--*` ディレクトリ 5 つ、
+    Cosmos が固定したコミット sha の `tokenizer.pth` blob、そして `--source-region` を渡せば
+    CRC64 チェックサムとオブジェクト数の照合まで。存在だけでは不十分です — HuggingFace の
+    オフラインモードは整合性検査を**まったく**行わないため 0 バイトのファイルも成功した
+    ダウンロードとして読み、中断された `aws s3 sync` は空のプレフィックスより**悪い**です:
+    ディレクトリが 1 つあるだけで `HF_HUB_OFFLINE=1` が有効になり、まだ欠けている
+    チェックポイントがダウンロードではなく不透明な `Local entry not found` に変わります。
 
 ### 安価で正直なスモークテスト（$1 を十分に下回る）
 

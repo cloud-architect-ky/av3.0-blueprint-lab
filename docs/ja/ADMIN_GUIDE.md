@@ -249,11 +249,11 @@ aws service-quotas request-service-quota-increase \
 | M2 Cosmos Reason | GPU g5.12xlarge（または g6.24xlarge） | モデルを `model-cache/` に事前キャッシュ（§6.2） | — |
 | M3 Cosmos Curator | GPU g5.12xlarge（または g6.24xlarge） | （M2 の出力を使用。追加キャッシュなし） | — |
 | M4 OpenSearch | CPU t3.medium | （M2 の出力を使用。追加キャッシュなし） | — |
-| M5 Cosmos Transfer | GPU g6.24xlarge（または 720p 用に p4d.24xlarge） | HF **オフラインキャッシュ**を `hf-cache/hub/` へ（§6.3） | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
-| M6 Cosmos Predict | GPU g6.24xlarge（またはネイティブ用に p4d.24xlarge） | HF オフラインキャッシュ（§6.3） | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M5 Cosmos Transfer | GPU g5.12xlarge（または 720p 用に p4d.24xlarge） | HF **オフラインキャッシュ**を `hf-cache/hub/` へ（§6.3） | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
+| M6 Cosmos Predict | GPU g5.12xlarge（またはネイティブ用に p4d.24xlarge） | HF オフラインキャッシュ（§6.3） | [COSMOS_M5_M6.md](COSMOS_M5_M6.md) |
 | M7 Nerfstudio | GPU g5.xlarge（または g6.xlarge） | gsplat CUDA ビルドがセッションごとに `scripts/setup_gsplat_env.sh` で実行される（§11） | 以下の §11 を参照 |
-| M8 Cosmos Reason SFT | GPU g6.24xlarge（または g7e.2xlarge） | （M2 の `model-cache/cosmos-reason1/` を再利用; 追加キャッシュ不要） | — |
-| M9 Alpamayo VLA | GPU g6.24xlarge（または p4d.24xlarge） | HF オフラインキャッシュ **+ デモクリップ**（§6.3） | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
+| M8 Cosmos Reason SFT | GPU g5.12xlarge（または g6.24xlarge） | （M2 の `model-cache/cosmos-reason1/` を再利用; 追加キャッシュ不要） | — |
+| M9 Alpamayo VLA | GPU g5.12xlarge（または p4d.24xlarge） | HF オフラインキャッシュ **+ デモクリップ**（§6.3） | [ALPAMAYO_M9.md](ALPAMAYO_M9.md) |
 | M10 AlpaSim | CPU t3.medium（ビジュアライザー） | **EC2 でリファレンス評価を一度実行**（§6.4） | [ALPASIM_M10.md](ALPASIM_M10.md) |
 | M11 Pipeline | CPU t3.medium（実際の SageMaker Pipeline を実行） | なし（ジョブクォータ §2b） | [PIPELINE_M11.md](PIPELINE_M11.md) |
 | M12 HyperPod | CPU t3.medium（実際の DDP ジョブを送信） | なし（ジョブクォータ §2b） | [HYPERPOD_M12.md](HYPERPOD_M12.md) |
@@ -261,6 +261,31 @@ aws service-quotas request-service-quota-increase \
 **要点:** 必須の一度きりの管理者キャッシュは **nuScenes（M1）+ model-cache（M2）+ hf-cache
 （M5/M6/M9）+ M9 デモクリップ**、加えて M10 を実行する場合は **M10 リファレンスラン**です。
 M12 と M11 には**キャッシュ不要** — §2b のジョブクォータだけです。
+
+---
+
+### 4b. 実際の IAM 縮小を可能にする 1 分の確認（無料）
+
+現在、共有実行ロールに `CreateApp` / `DeleteApp` が `resources=["*"]` で付与されています。つまり
+ターミナルを持つ参加者は CLI で**他人の**スペースのアプリを作成・削除できます（ダッシュボードには
+その経路はありません）。`${sagemaker:UserProfileName}` の所有者条件で絞るのが解決策ですが、その
+ポリシー変数がリクエスト時に実際に置換される場合に限られ、**シミュレーションでは判定できません**:
+
+* `iam:SimulateCustomPolicy` は `${sagemaker:*}` 変数を置換**しません**。変数を含むケースはすべて
+  `implicitDeny`、リテラルなら `allowed` を返すため、どちらの証拠にもなりません。
+* Studio の外からロールを assume しても同じです。アプリコンテキストが無いため変数が空になり、
+  `Resource` 内の未解決変数は何にもマッチせず fail-closed になります。これも情報になりません。
+
+信頼できる唯一の検査はライブ検査で、費用はかかりません:
+
+1. 参加者のスペースを**その参加者として**開き、**Run space**、続いて **Open JupyterLab** をクリック。
+2. **`AccessDenied` が出なければ** ⇒ リクエスト時に変数が置換される ⇒
+   `infra/av30_constructs/sagemaker.py` の `CreateApp`/`DeleteApp` を `resources=["*"]` から
+   `SageMakerOwnPrivateSpaceUpdate` が既に使う所有者条件に変更して安全です。
+3. **`AccessDenied` が出たら**絞っては**いけません**。未解決のポリシー変数は fail-closed なので、
+   この証拠なしに締めると参加者全員が自分のワークスペースからロックアウトされます。
+
+実施したら結果をここに記録し、次の管理者が再導出しなくて済むようにしてください。
 
 ---
 
@@ -334,6 +359,21 @@ pip install huggingface_hub && hf auth login --token "$HF_TOKEN"
 ```
 
 ### 6.3 HF オフラインキャッシュ（M5/M6/M9） — 「参加者トークン不要」のトリック
+
+> **`cache_models.sh` は `hf-cache/hub/` を作りません** — `scripts/cache_hf_tree.sh` を使ってください。
+> 2026-09-26 まで、このリポジトリのどれもそのツリーを生成できませんでした: `scripts/` 内のすべての
+> `hf-cache` 参照は S3 から*読む*側で、書く側が存在せず、唯一のレシピが下の手動手順でした。
+> `cache_models.sh` は代替になりません — 別のプレフィックス（`model-cache/`）に別のレイアウト
+> （フラットな `hf download --local-dir`。`models--org--name/snapshots/<sha>/…` ではない）で書きます。
+>
+> 結果として 2 点が実際に問題になりました:
+> * **新しいリージョンでは再構築ではなくコピー。** シード済みリージョンからバケット間 `aws s3 sync`
+>   （[ADDING_A_REGION.md](ADDING_A_REGION.md) §4）。2026-09-26 に ap-northeast-2 を
+>   `cache_models.sh` でシードし、M5/M6/M9/M10 が動かない状態で出荷しました。
+> * **推測せず検証する。** `./scripts/check_seeding.sh --region <r>` がランタイムの glob がテストする
+>   `models--nvidia--*` ディレクトリ 5 つと、固定された `tokenizer.pth` blob をアサートします。
+>   `cache_models.sh` が正常終了したことは、このプレフィックスについて何も証明しません。
+
 M5/M6/M9 はゲート付きチェックポイントを実行時に HF **独自のキャッシュレイアウト**経由で
 ロードします（M9 は隠れた Cosmos-Reason2-8B バックボーンもプルします）。これを確実に
 埋める方法は、**あなたの管理者トークンで GPU JupyterLab アプリ上で M5、M6、M9 を一度ずつ実行し**、
@@ -569,7 +609,8 @@ AlpaSim を自分自身で実行する**ようにしたい場合:
 | `ResourceLimitExceeded: ...Studio JupyterLab Apps... is 0` | GPU アプリクォータが未引き上げ — §2a。 |
 | M12 ジョブが送信時に失敗（`CreateTrainingJob` で `AccessDeniedException`） | 実行ロールの training-job ARN プレフィックスがノートブックの `JOB_NAME` と一致する 必要があります。モジュール再採番で HyperPod が M9→M12 に移動しノートブックは `av30-m12-distributed-*` を送信しますが、その修正より前のデプロイは `av30-m9-*` のみを 許可するため全ての送信が拒否されます。m5.xlarge の**ジョブ**クォータ（§2b）は別の稀な 原因です — まずエラーを確認してください: `AccessDenied` は IAM プレフィックス、`ResourceLimitExceeded` はクォータ。|
 | GPU インスタンスで参加者が「No GPU detected」 | CPU イメージが選択されている — Instance Options で再 Apply。 |
-| M5/M6/M9 が HF トークンを要求する | `hf-cache/hub/` が未ステージング（§6.3） — 参加者はオンラインダウンロードにフォールバックします。 |
+| M5/M6/M9 のセットアップセルが "this region has no usable offline HuggingFace cache and no HF_TOKEN" で停止（exit 2） | このリージョンに `hf-cache/hub/` が未シード（§6.3）。シード後 `./scripts/check_seeding.sh --region <r>`。このメッセージは*修正後*の挙動です — 2026-09-26 より前は同じ条件が沈黙で、セットアップセルが "environment ready" を表示した後、M5 が `torchrun` の中で 4 秒で `ChildFailedError` により停止し CUDA out-of-memory を指していました。まだ古い形が見える場合、参加者は古いステージング済み `setup_cosmos_env.sh` を使っています。 |
+| M5/M6/M9 が `Local entry not found … offline mode is enabled` で失敗 | 復元されたキャッシュが**部分的**です。中断された `aws s3 sync` が典型的な原因で — **同じ sync をもう一度実行してください**。欠けているもの・サイズ違いのものを再コピーして再開します。`sync` が検出できないのはサイズが正しく内容が誤ったオブジェクトです（size+mtime 比較）。`check_seeding.sh --source-region <seeded>` が CRC64 不一致を報告したら、そのオブジェクトだけ削除して再 sync してください。 |
 | M7 トレーニングセルが gsplat で失敗する | M7 セル 3（`scripts/setup_gsplat_env.sh`）を再実行 — CUDA ビルドはセッションごとで、アプリ再起動時にリセットされます。§11。 |
 | M9 がクリップのロードに失敗する | デモの `.pt` が `hf-cache/alpamayo-demo/` にアップロードされていない（§6.3）。 |
 | M10 ノートブックに何も表示されない | `m10-reference/` リファレンス評価が未実行（§6.4）。 |

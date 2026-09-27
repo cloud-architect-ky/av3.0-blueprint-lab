@@ -9,7 +9,7 @@ from pathlib import Path
 
 from constructs import Construct
 
-from av30_constructs import DEFAULT_SPACE_STORAGE_GB
+from av30_constructs import DEFAULT_SPACE_STORAGE_GB, SMD_IMAGE_VERSION_ALIAS
 
 import aws_cdk as cdk
 from aws_cdk import (
@@ -188,7 +188,7 @@ class ApiConstruct(Construct):
             "NOTEBOOK_TEMPLATES_PREFIX": "notebook-templates/",
             "SMD_CPU_IMAGE_ARN": _smd_cpu_image_arn,
             "SMD_GPU_IMAGE_ARN": _smd_gpu_image_arn,
-            "SMD_IMAGE_VERSION_ALIAS": "4.2.1",
+            "SMD_IMAGE_VERSION_ALIAS": SMD_IMAGE_VERSION_ALIAS,
             # Same literal the domain uses for DefaultEbsVolumeSizeInGb, so the Lambdas
             # agree with the volume that was actually provisioned. See
             # av30_constructs/__init__.py for why this is imported rather than repeated.

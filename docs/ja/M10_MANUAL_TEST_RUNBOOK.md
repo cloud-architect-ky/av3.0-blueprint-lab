@@ -407,7 +407,7 @@ UN aws iam delete-user --user-name $PID
 |---|---|
 | cell-4 `M10 reference eval not found in S3` | m10-reference/ 未アップロード → Part A を先に (または既存バンドルを確認) |
 | cell-4 download failed / AccessDenied | 実行ロールが shared バケットの read 権限なし → 既に付与済み (正常)。なければ IAM を確認 |
-| cell-7 video 空白/未表示 | **ファイル欠落ではなくコーデックの問題。** AlpaSim レンダラーが MPEG-4 Part 2 (`mpeg4`) で書き出し、Chrome/Firefox/Edge はこれをデコードできない (Safari のみ可) — ブラウザは静かに失敗し、これは Python 例外ではないので try/except では捕まえられない。`ffprobe -show_entries stream=codec_name eval/eval.mp4` で確認。根本修正済み: `alpasim_ec2_setup.sh` がアップロード前に H.264 へ変換 (ホストに動作する ffmpeg がなければその事実を出力)、cell-7 は死んだプレイヤーの代わりにコーデックを出力する。必須ではない — メトリクスだけでも PASS |
+| cell-7 video 空白/未表示 | **ファイル欠落ではなくコーデックの問題。** AlpaSim レンダラーが MPEG-4 Part 2 (`mpeg4`) で書き出し、Chrome/Firefox/Edge はこれをデコードできない — ブラウザは静かに失敗し、これは Python 例外ではないので try/except では捕まえられない。`ffprobe -show_entries stream=codec_name eval/eval.mp4` で確認。根本修正済み: `alpasim_ec2_setup.sh` がアップロード前に H.264 へ変換 (ホストに動作する ffmpeg がなければその事実を出力)、cell-7 は死んだプレイヤーの代わりにコーデックを出力する。必須ではない — メトリクスだけでも PASS |
 | STS/import エラー | CPU カーネルに pandas/matplotlib はデフォルト同梱 — ダメなら最初のセルで `%pip install pandas matplotlib` |
 
 ---

@@ -116,6 +116,29 @@ echo "topology  : $TOPOLOGY"
 echo "HF_HOME   : $HF_HOME_DIR"
 echo ""
 
+# h264_encoder: echo the name of a usable H.264 encoder, or return 1.
+# Needed because the eval video is transcoded to H.264 before upload (see the
+# upload section). Defined HERE, above pre-flight, so a host without ffmpeg is
+# discovered BEFORE the multi-hour GPU evaluation rather than after it.
+# We must RUN ffmpeg, not just `command -v` it — a broken build can sit on PATH
+# and exit 127 on a missing shared library (the SageMaker Distribution image
+# ships exactly that; see scripts/setup_nemo_curator_env.sh). Either encoder is
+# fine: the DL Base GPU AMI's ffmpeg, when present, usually carries libx264;
+# conda-forge builds carry libopenh264. No pipelines — this script runs under
+# `set -o pipefail`, where `grep | head -1` returns 141 (SIGPIPE) precisely when
+# it DOES find a match.
+h264_encoder() {
+    command -v ffmpeg >/dev/null 2>&1 || return 1
+    ffmpeg -hide_banner -version >/dev/null 2>&1 || return 1   # 127 if libs missing
+    local _encs
+    _encs="$(ffmpeg -hide_banner -encoders 2>/dev/null)" || true
+    case "$_encs" in
+        *libx264*)     printf 'libx264\n'     ;;
+        *libopenh264*) printf 'libopenh264\n' ;;
+        *)             return 1 ;;
+    esac
+}
+
 # --------------------------------------------------------------------------
 # Pre-flight
 # --------------------------------------------------------------------------
@@ -178,6 +201,33 @@ if ! command -v cargo &>/dev/null; then
     # shellcheck disable=SC1091
     [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
     export PATH="$HOME/.cargo/bin:$PATH"
+fi
+# ffmpeg with an H.264 encoder — used at the END of this script to transcode the
+# eval video. Resolved HERE on purpose: the DL Base GPU AMI ships Docker, the
+# NVIDIA toolkit and drivers but does NOT guarantee ffmpeg, and discovering that
+# after `alpasim_wizard` means the operator has already paid for a multi-hour
+# run on a ~$10/hr host only to get an unplayable video. A failure is NOT fatal —
+# the upload falls back to AlpaSim's own mpeg4 and says so.
+if ! h264_encoder >/dev/null; then
+    echo "[deps] no working ffmpeg with an H.264 encoder — installing ffmpeg ..."
+    if command -v apt-get &>/dev/null; then
+        # `sudo env VAR=…`, not `sudo VAR=… …`: the latter needs setenv/env_keep
+        # permission in sudoers and is refused on some hosts.
+        sudo -n apt-get update -qq >/dev/null 2>&1 || true
+        sudo -n env DEBIAN_FRONTEND=noninteractive \
+            apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true
+    fi
+    hash -r 2>/dev/null || true       # refresh PATH cache so a new ffmpeg is seen
+fi
+if _enc_preflight="$(h264_encoder)"; then
+    echo "[preflight] ffmpeg H.264 encoder: $_enc_preflight (eval video will be transcoded)"
+else
+    echo "[preflight] WARNING: no working ffmpeg with an H.264 encoder, and the install"
+    echo "            attempt did not provide one. The run will still complete, but the"
+    echo "            eval video will be uploaded as AlpaSim's MPEG-4 Part 2, which"
+    echo "            Chrome/Firefox/Edge cannot decode — M10 will print the codec"
+    echo "            instead of playing it. To fix before the expensive run, install"
+    echo "            ffmpeg now (sudo apt-get install -y ffmpeg) and re-run this script."
 fi
 
 mkdir -p "$WORK" "$HF_HOME_DIR"
@@ -422,36 +472,21 @@ REF="s3://${OUTPUT_BUCKET}/${M10_OUTPUT_PREFIX}"
 echo "[upload] -> $REF/ ..."
 aws s3 sync "$AGG" "$REF/aggregate/" --only-show-errors
 
-# h264_encoder: echo the name of a usable H.264 encoder, or return 1.
-# We must RUN ffmpeg, not just `command -v` it — a broken build can sit on PATH
-# and exit 127 on a missing shared library (the SMD image ships exactly that;
-# see scripts/setup_nemo_curator_env.sh). Either encoder is fine here: the DL
-# Base GPU AMI's ffmpeg, when present, usually carries libx264; conda-forge
-# builds carry libopenh264. No pipelines — this script runs under `set -o
-# pipefail`, where `grep | head -1` returns 141 (SIGPIPE) precisely when it DOES
-# find a match.
-h264_encoder() {
-    command -v ffmpeg >/dev/null 2>&1 || return 1
-    ffmpeg -hide_banner -version >/dev/null 2>&1 || return 1   # 127 if libs missing
-    local _encs
-    _encs="$(ffmpeg -hide_banner -encoders 2>/dev/null)" || true
-    case "$_encs" in
-        *libx264*)     printf 'libx264\n'     ;;
-        *libopenh264*) printf 'libopenh264\n' ;;
-        *)             return 1 ;;
-    esac
-}
-
 # One representative eval video (keep the upload small).
 #
 # AlpaSim's renderer writes MPEG-4 Part 2 ("mpeg4", Simple Profile) at 3000x1080,
-# which Chrome / Firefox / Edge CANNOT decode — Safari only. Uploading it verbatim
-# gives the M10 notebook a silently dead inline player: IPython.display.Video
-# emits a correct <video> tag and the browser fails to decode it, which is NOT a
-# Python exception, so no try/except can catch it. Transcode to H.264 so the
-# inline player works in every browser. 1280px wide is ample for the notebook's
-# 720px display and takes 4.7 MB -> ~0.5 MB. AlpaSim's untouched original stays
-# in aggregate/videos/, so nothing is lost.
+# which Chrome / Firefox / Edge cannot decode. Uploading it verbatim gives the M10
+# notebook a silently dead inline player: IPython.display.Video emits a correct
+# <video> tag and the browser fails to decode it, which is NOT a Python exception,
+# so no try/except can catch it. Transcode to H.264 so the inline player works.
+# 1280px wide is ample for the notebook's 720px display and takes the measured
+# 4.6 MB (4,602,777 bytes) down to ~0.47 MB.
+#
+# The original is preserved ONLY when the chosen file came from $AGG/videos/ —
+# the `aws s3 sync "$AGG"` above uploads it there untouched. When it came from
+# $LOG_DIR/rollouts/ (the other arm of the glob below) that path is OUTSIDE $AGG,
+# so the H.264 copy is the only one in S3; the untouched original then lives on
+# this host until it is terminated.
 if [ -n "$_mp4" ]; then
     _upload="$_mp4"
     if _enc="$(h264_encoder)"; then
@@ -467,10 +502,18 @@ if [ -n "$_mp4" ]; then
             echo "         Chrome/Firefox/Edge (the notebook prints the codec and why)."
         fi
     else
+        # Pre-flight already tried to install ffmpeg and warned if it could not, so
+        # reaching here means the host still has none. There is no upload-only entry
+        # point in this script, and re-running it would repeat the whole GPU
+        # evaluation — so point at the cheap fix instead of implying a partial re-run.
         echo "[upload] WARNING: no working ffmpeg with an H.264 encoder on this host —"
         echo "         uploading AlpaSim's mpeg4 verbatim. M10's inline player will stay"
         echo "         blank in Chrome/Firefox/Edge (the notebook prints the codec and why)."
-        echo "         Fix, then re-run just this upload: sudo apt-get install -y ffmpeg"
+        echo "         To fix WITHOUT re-running the evaluation, from this host:"
+        echo "             sudo apt-get install -y ffmpeg"
+        echo "             ffmpeg -i '$_mp4' -vf scale=1280:-2 -c:v libx264 \\"
+        echo "                    -pix_fmt yuv420p -movflags +faststart -an /tmp/eval_h264.mp4"
+        echo "             aws s3 cp /tmp/eval_h264.mp4 $REF/eval/eval.mp4"
     fi
     aws s3 cp "$_upload" "$REF/eval/eval.mp4" --only-show-errors
 fi

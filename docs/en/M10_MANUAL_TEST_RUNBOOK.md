@@ -406,7 +406,7 @@ This is what participants actually experience, and it fills the "real Studio env
 |---|---|
 | cell-4 `M10 reference eval not found in S3` | m10-reference/ not uploaded → do Part A first (or check for an existing bundle) |
 | cell-4 download failed / AccessDenied | the execution role lacks read on the shared bucket → already present (normal). If missing, check IAM |
-| cell-7 video blank or not shown | **a codec, not a missing file.** AlpaSim's renderer writes MPEG-4 Part 2 (`mpeg4`), which Chrome/Firefox/Edge cannot decode (Safari only) — the browser fails silently, which is not a Python exception, so no try/except catches it. Confirm with `ffprobe -show_entries stream=codec_name eval/eval.mp4`. Fixed at the source: `alpasim_ec2_setup.sh` transcodes to H.264 before upload (and says so if the host has no working ffmpeg); cell-7 now prints the codec instead of a dead player. Non-essential — PASS on metrics alone |
+| cell-7 video blank or not shown | **a codec, not a missing file.** AlpaSim's renderer writes MPEG-4 Part 2 (`mpeg4`), which Chrome/Firefox/Edge cannot decode — the browser fails silently, which is not a Python exception, so no try/except catches it. Confirm with `ffprobe -show_entries stream=codec_name eval/eval.mp4`. Fixed at the source: `alpasim_ec2_setup.sh` transcodes to H.264 before upload (and says so if the host has no working ffmpeg); cell-7 now prints the codec instead of a dead player. Non-essential — PASS on metrics alone |
 | STS/import error | the CPU kernel includes pandas/matplotlib by default — if not, `%pip install pandas matplotlib` in the first cell |
 
 ---

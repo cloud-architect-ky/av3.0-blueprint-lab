@@ -615,7 +615,8 @@ PARTICIPANT_GUIDE가 서술하는 선택적 개념 + 데이터 준비 데모로 
 | M5/M6/M9 설정 셀이 "this region has no usable offline HuggingFace cache and no HF_TOKEN"으로 멈춤(exit 2) | 이 리전에 `hf-cache/hub/`가 시딩되지 않음(§6.3). 시딩 후 `./scripts/check_seeding.sh --region <r>`. 이 메시지는 *고쳐진* 동작입니다 — 2026-09-26 전에는 같은 조건이 침묵이었고, 설정 셀이 "environment ready"를 출력한 뒤 M5가 `torchrun`에서 4초 만에 `ChildFailedError`로 죽으며 CUDA out-of-memory를 지목했습니다. 아직 그 옛 형태가 보이면 참가자가 낡은 스테이징 `setup_cosmos_env.sh`를 쓰는 중입니다. |
 | M5/M6/M9이 `Local entry not found … offline mode is enabled`로 실패 | 복원된 캐시가 **부분적**입니다. 중단된 `aws s3 sync`가 흔한 원인이고 — **같은 sync를 다시 돌리세요**, 이어서 없거나 크기가 다른 것을 재복사합니다. `sync`가 못 잡는 건 크기는 맞고 내용이 틀린 객체입니다(size+mtime 비교). `check_seeding.sh --source-region <seeded>`가 CRC64 불일치를 보고하면 그 객체만 지우고 다시 sync하세요. |
 | M9이 클립 로드에 실패 | 데모 `.pt`가 `hf-cache/alpamayo-demo/`에 업로드되지 않음(§6.3). |
-| M10 노트북이 아무것도 표시하지 않음 | `m10-reference/` 레퍼런스 평가가 실행되지 않음(§6.4). |
+| M10 노트북이 아무것도 표시하지 않음(cell-4 가 "No M10 AlpaSim results found in S3" 발생) | `m10-reference/` 레퍼런스 평가가 실행되지 않음(§6.4). |
+| M10 의 메트릭·그래프는 나오는데 **비디오만** 빈 화면 | **번들 누락이 아니며 §6.4 를 재실행하지 말 것.** 코덱 문제다: AlpaSim 렌더러가 MPEG-4 Part 2 로 쓰고 Chrome/Firefox/Edge 는 이를 디코딩하지 못한다. cell-7 이 찾은 코덱을 출력한다. GPU 호스트 없이 그 객체 하나만 H.264 로 교체하면 된다: `aws s3 cp s3://$SHARED_BUCKET/m10-reference/eval/eval.mp4 .` 후 `ffmpeg -i eval.mp4 -vf scale=1280:-2 -c:v libx264 -pix_fmt yuv420p -movflags +faststart -an eval_h264.mp4` 를 돌려 `m10-reference/eval/eval.mp4` 로 덮어쓴다. `scripts/alpasim_ec2_setup.sh` 는 이제 업로드 시점에 변환하므로, 그 변경 이후에 만든 번들은 이미 H.264 다. |
 | M7 트레이닝 셀이 gsplat에서 실패 | M7 셀 3(`scripts/setup_gsplat_env.sh`) 재실행 — CUDA 빌드는 세션별이며 앱 재시작 시 리셋됨. §11. |
 | SNS 예산 경보가 placeholder@example.com으로 감 | `--context admin_email` 없이 배포됨 — `deploy.sh`로 재배포. |
 | 참가자 링크가 "Demo Mode"를 표시 | 맨 URL을 열었음; 전체 `?userId=&token=` 링크를 다시 보내세요. |

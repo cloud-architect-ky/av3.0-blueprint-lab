@@ -613,7 +613,8 @@ AlpaSim を自分自身で実行する**ようにしたい場合:
 | M5/M6/M9 が `Local entry not found … offline mode is enabled` で失敗 | 復元されたキャッシュが**部分的**です。中断された `aws s3 sync` が典型的な原因で — **同じ sync をもう一度実行してください**。欠けているもの・サイズ違いのものを再コピーして再開します。`sync` が検出できないのはサイズが正しく内容が誤ったオブジェクトです（size+mtime 比較）。`check_seeding.sh --source-region <seeded>` が CRC64 不一致を報告したら、そのオブジェクトだけ削除して再 sync してください。 |
 | M7 トレーニングセルが gsplat で失敗する | M7 セル 3（`scripts/setup_gsplat_env.sh`）を再実行 — CUDA ビルドはセッションごとで、アプリ再起動時にリセットされます。§11。 |
 | M9 がクリップのロードに失敗する | デモの `.pt` が `hf-cache/alpamayo-demo/` にアップロードされていない（§6.3）。 |
-| M10 ノートブックに何も表示されない | `m10-reference/` リファレンス評価が未実行（§6.4）。 |
+| M10 ノートブックに何も表示されない（cell-4 が "No M10 AlpaSim results found in S3" を出す） | `m10-reference/` リファレンス評価が未実行（§6.4）。 |
+| M10 のメトリクス・グラフは出るが**動画だけ**が空白 | **バンドル欠落ではなく、§6.4 を再実行してはいけない。** コーデックの問題: AlpaSim レンダラーが MPEG-4 Part 2 で書き出し、Chrome/Firefox/Edge はこれをデコードできない。cell-7 が検出したコーデックを出力する。GPU ホスト不要で、そのオブジェクト 1 つを H.264 に置き換えればよい: `aws s3 cp s3://$SHARED_BUCKET/m10-reference/eval/eval.mp4 .` の後 `ffmpeg -i eval.mp4 -vf scale=1280:-2 -c:v libx264 -pix_fmt yuv420p -movflags +faststart -an eval_h264.mp4` を実行し `m10-reference/eval/eval.mp4` に上書きする。`scripts/alpasim_ec2_setup.sh` はアップロード時に変換するようになったので、その変更以降に作られたバンドルは既に H.264 である。 |
 | SNS 予算アラートが placeholder@example.com に届いた | `--context admin_email` なしでデプロイされた — `deploy.sh` で再デプロイ。 |
 | 参加者リンクが「Demo Mode」と表示される | 素の URL を開いた。完全な `?userId=&token=` リンクを再送してください。 |
 | 一括プロビジョニングが部分的に失敗 | 失敗した行を個別に再試行。`bulk_provision` の CloudWatch ログを確認。 |

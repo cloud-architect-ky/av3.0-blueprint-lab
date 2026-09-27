@@ -421,8 +421,59 @@ echo "[verify] core outputs present."
 REF="s3://${OUTPUT_BUCKET}/${M10_OUTPUT_PREFIX}"
 echo "[upload] -> $REF/ ..."
 aws s3 sync "$AGG" "$REF/aggregate/" --only-show-errors
-# one representative eval video (keep the upload small)
-[ -n "$_mp4" ] && aws s3 cp "$_mp4" "$REF/eval/eval.mp4" --only-show-errors
+
+# h264_encoder: echo the name of a usable H.264 encoder, or return 1.
+# We must RUN ffmpeg, not just `command -v` it — a broken build can sit on PATH
+# and exit 127 on a missing shared library (the SMD image ships exactly that;
+# see scripts/setup_nemo_curator_env.sh). Either encoder is fine here: the DL
+# Base GPU AMI's ffmpeg, when present, usually carries libx264; conda-forge
+# builds carry libopenh264. No pipelines — this script runs under `set -o
+# pipefail`, where `grep | head -1` returns 141 (SIGPIPE) precisely when it DOES
+# find a match.
+h264_encoder() {
+    command -v ffmpeg >/dev/null 2>&1 || return 1
+    ffmpeg -hide_banner -version >/dev/null 2>&1 || return 1   # 127 if libs missing
+    local _encs
+    _encs="$(ffmpeg -hide_banner -encoders 2>/dev/null)" || true
+    case "$_encs" in
+        *libx264*)     printf 'libx264\n'     ;;
+        *libopenh264*) printf 'libopenh264\n' ;;
+        *)             return 1 ;;
+    esac
+}
+
+# One representative eval video (keep the upload small).
+#
+# AlpaSim's renderer writes MPEG-4 Part 2 ("mpeg4", Simple Profile) at 3000x1080,
+# which Chrome / Firefox / Edge CANNOT decode — Safari only. Uploading it verbatim
+# gives the M10 notebook a silently dead inline player: IPython.display.Video
+# emits a correct <video> tag and the browser fails to decode it, which is NOT a
+# Python exception, so no try/except can catch it. Transcode to H.264 so the
+# inline player works in every browser. 1280px wide is ample for the notebook's
+# 720px display and takes 4.7 MB -> ~0.5 MB. AlpaSim's untouched original stays
+# in aggregate/videos/, so nothing is lost.
+if [ -n "$_mp4" ]; then
+    _upload="$_mp4"
+    if _enc="$(h264_encoder)"; then
+        _h264="$WORK/eval_h264.mp4"
+        if ffmpeg -hide_banner -loglevel error -y -i "$_mp4" \
+                -vf 'scale=1280:-2' -c:v "$_enc" -pix_fmt yuv420p \
+                -movflags +faststart -an "$_h264" && [ -s "$_h264" ]; then
+            _upload="$_h264"
+            echo "[upload] eval video transcoded mpeg4 -> H.264 via $_enc ($(du -h "$_h264" | cut -f1))"
+        else
+            echo "[upload] WARNING: H.264 transcode failed ($_enc) — uploading AlpaSim's"
+            echo "         mpeg4 verbatim. M10's inline player will stay blank in"
+            echo "         Chrome/Firefox/Edge (the notebook prints the codec and why)."
+        fi
+    else
+        echo "[upload] WARNING: no working ffmpeg with an H.264 encoder on this host —"
+        echo "         uploading AlpaSim's mpeg4 verbatim. M10's inline player will stay"
+        echo "         blank in Chrome/Firefox/Edge (the notebook prints the codec and why)."
+        echo "         Fix, then re-run just this upload: sudo apt-get install -y ffmpeg"
+    fi
+    aws s3 cp "$_upload" "$REF/eval/eval.mp4" --only-show-errors
+fi
 # per-rollout parquet(s)
 for pq in $(ls "$LOG_DIR"/rollouts/*/*/metrics.parquet 2>/dev/null); do
     sc="$(basename "$(dirname "$(dirname "$pq")")")"

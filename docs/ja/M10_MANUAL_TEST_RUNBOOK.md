@@ -398,7 +398,7 @@ UN aws iam delete-user --user-name $PID
 | cell-4 download | `aws s3 sync m10-reference/` → アーティファクト一覧 (aggregate/、rollouts/、eval/、run.json) |
 | cell-5 parse | AlpaSim 集計表 verbatim + 11 個の driving score (collision 0.00、dist_to_gt 4.37m、progress 0.92) + "Per-rollout time-series: N rows" |
 | cell-6 viz | metrics_results.png インライン + safety-rate バー + dist_to_gt_trajectory 時系列 |
-| cell-7 video | eval.mp4 (~4.7MB) インライン再生 |
+| cell-7 video | eval.mp4 (~0.5MB, H.264 1280px) インライン再生 |
 | cell-8 cost | CPU の正直なフレーミング + reference run メタ (g6e.12xlarge/m7_4gpu) |
 | cell-9 validation | 4 個のチェック OK → **PASS** + headline "no at-fault collisions, no off-road, route progress 0.92" + PIPELINE COMPLETE |
 
@@ -407,7 +407,7 @@ UN aws iam delete-user --user-name $PID
 |---|---|
 | cell-4 `M10 reference eval not found in S3` | m10-reference/ 未アップロード → Part A を先に (または既存バンドルを確認) |
 | cell-4 download failed / AccessDenied | 実行ロールが shared バケットの read 権限なし → 既に付与済み (正常)。なければ IAM を確認 |
-| cell-7 video 未表示 | eval.mp4 欠落 (必須ではない) — メトリクスだけでも PASS |
+| cell-7 video 空白/未表示 | **ファイル欠落ではなくコーデックの問題。** AlpaSim レンダラーが MPEG-4 Part 2 (`mpeg4`) で書き出し、Chrome/Firefox/Edge はこれをデコードできない (Safari のみ可) — ブラウザは静かに失敗し、これは Python 例外ではないので try/except では捕まえられない。`ffprobe -show_entries stream=codec_name eval/eval.mp4` で確認。根本修正済み: `alpasim_ec2_setup.sh` がアップロード前に H.264 へ変換 (ホストに動作する ffmpeg がなければその事実を出力)、cell-7 は死んだプレイヤーの代わりにコーデックを出力する。必須ではない — メトリクスだけでも PASS |
 | STS/import エラー | CPU カーネルに pandas/matplotlib はデフォルト同梱 — ダメなら最初のセルで `%pip install pandas matplotlib` |
 
 ---

@@ -394,7 +394,7 @@ UN aws iam delete-user --user-name $PID
 | cell-4 download | `aws s3 sync m10-reference/` → 아티팩트 목록(aggregate/, rollouts/, eval/, run.json) |
 | cell-5 parse | AlpaSim 집계표 verbatim + 11개 driving score(collision 0.00, dist_to_gt 4.37m, progress 0.92) + "Per-rollout time-series: N rows" |
 | cell-6 viz | metrics_results.png 인라인 + safety-rate 막대 + dist_to_gt_trajectory 시계열 |
-| cell-7 video | eval.mp4 (~4.7MB) 인라인 재생 |
+| cell-7 video | eval.mp4 (~0.5MB, H.264 1280px) 인라인 재생 |
 | cell-8 cost | CPU 정직한 프레이밍 + reference run 메타(g6e.12xlarge/m7_4gpu) |
 | cell-9 validation | 4개 체크 OK → **PASS** + headline "no at-fault collisions, no off-road, route progress 0.92" + PIPELINE COMPLETE |
 
@@ -403,7 +403,7 @@ UN aws iam delete-user --user-name $PID
 |---|---|
 | cell-4 `M10 reference eval not found in S3` | m10-reference/ 미업로드 → Part A 먼저(또는 기존 번들 확인) |
 | cell-4 download failed / AccessDenied | 실행역할이 shared 버킷 read 권한 없음 → 이미 있음(정상). 없으면 IAM 확인 |
-| cell-7 video 미표시 | eval.mp4 누락(비필수) — 메트릭만으로도 PASS |
+| cell-7 video 빈 화면/미표시 | **파일 누락이 아니라 코덱 문제.** AlpaSim 렌더러가 MPEG-4 Part 2(`mpeg4`)로 쓰고 Chrome/Firefox/Edge는 이를 디코딩하지 못함(Safari만 가능) — 브라우저가 조용히 실패하며 이는 파이썬 예외가 아니므로 어떤 try/except도 잡지 못함. `ffprobe -show_entries stream=codec_name eval/eval.mp4` 로 확인. 근본 수정 완료: `alpasim_ec2_setup.sh` 가 업로드 전 H.264로 변환(호스트에 동작하는 ffmpeg가 없으면 그 사실을 출력), cell-7은 죽은 플레이어 대신 코덱을 출력함. 비필수 — 메트릭만으로도 PASS |
 | STS/import 에러 | CPU 커널에 pandas/matplotlib 기본 포함 — 안 되면 첫 셀에서 `%pip install pandas matplotlib` |
 
 ---

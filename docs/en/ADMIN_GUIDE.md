@@ -125,14 +125,16 @@ all measured: it has the *identical* geometry to `ml.g6.24xlarge` (`describe-ins
 reports 4 GPUs × 22,888 MiB for both, so every per-GPU module gate takes the same branch),
 it is cheaper in both regions ($7.09 vs $8.34 in us-west-2; $8.72 vs $10.26 in
 ap-northeast-2), it has a higher quota (5 vs 2 in us-west-2, 5 vs **0** in ap-northeast-2),
-and both of the lab's captured passes are reachable from it. Be precise about what is
-measured, because an earlier version of this guide had it backwards: the 4-GPU Run-All
-captured in `examples/notebooks-with-outputs.tar.gz` (M2, M5, M6, M9 — M9 at minADE
-0.3805, `Status: PASS`) ran on **4x NVIDIA L4**, i.e. genuinely g6.24xlarge geometry AND
-silicon; `docs/en/ALPAMAYO_M9.md:181-187` separately records M9 passing on **8x A10G**
-(g5.48xlarge). So (4 GPUs) and (A10G) are each measured while the 4xA10G pair is not, and
-no heavy module branches on anything but per-GPU VRAM and GPU count — so it cannot
-diverge. The reason to prefer g5.12xlarge is quota and price, not verification.
+and the lab's captured passes are reachable from it. Be precise about what is
+measured. `examples/notebooks-with-outputs.tar.gz` now holds a full M0–M12 run on
+**4x NVIDIA A10G** — i.e. g5.12xlarge itself — with M9 at minADE 0.3779, `Status: PASS`.
+So this exact instance is directly measured; it no longer rests on the geometry argument.
+(The previous bundle recorded the same pipeline on **4x NVIDIA L4** with M9 at minADE
+0.3805, and `docs/en/ALPAMAYO_M9.md:181-187` separately records M9 on **8x A10G**
+/ g5.48xlarge. Those remain real measurements, they are simply no longer what the
+published bundle contains.) One caveat carried by that run: M7's novel-view render
+finished with `rc=1` and produced **0 frames** — training completed, the render did not.
+The reason to prefer g5.12xlarge is quota and price.
 p4d/p5 remain the native-resolution / full-720p path if you have the quota.
 
 > **The `us-west-2` column below is not your region.** Quota is a per-(account × region)

@@ -123,15 +123,15 @@ Service Quotas 콘솔에서 "**Studio JupyterLab Apps running on**"을 검색하
 *동일*하고(`describe-instance-types`가 둘 다 4 GPU × 22,888 MiB로 보고하므로 모든 GPU당 VRAM
 게이트가 같은 분기를 탑니다), 두 리전 모두에서 더 싸고($7.09 vs $8.34 — us-west-2,
 $8.72 vs $10.26 — ap-northeast-2), 쿼터가 더 높고(us-west-2 5 vs 2, ap-northeast-2 5 vs **0**),
-랩이 캡처한 통과 실행 두 건 모두에서 닿을 수 있는 계열입니다. 무엇이 실측인지 정확히
-적습니다 — 이 가이드의 이전 버전이 거꾸로 적었기 때문입니다:
-`examples/notebooks-with-outputs.tar.gz`에 담긴 4-GPU Run-All(M2/M5/M6/M9, M9는 minADE
-0.3805 `Status: PASS`)은 **4× NVIDIA L4**에서 돌았습니다 — 즉 진짜 g6.24xlarge 지오메트리
-**그리고** 실리콘입니다. 그리고 `docs/en/ALPAMAYO_M9.md:181-187`은 M9가 **8× A10G**
-(g5.48xlarge)에서 통과한 것을 따로 기록합니다. 즉 (4 GPU)와 (A10G)가 각각 실측이고
-4×A10G 조합만 미실측인데, 무거운 모듈은 per-GPU VRAM과 GPU 개수 외에 아무것도 분기하지
-않으므로 결과가 갈릴 수 없습니다. g5.12xlarge를 선호하는 이유는 쿼터와 가격이며 검증
-여부가 아닙니다. 쿼터가 있다면 p4d/p5는 여전히
+랩이 캡처한 통과 실행에서 닿을 수 있는 계열입니다. 무엇이 실측인지 정확히 적습니다.
+`examples/notebooks-with-outputs.tar.gz`에는 이제 **4× NVIDIA A10G**(즉 g5.12xlarge 그
+자체)에서 돌린 M0–M12 전 구간 실행이 담겨 있고, M9는 minADE 0.3779 `Status: PASS`입니다.
+따라서 이 인스턴스 자체가 직접 실측이며, 더 이상 지오메트리 논증에 기대지 않습니다.
+(이전 번들은 같은 파이프라인을 **4× NVIDIA L4**에서 M9 minADE 0.3805로 기록했고,
+`docs/en/ALPAMAYO_M9.md:181-187`은 M9의 **8× A10G**(g5.48xlarge) 통과를 따로 기록합니다.
+둘 다 여전히 실측이며, 다만 공개 번들의 내용이 아닐 뿐입니다.) 그 실행이 남긴 단서 하나:
+M7의 novel-view 렌더는 `rc=1`로 끝나 **프레임 0개**를 냈습니다 — 학습은 완료됐고 렌더는
+안 됐습니다. g5.12xlarge를 선호하는 이유는 쿼터와 가격입니다. 쿼터가 있다면 p4d/p5는 여전히
 네이티브 해상도 / 전체 720p 경로로 남습니다.
 
 > **아래 `us-west-2` 열은 당신의 리전이 아닙니다.** 쿼터는 (계정 × 리전) 단위 사실입니다:

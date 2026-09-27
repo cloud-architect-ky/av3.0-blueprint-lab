@@ -58,17 +58,14 @@ the modules map to it)"](PRE_LEARNING_GUIDE.md#the-8-stage-pipeline).
 Want to see what the lab produces before deploying anything?
 
 **Executed notebook results.** [`examples/notebooks-with-outputs.tar.gz`](../../examples/notebooks-with-outputs.tar.gz)
-contains 12 module notebooks **with their output cells** from a real run — plots,
-generated videos' metadata, metrics, and logs. Download and open them in any Jupyter
-viewer to see each module's actual results **without installing or running
-anything**. (Account-specific identifiers have been replaced with placeholders.)
-
-> **The bundle predates the renumbering to blog-stage order**, so its filenames and
-> the S3 paths printed in its outputs use the OLD numbers. It is left exactly as
-> captured rather than relabelled, because rewriting the printed paths would falsify
-> the execution record. Old → new: `M4`→M5, `M5`→M6, `M6`→M9, `M7`→M10, `M8`→M4,
-> `M9`→M12, `M10`→M7; M0–M3 and M11 are unchanged. The new **M8** (Cosmos Reason
-> LoRA SFT) is not in the bundle — it has no captured run yet.
+contains all 13 module notebooks (M0–M12) **with their output cells** from one
+end-to-end run in `ap-northeast-2` on `ml.g5.12xlarge` — 11 plots, 3 playable
+embedded H.264 videos (M5, M6, M10), metrics, and logs. Every code cell carries an
+execution count and none produced an error output. Download and open them in any
+Jupyter viewer to see each module's actual results **without installing or running
+anything**. The eight helper scripts are bundled under `scripts/` as they were at run
+time. (The AWS account id was replaced with `<aws-account-id>`; nothing else in the
+captured outputs was rewritten.)
 
 **Verified end-to-end run.** The table below is a measured record, not a claim — every
 number came from the deployed account after the run finished.
@@ -91,7 +88,9 @@ them as part of the setup, not as trivia:
 1. `hf-cache/` seeded **in this region** (README step 6b). Without it M5/M6/M9 die seconds
    into `torchrun` on a gated-repo refusal.
 2. The 200 GB space volume. The old 5 GB default runs out during the Cosmos builds.
-3. `USE_TORCH=1` in M2/M4/M8, which keeps TensorFlow out of the transformers import chain.
+3. `USE_TF=0` in M2/M4/M8 (M2 and M8 also set `USE_TORCH=1`), which keeps TensorFlow out of
+   the transformers import chain. Grep `USE_TF`, not `USE_TORCH`, when debugging M4 — it sets
+   `USE_TF=0` + `USE_FLAX=0` and never sets `USE_TORCH`.
 4. Awareness that M7 downgrades `protobuf` for the rest of the app session (M7 now says so).
 
 **Admin dashboard.** The admin adds or removes participants here. Each row's

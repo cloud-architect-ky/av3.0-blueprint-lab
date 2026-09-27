@@ -19,25 +19,43 @@ Both notebook claims were introduced in the **same commit** (`7260cf8`), so the 
 cannot arbitrate between them. The ADMIN_GUIDE's optimistic line is *older* than the
 script it credits.
 
-**The execution record does not settle it either.** In
-`examples/notebooks-with-outputs.tar.gz`, the Nerfstudio notebook has output cells for
-**2 of 9** cells — setup and the GPU check. Every cell from the install onward executed
-with **no retained output**. So nobody has a captured run of this cell either passing or
-failing.
+**The execution record now settles half of it.**
+`examples/notebooks-with-outputs.tar.gz` holds a full 9-of-9-cell M7 run on **4x A10G**
+(`ml.g5.12xlarge`, sm_86): gsplat's CUDA backend built, nerfstudio 1.1.5 installed, and
+`splatfacto` trained **5000 iterations in 83.9 s**, its densification log ending at
+236,507 Gaussians. So the notebook cell-0 claim that the cell "does NOT run" is false,
+and cell 5 plus the ADMIN_GUIDE are right: **training runs** — including on the A10G arch
+that section 3 below still calls unverified.
 
-**Status: UNVERIFIED.** Treat M7 as optional until someone runs it.
+**What the same run shows failing is the step after it.** Cell 7's novel-view render
+exited `rc=1` and produced **0 frames** ("No rendered images found — check render
+output."), so cell 8 uploaded only `reconstruction_metadata.json` (667 bytes) and no
+imagery — while `docs/en/DATA_CONTRACT.md` lists M7's outputs as
+"`m7/reconstruction_metadata.json`, renders". Cell 10 then marked the module complete on
+the dashboard anyway.
+
+**Status: training VERIFIED on 4x A10G; novel-view render FAILING.** M7 stays optional,
+but the open question has moved. It is no longer "does it train" — it is "why does the
+render exit 1 and write nothing", and separately "why does a module that produced no
+renders report itself complete".
 
 ---
 
-## 2. How to settle it — ~$0.25, about 15 minutes
+## 2. What is left to settle — the render, not the training
+
+The training question is answered (section 1). What a fresh run still has to answer is why
+`ns-render` exits 1 with 0 frames. Note that the captured failure came from a **4-GPU**
+box; a single-GPU run may behave differently, which is itself worth knowing.
 
 M7's recommended instance is `ml.g5.xlarge` (1× A10G 24 GB, ~$1.41/hr in us-west-2,
-~$1.73 in ap-northeast-2). One Run-All answers the question.
+~$1.73 in ap-northeast-2), so one Run-All is ~$0.25 and about 15 minutes.
 
 1. Provision one throwaway participant, set the instance to `ml.g5.xlarge`.
 2. **Restart & Run All.** Do not skip the install cell — see the ephemerality note below.
-3. Record what actually happens at cell 5, then delete two of the three claims above so
-   only the true one survives, and replace this section with the result.
+3. Capture cell 7's full stderr, not just its summary line, and record whether any frames
+   appear under the render output directory.
+4. Then correct the notebook's own cell-0 and cell-5 markdown, which still say the
+   training cell does not run and that no execution record exists.
 
 Tear the profile down afterwards: `scripts/teardown.sh --user <id>`.
 
@@ -63,9 +81,10 @@ also adds version-matched TensorFlow-bundled nvcc headers as a gap-filler.
 
 It builds for both architectures the lab uses: `setup_gsplat_env.sh:54`
 `ARCH="${GSPLAT_ARCH:-8.6;8.9}"` covers sm_86 (A10G, `ml.g5.*`) and sm_89 (L4,
-`ml.g6.*`). Note the script's own header records verification on **g6/L4 only**, while
-notebook cell 3 claims "g6/L4 + g5/A10G" — another unresolved claim, and `ml.g5.xlarge`
-is the recommended instance, i.e. the *unverified* arch.
+`ml.g6.*`). The script's own header records verification on **g6/L4 only**, while notebook
+cell 3 claims "g6/L4 + g5/A10G". The captured run in
+`examples/notebooks-with-outputs.tar.gz` resolves that in the notebook's favour: it built
+and trained on **A10G / sm_86**. The script header is simply behind.
 
 ### This is a per-SESSION bootstrap, not an install
 

@@ -448,17 +448,41 @@ if [ -n "${SHARED_BUCKET:-}" ]; then
             "s3://$SHARED_BUCKET/notebook-templates/scripts/$_s" \
             --region "$REGION" --only-show-errors
     done
-    # Remove admin-only scripts that earlier whole-directory syncs already published.
-    # Scoped to the exact filenames rather than a prefix delete, so a helper that is not in
-    # the allow-list yet is never destroyed by accident.
-    for _s in deploy.sh teardown.sh cache_models.sh cache_hf_tree.sh check_seeding.sh \
-              check_quotas.py stage_nuscenes.sh refresh_instance_rates.py \
-              hf_cache_manifest.tsv grab_gpu_instance.py patch_notebooks.py \
-              renumber_modules.py
-    do
-        aws s3 rm "s3://$SHARED_BUCKET/notebook-templates/scripts/$_s" \
-            --region "$REGION" >/dev/null 2>&1 || true
-    done
+    # Sweep everything under notebook-templates/scripts/ that is NOT in the allow-list
+    # above. DENY BY DEFAULT — this replaces a list of 12 exact admin filenames.
+    #
+    # That list could only match names directly under scripts/, so it left
+    # scripts/__pycache__/ behind. Measured 2026-09-27 in ap-northeast-2: the .pyc of
+    # grab_gpu_instance.py, patch_notebooks.py and renumber_modules.py were still
+    # published after their sources had been removed. .pyc decompiles, so removing only
+    # the sources did not actually un-publish the tooling. A deny-list also leaks every
+    # future admin script by default, which is how those got there in the first place.
+    #
+    # A file the notebooks genuinely need but that is missing from the allow-list gets
+    # deleted here. That is correct: the cp loop above never publishes it, so its only
+    # presence in S3 would be a leftover from an older whole-directory sync, and silently
+    # depending on a leftover is worse than the loud failure the existence check above
+    # gives. Strictly scoped to the scripts/ prefix — the notebooks themselves are
+    # governed by the sync at the top of this block.
+    _keep=" av30_progress.py av30_instance_rates.py setup_cosmos_env.sh setup_gsplat_env.sh\
+ setup_nemo_curator_env.sh alpamayo_infer.py alpamayo_save_clip.py alpasim_ec2_setup.sh "
+    _swept=0
+    # Heredoc, not a pipe: `while read` in a pipeline runs in a subshell, and _swept
+    # would not survive it. `|| true` because `aws s3 ls` exits non-zero on an absent
+    # prefix and this script runs under `set -e`.
+    while read -r _key; do
+        [ -n "$_key" ] || continue
+        _base="${_key#notebook-templates/scripts/}"
+        case "$_keep" in *" $_base "*) continue ;; esac
+        if aws s3 rm "s3://$SHARED_BUCKET/$_key" --region "$REGION" >/dev/null 2>&1; then
+            echo "    swept (admin-only, not for participants): $_base"
+            _swept=$((_swept + 1))
+        fi
+    done <<SWEEP
+$(aws s3 ls "s3://$SHARED_BUCKET/notebook-templates/scripts/" --recursive --region "$REGION" 2>/dev/null \
+    | awk '{ $1=""; $2=""; $3=""; sub(/^ +/, ""); print }' || true)
+SWEEP
+    [ "$_swept" -eq 0 ] || echo ">>> Swept $_swept non-allow-listed object(s) from notebook-templates/scripts/."
     STAGED_COUNT=$(aws s3 ls "s3://$SHARED_BUCKET/notebook-templates/" --recursive \
         --region "$REGION" | wc -l | tr -d ' ')
     echo ">>> Staged. notebook-templates/ now holds $STAGED_COUNT objects."

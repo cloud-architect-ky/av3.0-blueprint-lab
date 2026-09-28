@@ -246,20 +246,49 @@ fi
 # silently absent. So decide it explicitly, per region, from the live value.
 APIGW_ROLE_NOW=$(aws apigateway get-account --region "$REGION" \
     --query cloudwatchRoleArn --output text 2>/dev/null)
+# Does THIS stack own the live role? Both branches below need that answer, and they used to
+# disagree: only the flag-IS-set branch tested ownership, so the unset branch told an
+# operator whose OWN stack owned the role "leave it alone, do not set the flag" — advice
+# that DELETES it. api.py gates AWS::ApiGateway::Account *and* its IAM role on this one
+# context value, so omitting the flag drops both from the template. Resolve it once here.
+APIGW_ROLE_EXISTS=false
+APIGW_ROLE_IS_OURS=false
+if [ "$APIGW_ROLE_NOW" != "None" ] && [ -n "$APIGW_ROLE_NOW" ]; then
+    APIGW_ROLE_EXISTS=true
+    # `if`, not `grep -q ... && VAR=true`: under `set -e` that AND-list ends non-zero
+    # whenever grep does NOT match, which is the common case here. A grep inside an `if`
+    # condition is explicitly exempt from set -e; as a bare statement it is not.
+    if printf '%s' "$APIGW_ROLE_NOW" | grep -q "$STACK_NAME"; then
+        APIGW_ROLE_IS_OURS=true
+    fi
+fi
 if [ -z "${APIGW_ACCOUNT_ROLE:-}" ]; then
-    if [ "$APIGW_ROLE_NOW" = "None" ] || [ -z "$APIGW_ROLE_NOW" ]; then
+    if [ "$APIGW_ROLE_EXISTS" != true ]; then
         echo "    NOTE: $REGION has no API Gateway account-level CloudWatch role, so API"
         echo "          execution logs will not be emitted. This deploy will NOT create"
         echo "          one (creating it is an account-wide overwrite). If this region is"
         echo "          yours alone, re-run with APIGW_ACCOUNT_ROLE=true to create it."
+    elif [ "$APIGW_ROLE_IS_OURS" = true ]; then
+        # The destructive case, and the one that reads as harmless. Refuse, like the
+        # Owner-tag and hosted-UI guards above, rather than warn: there is no way to
+        # PRESERVE a role this stack owns other than passing the flag.
+        echo "REFUSING: the API Gateway account-level CloudWatch role in $REGION is owned" >&2
+        echo "          by THIS stack:" >&2
+        echo "          $APIGW_ROLE_NOW" >&2
+        echo "          Deploying without APIGW_ACCOUNT_ROLE drops AWS::ApiGateway::Account" >&2
+        echo "          and its IAM role from the template, so CloudFormation DELETES the" >&2
+        echo "          live role and API execution logging stops for the whole region." >&2
+        echo "          Re-run with:  APIGW_ACCOUNT_ROLE=true $0 --region $REGION" >&2
+        exit 1
     else
-        echo "    NOTE: $REGION already has an API Gateway account role:"
+        echo "    NOTE: $REGION already has an API Gateway account role, owned by another"
+        echo "          stack:"
         echo "          $APIGW_ROLE_NOW"
-        echo "          Leaving it alone. Do NOT set APIGW_ACCOUNT_ROLE unless you own it."
+        echo "          Leaving it alone. Do NOT set APIGW_ACCOUNT_ROLE here — creating it"
+        echo "          is an account-wide overwrite that breaks that stack's API logging."
     fi
 else
-    if [ "$APIGW_ROLE_NOW" != "None" ] && [ -n "$APIGW_ROLE_NOW" ] \
-       && ! printf '%s' "$APIGW_ROLE_NOW" | grep -q "$STACK_NAME"; then
+    if [ "$APIGW_ROLE_EXISTS" = true ] && [ "$APIGW_ROLE_IS_OURS" != true ]; then
         echo "REFUSING: APIGW_ACCOUNT_ROLE=true would overwrite an existing account-level" >&2
         echo "          API Gateway role in $REGION that this stack does not own:" >&2
         echo "          $APIGW_ROLE_NOW" >&2

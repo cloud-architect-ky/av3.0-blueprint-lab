@@ -56,13 +56,18 @@
 
 배포하기 전에 이 랩이 무엇을 만들어내는지 미리 보고 싶으신가요?
 
-**실행된 노트북 결과.** [`examples/notebooks-with-outputs.tar.gz`](../../examples/notebooks-with-outputs.tar.gz)에는
+**실행된 노트북 결과.** [`examples/notebooks-with-outputs.tar.gz`](https://github.com/cloud-architect-ky/av3.0-blueprint-lab/raw/main/examples/notebooks-with-outputs.tar.gz)에는
 13개 모듈 노트북(M0–M12) 전부가 `ap-northeast-2`의 `ml.g5.12xlarge`에서 한 번에 끝까지
 실행된 **출력 셀과 함께** 담겨 있습니다 — 그래프 11개, 재생 가능한 H.264 임베드 비디오
 3개(M5·M6·M10), 지표, 로그. 모든 코드 셀에 실행 번호가 있고 오류 출력은 하나도 없습니다.
 내려받아 아무 Jupyter 뷰어에서 열면 **설치하거나 실행하지 않고도** 각 모듈의 실제 결과를
 볼 수 있습니다. 실행 당시의 헬퍼 스크립트 8개도 `scripts/` 에 함께 들어 있습니다.
 (AWS 계정 ID는 `<aws-account-id>`로 치환했고, 캡처된 출력의 다른 내용은 고치지 않았습니다.)
+
+```bash
+curl -L -O https://github.com/cloud-architect-ky/av3.0-blueprint-lab/raw/main/examples/notebooks-with-outputs.tar.gz
+tar xzf notebooks-with-outputs.tar.gz
+```
 
 **검증된 전 구간 실행 기록.** 아래 표는 주장이 아니라 실측입니다 — 모든 수치는 실행이 끝난 뒤
 배포된 계정에서 읽은 값입니다.

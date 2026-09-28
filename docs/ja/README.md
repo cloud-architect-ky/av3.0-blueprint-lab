@@ -40,7 +40,12 @@
 
 デプロイする前に、このラボが何を生成するのか見てみたいですか？
 
-**実行済みノートブックの結果。** [`examples/notebooks-with-outputs.tar.gz`](../../examples/notebooks-with-outputs.tar.gz) には、13 個のモジュールノートブック（M0–M12）すべてが `ap-northeast-2` の `ml.g5.12xlarge` での一気通貫の実行後の**出力セル付き**で含まれています — グラフ 11 点、再生可能な H.264 埋め込み動画 3 点（M5・M6・M10）、メトリクス、ログ。すべてのコードセルに実行番号があり、エラー出力は 1 つもありません。ダウンロードして任意の Jupyter ビューアーで開けば、**インストールも実行もせずに**各モジュールの実際の結果を確認できます。実行時点のヘルパースクリプト 8 本も `scripts/` に同梱されています。（AWS アカウント ID は `<aws-account-id>` に置換し、取得した出力の他の内容は書き換えていません。）
+**実行済みノートブックの結果。** [`examples/notebooks-with-outputs.tar.gz`](https://github.com/cloud-architect-ky/av3.0-blueprint-lab/raw/main/examples/notebooks-with-outputs.tar.gz) には、13 個のモジュールノートブック（M0–M12）すべてが `ap-northeast-2` の `ml.g5.12xlarge` での一気通貫の実行後の**出力セル付き**で含まれています — グラフ 11 点、再生可能な H.264 埋め込み動画 3 点（M5・M6・M10）、メトリクス、ログ。すべてのコードセルに実行番号があり、エラー出力は 1 つもありません。ダウンロードして任意の Jupyter ビューアーで開けば、**インストールも実行もせずに**各モジュールの実際の結果を確認できます。実行時点のヘルパースクリプト 8 本も `scripts/` に同梱されています。（AWS アカウント ID は `<aws-account-id>` に置換し、取得した出力の他の内容は書き換えていません。）
+
+```bash
+curl -L -O https://github.com/cloud-architect-ky/av3.0-blueprint-lab/raw/main/examples/notebooks-with-outputs.tar.gz
+tar xzf notebooks-with-outputs.tar.gz
+```
 
 **エンドツーエンドの検証済み実行記録.** 以下の表は主張ではなく実測値です — すべての数値は実行完了後に
 デプロイ済みアカウントから読み取ったものです。

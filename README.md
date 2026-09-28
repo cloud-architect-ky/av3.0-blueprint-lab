@@ -64,7 +64,7 @@ the modules map to it)"](docs/en/PRE_LEARNING_GUIDE.md#the-8-stage-pipeline).
 
 Want to see what the lab produces before deploying anything?
 
-**Executed notebook results.** [`examples/notebooks-with-outputs.tar.gz`](examples/notebooks-with-outputs.tar.gz)
+**Executed notebook results.** [`examples/notebooks-with-outputs.tar.gz`](https://github.com/cloud-architect-ky/av3.0-blueprint-lab/raw/main/examples/notebooks-with-outputs.tar.gz)
 contains all 13 module notebooks (M0–M12) **with their output cells** from one
 end-to-end run in `ap-northeast-2` on `ml.g5.12xlarge` — 11 plots, 3 playable
 embedded H.264 videos (M5, M6, M10), metrics, and logs. Every code cell carries an
@@ -73,6 +73,11 @@ Jupyter viewer to see each module's actual results **without installing or runni
 anything**. The eight helper scripts are bundled under `scripts/` as they were at run
 time. (The AWS account id was replaced with `<aws-account-id>`; nothing else in the
 captured outputs was rewritten.)
+
+```bash
+curl -L -O https://github.com/cloud-architect-ky/av3.0-blueprint-lab/raw/main/examples/notebooks-with-outputs.tar.gz
+tar xzf notebooks-with-outputs.tar.gz
+```
 
 **Verified end-to-end run.** The table below is a measured record, not a claim — every
 number came from the deployed account after the run finished.

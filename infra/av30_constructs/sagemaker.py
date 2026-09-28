@@ -707,6 +707,26 @@ class SageMakerConstruct(Construct):
                 resources=["*"],
             )
         )
+        # aoss:APIAccessAll ALONE is deliberate — do NOT add aoss:DashboardsAccessAll.
+        #
+        # The AWS data-access-control page states the opposite: "An associated principal
+        # must also be granted access to the IAM permissions aoss:APIAccessAll and
+        # aoss:DashboardsAccessAll ... If a principal doesn't have both of these IAM
+        # permissions, they will receive 403 errors when attempting to send requests to
+        # the collection." Read literally, that says M4 cannot work with this statement.
+        #
+        # Measured 2026-09-28 against a live VECTORSEARCH collection with exactly this
+        # grant: index create, 24 document writes, k-NN search, match_all search, _count,
+        # get_mapping and cat.indices ALL succeeded. So APIAccessAll alone is sufficient
+        # for the signed data-plane API path; the Dashboards permission gates the
+        # Dashboards UI, which this lab never opens.
+        #
+        # This note exists because M4 spent a long session throwing 403 on reads, and the
+        # doc sentence above is the first thing anyone debugging that will find. The
+        # actual cause was the notebook freezing rotating credentials into its signer
+        # (see notebooks/M4_OpenSearch_Semantic_Search.ipynb, the client cell). Granting
+        # DashboardsAccessAll would have widened participant access for nothing and left
+        # the real bug in place.
         self._execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="OpenSearchServerlessDataPlane",

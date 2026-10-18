@@ -89,7 +89,7 @@ M10 は Alpamayo ポリシーを、本物の AlpaSim シミュレータで**ク�
 完全な手順、インスタンスの選択、GPU 配置の詳細：[ALPASIM_M10.md](ALPASIM_M10.md)。
 
 ### 管理者：一度だけ承認するライセンス（管理者の HF アカウントで）
-各リポジトリで**「Agree and access repository」**に同意し、それから `HF_TOKEN` を設定します：
+各リポジトリで<strong>「Agree and access repository」</strong>に同意し、それから `HF_TOKEN` を設定します：
 
 | リポジトリ | 使用箇所 | ライセンス |
 |---|---|---|

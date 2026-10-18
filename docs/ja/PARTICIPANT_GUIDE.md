@@ -40,7 +40,7 @@ https://<user-dashboard>.cloudfront.net/?userId=<your-id>&token=<your-token>
 
 - 任意のブラウザで開いてください。このリンクは**期限切れになりません**。ブックマークしておき、
   ワークショップ中いつでも再利用できます。
-- ページに**「Demo Mode」**バナーが表示される場合、リンクに `userId`/`token` が含まれていません。
+- ページに<strong>「Demo Mode」</strong>バナーが表示される場合、リンクに `userId`/`token` が含まれていません。
   戻って、管理者が送付した完全なリンクを開いてください。
 - **パイプラインマップ**が表示されます。M1〜M12 の 12 個のノードがステータスに応じて色分けされています。
 
@@ -67,8 +67,8 @@ Face トークン**が必要です（[PREREQUISITES.md](PREREQUISITES.md) を参
 トークンは不要です。[ALPASIM_M10.md](ALPASIM_M10.md) を、自己実行については
 [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md) を参照。）
 
-ワークスペースは小さな CPU インスタンス（`ml.t3.medium`）で開始します。**M2（Cosmos Reason
-キャプション生成）**のような GPU モジュールを実行する前に、切り替えてください：
+ワークスペースは小さな CPU インスタンス（`ml.t3.medium`）で開始します。<strong>M2（Cosmos Reason
+キャプション生成）</strong>のような GPU モジュールを実行する前に、切り替えてください：
 
 1. パイプラインマップで、**M2 — Cosmos Reason Captioning** ノードをクリックします。
 2. サイドパネルで、**Instance Options** をクリックします。

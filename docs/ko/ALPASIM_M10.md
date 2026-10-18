@@ -1,7 +1,7 @@
 # AlpaSim (M10) — EC2에서 호스팅되는 실제 폐루프 평가
 
 **상태:** M10은 실제 **AlpaSim** 시뮬레이터([NVlabs/alpasim](https://github.com/NVlabs/alpasim),
-Apache-2.0)로 Alpamayo 1.5 정책을 **폐루프(closed-loop)**로 평가합니다.
+Apache-2.0)로 Alpamayo 1.5 정책을 <strong>폐루프(closed-loop)</strong>로 평가합니다.
 M5/M6/M9와 달리 AlpaSim은 **SageMaker Studio 노트북 내에서 실행될 수
 없습니다** — ≥40 GB GPU가 필요한 gRPC 마이크로서비스의 Docker-Compose
 플릿이기 때문입니다. 따라서 실제 시뮬레이션은 **GPU EC2 호스트**에서 실행되고,
@@ -74,7 +74,7 @@ AlpaSim은 M9의 예측 궤적 `.npy`를 **소비하지 않습니다**. 그것�
 `nvidia/Alpamayo-1.5-10B` 체크포인트**(공유 hf-cache에서)를 `driver=alpamayo1_5`
 플러그인으로 로드하여 폐루프로 구동합니다. 따라서:
 
-- **M9** = Alpamayo 모델이 궤적을 **개루프(open-loop)**로 예측(minADE).
+- **M9** = Alpamayo 모델이 궤적을 <strong>개루프(open-loop)</strong>로 예측(minADE).
 - **M10** = **동일한 모델**이 AlpaSim에서 **폐루프**로 구동(안전 메트릭).
 
 공유되는 아티팩트는 궤적 파일이 아니라 체크포인트입니다. 노트북은 이 출처를

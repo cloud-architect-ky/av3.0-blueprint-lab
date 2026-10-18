@@ -70,7 +70,7 @@ GPU 인스턴스가 필요하며, 대시보드에서 직접 선택합니다.
 [M10_PARTICIPANT_SSM_RUNBOOK.md](M10_PARTICIPANT_SSM_RUNBOOK.md)를 참조하세요.)
 
 워크스페이스는 작은 CPU 인스턴스(`ml.t3.medium`)에서 시작됩니다.
-**M2(Cosmos Reason Captioning)**와 같은 GPU 모듈을 실행하기 전에 인스턴스를
+<strong>M2(Cosmos Reason Captioning)</strong>와 같은 GPU 모듈을 실행하기 전에 인스턴스를
 전환하세요:
 
 1. Pipeline Map에서 **M2 — Cosmos Reason Captioning** 노드를 클릭합니다.
@@ -245,7 +245,7 @@ M2가 성공하면 Cosmos Reason 모델을 다운로드하고(미리 캐시되�
 EC2InsufficientCapacityError: Instance type 'ml.g5.12xlarge' is temporarily unavailable ...
 ```
 
-해결 방법: **Instance Options**를 다시 열고 대체 인스턴스인 **`ml.g6.12xlarge`**를
+해결 방법: **Instance Options**를 다시 열고 대체 인스턴스인 <strong>`ml.g6.12xlarge`</strong>를
 선택하세요(4× NVIDIA L40S, 192 GB — 가용성이 더 높은 최신 세대). 이는 M2와 M3의
 요구 사항을 충분히 충족합니다(`ml.g5.12xlarge`를 사용하는 유일한 두 모듈).
 Apply & Restart한 후 계속 진행하세요.

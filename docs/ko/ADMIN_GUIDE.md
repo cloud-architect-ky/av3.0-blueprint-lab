@@ -571,7 +571,7 @@ PARTICIPANT_GUIDE가 서술하는 선택적 개념 + 데이터 준비 데모로 
 (그래서 `ns-train`의 서브프로세스 안에서도 env 변수 없이 빌드가 작동함),
 `gsplat==1.4.0`을 소스 빌드합니다.
 
-- 이것은 **일시적(ephemeral)**입니다 — SMD 앱이 재시작 시 `/opt/conda`를 리셋하므로,
+- 이것은 <strong>일시적(ephemeral)</strong>입니다 — SMD 앱이 재시작 시 `/opt/conda`를 리셋하므로,
   설정 셀이 세션마다 다시 실행됩니다(콜드 시 ~3–5분, 이미 빌드되어 있으면 수초).
 - 데모는 **합성 사인파 카메라 포즈**를 사용하므로, 트레이닝은 엔드투엔드로 실행되지만
   (진짜 Gaussian-Splatting 파이프라인) 재구성은 스모크 테스트이지
@@ -584,7 +584,7 @@ PARTICIPANT_GUIDE가 서술하는 선택적 개념 + 데이터 준비 데모로 
 
 ## 12. 티어다운 및 이벤트 후 보안
 
-- **원샷 티어다운:** **`scripts/teardown.sh`**가 관리자 AWS 자격 증명으로
+- **원샷 티어다운:** <strong>`scripts/teardown.sh`</strong>가 관리자 AWS 자격 증명으로
   모든 것을 회수합니다. 기본은 드라이런(열거만 하고 아무것도 변경하지 않음);
   실제 실행은 `--yes`, 단일 사용자로 범위를 좁히려면 `--user <id>`, `cdk destroy`도 함께 하려면 `--destroy`.
   사용자당 app→space→profile→AOSS→S3→DDB 순서로 삭제하고(delete_user

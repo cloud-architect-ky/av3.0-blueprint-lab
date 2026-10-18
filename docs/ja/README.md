@@ -4,7 +4,7 @@
 
 **ドキュメント言語:** [English](../en/README.md) · [한국어](../ko/README.md) · **日本語**
 
-[Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/) をハンズオンで実行するための、セルフサービス型 AWS プラットフォームです。参加者は **13 個の Jupyter ノートブックモジュール（M0〜M12）**に取り組み、自動運転車データパイプラインの全体像 — データ探索、動画キャプション生成（Cosmos Reason）、データキュレーション（Cosmos Curator）、合成データ拡張（Cosmos Transfer & Predict）、Vision-Language-Action 推論（Alpamayo）、クローズドループシミュレーション（AlpaSim）、セマンティック検索、分散学習、3D 再構成、本番パイプライン自動化 — を通して学びます。
+[Building an End-to-End Physical AI Data Pipeline for Autonomous Vehicle 3.0 on AWS with NVIDIA](https://aws.amazon.com/blogs/industries/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/) をハンズオンで実行するための、セルフサービス型 AWS プラットフォームです。参加者は <strong>13 個の Jupyter ノートブックモジュール（M0〜M12）</strong>に取り組み、自動運転車データパイプラインの全体像 — データ探索、動画キャプション生成（Cosmos Reason）、データキュレーション（Cosmos Curator）、合成データ拡張（Cosmos Transfer & Predict）、Vision-Language-Action 推論（Alpamayo）、クローズドループシミュレーション（AlpaSim）、セマンティック検索、分散学習、3D 再構成、本番パイプライン自動化 — を通して学びます。
 
 このプラットフォームは、管理者ダッシュボードと参加者ダッシュボード、マルチユーザー SageMaker Studio のプロビジョニング、自動コスト管理を備えた**単一の AWS CDK スタック**としてデプロイされます。誰でも**自分自身の AWS アカウント**にデプロイできます。
 
@@ -321,4 +321,4 @@ S3 モデルキャッシュのパスはリージョンローカルです — デ
 
 このリポジトリ内の**ワークショップコード**（CDK インフラ、Lambda、ノートブック、ダッシュボード、スクリプト）は **MIT-0** ライセンスの下で提供されます — [LICENSE](../../LICENSE) を参照してください。
 
-ノートブックがダウンロードする**モデルおよびデータセット**は、そのライセンスの対象**ではなく**、ここでは**再配布されません**。それぞれが独自の規約を保持しています — 特に **Alpamayo-1.5-10B（M9/M10）は商用利用不可（研究/評価目的のみ）**であり、**nuScenes** も商用利用不可です。適用されるすべてのライセンスを確認し、遵守してください。完全なリストは [NOTICE](../../NOTICE) を参照してください。
+ノートブックがダウンロードする**モデルおよびデータセット**は、そのライセンスの対象**ではなく**、ここでは**再配布されません**。それぞれが独自の規約を保持しています — 特に <strong>Alpamayo-1.5-10B（M9/M10）は商用利用不可（研究/評価目的のみ）</strong>であり、**nuScenes** も商用利用不可です。適用されるすべてのライセンスを確認し、遵守してください。完全なリストは [NOTICE](../../NOTICE) を参照してください。

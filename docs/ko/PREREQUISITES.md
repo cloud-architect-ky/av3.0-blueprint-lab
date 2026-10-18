@@ -92,7 +92,7 @@ $0. 전체 절차, 인스턴스 선택, GPU 배치 세부 사항은
 [ALPASIM_M10.md](ALPASIM_M10.md)를 참조하세요.
 
 ### 관리자: 한 번 동의해야 할 라이선스 (관리자의 HF 계정에서)
-각 항목에서 **"Agree and access repository"**에 동의한 다음 `HF_TOKEN`을
+각 항목에서 <strong>"Agree and access repository"</strong>에 동의한 다음 `HF_TOKEN`을
 설정하세요:
 
 | 저장소 | 사용처 | 라이선스 |

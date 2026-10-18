@@ -80,7 +80,7 @@ the ACCOUNT, RESOURCE, or ALL levels"라고 말합니다. 즉 *account-level*은
 
 리전 범위임을 보여 주는 독립적인 증거 세 가지:
 
-- **`GlobalQuota`**는 SageMaker 할당량 **2,258**개 전부에서 `false`입니다(페이지네이션
+- <strong>`GlobalQuota`</strong>는 SageMaker 할당량 **2,258**개 전부에서 `false`입니다(페이지네이션
   전체를 센 값). 대조적으로 IAM은 23/23, Route 53은 9/9가 `true`이고, S3는 섞여
   있습니다 — `General purpose buckets`는 `true`인데 복제 관련 할당량은 `false`입니다.
 - `QuotaArn`에 리전이 박혀 있으므로 서로 다른 리소스입니다:

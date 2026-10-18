@@ -172,8 +172,8 @@ p4d/p5 remain the native-resolution / full-720p path if you have the quota.
 > **0** in `us-west-2` for this account (verified via `list-service-quotas`), so
 > nobody can select it until you request an increase. It is listed because it is
 > the *cheapest* way to the native-resolution tier — one 96 GB card at ~$4.20/hr
-> beats `ml.p4d.24xlarge` at ~$25.25/hr and even undercuts the 24 GB default
-> (~$8.34/hr) — but **no module has been run end-to-end on g7e in this lab**. If
+> beats `ml.p4d.24xlarge` at \~$25.25/hr and even undercuts the 24 GB default
+> (\~$8.34/hr) — but **no module has been run end-to-end on g7e in this lab**. If
 > you request it, smoke-test M5 on one user before pointing a room at it. Other
 > g7e sizes (4xl/8xl/12xl/48xl) have quota codes too (L-B7228EBF, L-0407753C,
 > L-5F015F52, L-A48244DF) but are not offered in the dashboard.

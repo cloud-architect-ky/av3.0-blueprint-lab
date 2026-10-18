@@ -85,9 +85,9 @@ https://huggingface.co/settings/tokens 에서 폐기하세요.
 ## M6 (Cosmos Predict 2.5) — 검증됨
 
 M6는 동일한 환각된 API(`WorldGenerationPipeline`)를 배포했습니다. 실제 경로는
-형제 리포지토리 **`github.com/nvidia-cosmos/cosmos-predict2.5`**입니다 —
+형제 리포지토리 <strong>`github.com/nvidia-cosmos/cosmos-predict2.5`</strong>입니다 —
 Transfer와 동일한 설치 형태(`cosmos-oss[cu128_torch27]`, `uv sync --extra=cu128`,
-동일한 CUDA/opencv 수정)이지만 **자체 `.venv`**에 있는 **별도의** 최상위 패키지
+동일한 CUDA/opencv 수정)이지만 <strong>자체 `.venv`</strong>에 있는 **별도의** 최상위 패키지
 (`cosmos_predict2`)입니다. 2026-07-09에 엔드투엔드로 검증됨(KY-5, p5.48xlarge,
 H100×8).
 

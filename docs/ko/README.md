@@ -6,7 +6,7 @@
 
 [NVIDIA와 함께 AWS에서 자율주행 3.0을 위한 End-to-End Physical AI 데이터 파이프라인 구축하기](https://aws.amazon.com/ko/blogs/tech/building-an-end-to-end-physical-ai-data-pipeline-for-autonomous-vehicle-3-0-on-aws-with-nvidia/)를 직접 실행해 볼 수 있는 셀프
 서비스 AWS 플랫폼입니다. 참가자는 자율주행 데이터 파이프라인 전체를 다루는
-**13개의 Jupyter 노트북 모듈(M0–M12)**을 차례로 진행합니다 — 데이터 탐색,
+<strong>13개의 Jupyter 노트북 모듈(M0–M12)</strong>을 차례로 진행합니다 — 데이터 탐색,
 비디오 캡셔닝(Cosmos Reason), 데이터 큐레이션(Cosmos Curator), 합성 데이터
 증강(Cosmos Transfer & Predict), 비전-언어-행동 추론(Alpamayo),
 폐루프 시뮬레이션(AlpaSim), 시맨틱 검색, 분산 학습, 3D 재구성, 프로덕션
@@ -247,7 +247,7 @@ aws s3 sync scripts/   "s3://av30lab-shared-data-$ACCOUNT-$REGION/notebook-templ
 임시 비밀번호로 로그인하고, 테스트 사용자를 프로비저닝한 뒤 **Participant
 Dashboard Link**를 열어 파이프라인 맵을 확인하세요. 스모크 테스트, 대량
 프로비저닝, 모니터링, 정리(teardown)까지 포함한 일자별 전체 런북은
-**[docs/ko/ADMIN_GUIDE.md](ADMIN_GUIDE.md)**에 있습니다.
+<strong>[docs/ko/ADMIN_GUIDE.md](ADMIN_GUIDE.md)</strong>에 있습니다.
 
 ---
 
@@ -376,6 +376,6 @@ S3 모델 캐시 경로는 리전 로컬입니다 — 배포한 리전에 데이
 
 노트북이 다운로드하는 **모델과 데이터셋**은 그 라이선스의 대상이 **아니며**
 여기서 **재배포되지 않습니다**. 각각은 고유한 약관을 유지합니다 — 특히
-**Alpamayo-1.5-10B (M9/M10)는 비상업용(연구/평가 전용)**이며 **nuScenes**는
+<strong>Alpamayo-1.5-10B (M9/M10)는 비상업용(연구/평가 전용)</strong>이며 **nuScenes**는
 비상업용입니다. 적용되는 모든 라이선스를 검토하고 준수하세요; 전체 목록은
 [NOTICE](../../NOTICE)를 참고하세요.

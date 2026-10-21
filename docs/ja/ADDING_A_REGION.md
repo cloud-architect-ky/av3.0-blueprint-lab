@@ -229,7 +229,7 @@ export ADMIN_IP_ALLOWLIST=1.2.3.4/32          # omit to allow all
 
 | コンテキスト / 環境変数 | 設定してはいけない理由 |
 |---|---|
-| `OWNER_TAG` | `Owner` タグがデフォルトと異なるスタックを更新する場合のみ使います。SageMaker はドメインの**タグ**を置換が必要な属性として扱うため、不一致があると Studio ドメインが置換され、その EFS が孤立します。必要なのは `kkyoung` でタグ付けされた us-west-2 *のみ*です。 |
+| `OWNER_TAG` | `Owner` タグがデフォルトと異なるスタックを更新する場合のみ使います。SageMaker はドメインの**タグ**を置換が必要な属性として扱うため、不一致があると Studio ドメインが置換され、その EFS が孤立します。別の `Owner` タグで作成された既存スタックを更新する場合にのみ必要です — `deploy.sh` が不一致を拒否し、再実行用の正確な `OWNER_TAG=...` コマンドを出力します。 |
 | `HOSTED_UI_DOMAIN_EXISTS` | ここで最も危険なレバーです。Cognito ホステッド UI ドメインの宣言をスキップするため、**サインインエンドポイントを持たない**プールができてしまいます。これは us-west-2 に既存の、管理外のドメインが 1 つだけあるという事情のためだけに存在します。 |
 | `APIGW_ACCOUNT_ROLE` | `AWS::ApiGateway::Account` は名前を持たない**アカウント・リージョンごとのシングルトン**で、無条件の `PATCH /account` として実装されています。そのリージョンに既に CloudWatch ロールがある場合（ソウルには `FAST-stack` に属するものがあります）、これを有効にすると**別のスタックのロールを奪い取ります**。`aws apigateway get-account --region $R --query cloudwatchRoleArn` が `None` を返す場合にのみ設定してください。既存のロールが自分たちのものでない場合、`deploy.sh` は実行を拒否します。 |
 

@@ -244,7 +244,7 @@ the shell guards just checked. Observed runtime **~3 minutes**, 176 resources.
 
 | Context / env | Why not |
 |---|---|
-| `OWNER_TAG` | Only for updating a stack whose `Owner` tag differs from the default. SageMaker treats domain **tags** as replacement-requiring, so a mismatch replaces the Studio domain and orphans its EFS. Needed *only* in us-west-2, which is tagged `kkyoung`. |
+| `OWNER_TAG` | Only for updating a stack whose `Owner` tag differs from the default. SageMaker treats domain **tags** as replacement-requiring, so a mismatch replaces the Studio domain and orphans its EFS. Needed only when updating a stack created with a different `Owner` tag — `deploy.sh` refuses the mismatch and prints the exact `OWNER_TAG=...` re-run command. |
 | `HOSTED_UI_DOMAIN_EXISTS` | The most dangerous lever here. It skips declaring the Cognito hosted-UI domain, producing a pool with **no sign-in endpoint**. It exists solely for the one pre-existing unmanaged domain in us-west-2. |
 | `APIGW_ACCOUNT_ROLE` | `AWS::ApiGateway::Account` is an unnamed **per-account-per-region singleton** implemented as an unconditional `PATCH /account`. If the region already has a CloudWatch role (Seoul has one belonging to `FAST-stack`), opting in **hijacks another stack's role**. Only set it if `aws apigateway get-account --region $R --query cloudwatchRoleArn` returns `None`. `deploy.sh` refuses when the existing role isn't ours. |
 
